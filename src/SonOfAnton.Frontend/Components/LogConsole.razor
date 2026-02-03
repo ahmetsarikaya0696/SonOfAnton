@@ -1,0 +1,167 @@
+@using SonOfAnton.Frontend.Services
+@using SonOfAnton.Shared.DTOs
+@using SonOfAnton.Shared.Enums
+@using System.Text.Json
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@implements IAsyncDisposable
+
+<div class="log-console @(_isOpen ? "open" : "")">
+    <div class="console-header" @onclick="ToggleConsole">
+        <span class="icon">??</span>
+        <span class="title">Konsol</span>
+        @if (_logs.Count > 0)
+        {
+            <span class="log-count">@_logs.Count</span>
+        }
+        <span class="toggle-icon">@(_isOpen ? "?" : "?")</span>
+    </div>
+
+    @if (_isOpen)
+    {
+        <div class="console-toolbar">
+            <button class="toolbar-btn" @onclick="ClearLogs">??? Temizle</button>
+            <label class="auto-scroll">
+                <input type="checkbox" @bind="_autoScroll" />
+                Otomatik kayd�r
+            </label>
+        </div>
+
+        <div class="console-body" @ref="_logContainer">
+            @if (_logs.Count == 0)
+            {
+                <div class="empty-state">
+                    <span>Hen�z log yok. Bir workflow �al��t�r�n.</span>
+                </div>
+            }
+            else
+            {
+                @foreach (var log in _logs)
+                {
+                    <div class="log-entry @log.Level.ToString().ToLower()">
+                        <span class="log-time">@log.Timestamp.ToString("HH:mm:ss.fff")</span>
+                        <span class="log-level">@GetLevelIcon(log.Level)</span>
+                        @if (!string.IsNullOrEmpty(log.NodeName))
+                        {
+                            <span class="log-node">[@log.NodeName]</span>
+                        }
+                        <span class="log-message">@log.Message</span>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid? ExecutionId { get; set; }
+
+    private bool _isOpen = true;
+    private bool _autoScroll = true;
+    private List<LogEventDto> _logs = [];
+    private ElementReference _logContainer;
+    private Guid? _lastExecutionId;
+    private string? _currentConnectionId;
+    private DotNetObjectReference<LogConsole>? _dotNetRef;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Console.WriteLine($"[LogConsole] OnParametersSetAsync - ExecutionId: {ExecutionId}, LastExecutionId: {_lastExecutionId}");
+        
+        if (ExecutionId.HasValue && ExecutionId != Guid.Empty && ExecutionId != _lastExecutionId)
+        {
+            Console.WriteLine($"[LogConsole] Starting streaming for: {ExecutionId}");
+            _lastExecutionId = ExecutionId;
+            await StartStreaming(ExecutionId.Value);
+        }
+    }
+
+    private async Task StartStreaming(Guid executionId)
+    {
+        Console.WriteLine($"[LogConsole] StartStreaming called: {executionId}");
+        
+        // �nceki ba�lant�y� kapat
+        if (_currentConnectionId != null)
+        {
+            await JS.InvokeVoidAsync("sseHelper.disconnect", _currentConnectionId);
+        }
+        
+        // Yeni execution i�in loglar� temizle
+        _logs.Clear();
+        StateHasChanged();
+
+        // Yeni ba�lant� ba�lat
+        _currentConnectionId = Guid.NewGuid().ToString();
+        _dotNetRef = DotNetObjectReference.Create(this);
+        
+        var backendUrl = Configuration.GetValue<string>("BackendUrl") ?? "https://localhost:5002";
+        var sseUrl = $"{backendUrl}/api/logs/{executionId}";
+        
+        Console.WriteLine($"[LogConsole] Connecting to SSE: {sseUrl}");
+        
+        await JS.InvokeVoidAsync("sseHelper.connect", _dotNetRef, _currentConnectionId, sseUrl);
+    }
+
+    [JSInvokable]
+    public async Task OnLogReceived(string jsonData)
+    {
+        try
+        {
+            Console.WriteLine($"[LogConsole] OnLogReceived: {jsonData[..Math.Min(100, jsonData.Length)]}");
+            
+            var logEvent = JsonSerializer.Deserialize<LogEventDto>(jsonData, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (logEvent != null)
+            {
+                _logs.Add(logEvent);
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LogConsole] Parse error: {ex.Message}");
+        }
+    }
+
+    [JSInvokable]
+    public Task OnStreamComplete()
+    {
+        Console.WriteLine("[LogConsole] Stream completed");
+        _currentConnectionId = null;
+        return Task.CompletedTask;
+    }
+
+    private void ToggleConsole()
+    {
+        _isOpen = !_isOpen;
+    }
+
+    private void ClearLogs()
+    {
+        _logs.Clear();
+    }
+
+    private string GetLevelIcon(LogLevel level) => level switch
+    {
+        LogLevel.Debug => "??",
+        LogLevel.Info => "??",
+        LogLevel.Warning => "??",
+        LogLevel.Error => "?",
+        _ => "??"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_currentConnectionId != null)
+        {
+            await JS.InvokeVoidAsync("sseHelper.disconnect", _currentConnectionId);
+        }
+        _dotNetRef?.Dispose();
+    }
+}
+

@@ -1,0 +1,7 @@
+@SonOfAnton.Backend_HostAddress = http://localhost:5154
+
+GET {{SonOfAnton.Backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+

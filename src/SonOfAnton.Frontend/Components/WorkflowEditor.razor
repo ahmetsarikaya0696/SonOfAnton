@@ -1,0 +1,330 @@
+@using Blazor.Diagrams.Components
+@using SonOfAnton.Frontend.Services
+@using SonOfAnton.Shared.Models
+@inject DiagramStateService DiagramState
+@inject WorkflowApiService ApiService
+@inject SseClientService SseClient
+@implements IAsyncDisposable
+
+<div class="workflow-editor">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <button class="btn btn-primary" @onclick="NewWorkflow">
+                <Icon Name="plus" Size="14" /> Yeni
+            </button>
+            <button class="btn btn-secondary" @onclick="OpenTemplates">
+                <Icon Name="layers" Size="14" /> Şablonlar
+            </button>
+            <button class="btn btn-success" @onclick="SaveWorkflow" disabled="@_isSaving">
+                @if (_isSaving)
+                {
+                    <span class="spinner-sm"></span>
+                }
+                else
+                {
+                    <Icon Name="save" Size="14" />
+                }
+                Kaydet
+            </button>
+        </div>
+        
+        <div class="toolbar-center">
+            <input type="text" 
+                   class="workflow-name-input" 
+                   @bind="@_workflowName" 
+                   @bind:event="oninput"
+                   placeholder="İş Akışı Adı" />
+        </div>
+        
+        <div class="toolbar-right">
+            @if (_isExecuting)
+            {
+                <button class="btn btn-danger" @onclick="StopExecution">
+                    <Icon Name="square" Size="14" /> Durdur
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-warning" 
+                        @onclick="ExecuteWorkflow" 
+                        disabled="@(DiagramState.CurrentWorkflow?.Id == Guid.Empty)">
+                    <Icon Name="play" Size="14" /> Çalıştır
+                </button>
+            }
+            <button class="btn btn-info" @onclick="ToggleMonitor">
+                <Icon Name="activity" Size="14" /> Monitor
+            </button>
+        </div>
+    </div>
+
+    <div class="editor-container">
+        <NodePalette OnNodeDrop="HandleNodeDrop" />
+        
+        <div class="canvas-container" 
+             @ondragover="HandleDragOver" 
+             @ondragover:preventDefault="true"
+             @ondrop="HandleDrop"
+             @ondrop:preventDefault="true">
+            <CascadingValue Value="DiagramState.Diagram">
+                <DiagramCanvas></DiagramCanvas>
+            </CascadingValue>
+            
+            @if (_showConnectionHint)
+            {
+                <div class="connection-hint">
+                    Bağlantı oluşturmak için bir çıkış portunu tutup bir giriş portuna sürükleyin
+                </div>
+            }
+        </div>
+        
+        <NodePropertiesPanel />
+    </div>
+
+    <LogConsole ExecutionId="@_currentExecutionId" />
+    
+    <ExecutionMonitor @ref="_executionMonitor"
+                      ExecutionId="@_currentExecutionId"
+                      IsVisible="@_isMonitorVisible"
+                      OnClose="HideMonitor"
+                      OnNodeExecuting="HandleNodeExecuting"
+                      OnNodeCompleted="HandleNodeCompleted" />
+</div>
+
+<TemplatesPanel IsOpen="_isTemplatesPanelOpen" 
+                OnClose="CloseTemplates" 
+                OnTemplateSelected="LoadTemplate" />
+
+@code {
+    private bool _isSaving;
+    private bool _isExecuting;
+    private Guid? _currentExecutionId;
+    private bool _isTemplatesPanelOpen;
+    private bool _isMonitorVisible;
+    private bool _showConnectionHint = true;
+    private string _workflowName = "Yeni İş Akışı";
+    private ExecutionMonitor? _executionMonitor;
+
+    protected override void OnInitialized()
+    {
+        DiagramState.OnStateChanged += HandleStateChanged;
+        DiagramState.CreateNewWorkflow();
+        
+        // İlk workflow adını ayarla
+        _workflowName = DiagramState.CurrentWorkflow?.Name ?? "Yeni İş Akışı";
+    }
+    
+    private void HandleStateChanged()
+    {
+        // Workflow değiştiğinde adı güncelle
+        if (DiagramState.CurrentWorkflow != null && 
+            DiagramState.CurrentWorkflow.Name != _workflowName)
+        {
+            _workflowName = DiagramState.CurrentWorkflow.Name;
+        }
+        StateHasChanged();
+    }
+
+    private void NewWorkflow()
+    {
+        DiagramState.CreateNewWorkflow();
+        _workflowName = "Yeni İş Akışı";
+        _currentExecutionId = null;
+        _isExecuting = false;
+    }
+
+    private async Task SaveWorkflow()
+    {
+        if (_isSaving) return;
+        _isSaving = true;
+
+        try
+        {
+            // Workflow adını güncelle
+            if (DiagramState.CurrentWorkflow != null)
+            {
+                DiagramState.CurrentWorkflow.Name = _workflowName;
+            }
+            
+            var request = new SonOfAnton.Shared.DTOs.SaveWorkflowRequest
+            {
+                Id = DiagramState.CurrentWorkflow?.Id != Guid.Empty ? DiagramState.CurrentWorkflow?.Id : null,
+                Name = _workflowName,
+                Description = DiagramState.CurrentWorkflow?.Description,
+                TriggerType = DiagramState.CurrentWorkflow?.TriggerType ?? SonOfAnton.Shared.Enums.TriggerType.Manual,
+                IsActive = DiagramState.CurrentWorkflow?.IsActive ?? false,
+                Graph = DiagramState.GetCurrentGraph()
+            };
+
+            var saved = await ApiService.SaveWorkflowAsync(request);
+            if (saved != null)
+            {
+                DiagramState.LoadWorkflow(saved);
+                _workflowName = saved.Name;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Kaydetme hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ExecuteWorkflow()
+    {
+        if (_isExecuting || DiagramState.CurrentWorkflow?.Id == null || DiagramState.CurrentWorkflow.Id == Guid.Empty)
+            return;
+
+        _isExecuting = true;
+        _isMonitorVisible = true;
+
+        try
+        {
+            var execution = await ApiService.ExecuteWorkflowAsync(DiagramState.CurrentWorkflow.Id);
+            if (execution != null)
+            {
+                _currentExecutionId = execution.Id;
+                
+                // ExecutionMonitor'a bağlan
+                if (_executionMonitor != null)
+                {
+                    await _executionMonitor.ConnectAsync();
+                }
+                
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Çalıştırma hatası: {ex.Message}");
+            _isExecuting = false;
+        }
+    }
+    
+    private async Task StopExecution()
+    {
+        if (_currentExecutionId.HasValue)
+        {
+            try
+            {
+                await ApiService.CancelExecutionAsync(_currentExecutionId.Value);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Durdurma hatası: {ex.Message}");
+            }
+        }
+        
+        _isExecuting = false;
+        
+        if (_executionMonitor != null)
+        {
+            await _executionMonitor.DisconnectAsync();
+        }
+    }
+    
+    private void ToggleMonitor()
+    {
+        _isMonitorVisible = !_isMonitorVisible;
+    }
+    
+    private void HideMonitor()
+    {
+        _isMonitorVisible = false;
+    }
+    
+    private void HandleNodeExecuting(Guid nodeId)
+    {
+        // Node'u executing stiline çevir
+        DiagramState.SetNodeExecuting(nodeId, true);
+    }
+    
+    private void HandleNodeCompleted((Guid NodeId, bool Success) args)
+    {
+        // Node'u completed stiline çevir
+        DiagramState.SetNodeExecuting(args.NodeId, false);
+        DiagramState.SetNodeCompleted(args.NodeId, args.Success);
+        
+        // Tüm node'lar tamamlandıysa execution'ı bitir
+        // Bu basit bir kontrol, gerçek uygulamada SSE event'i ile yapılır
+    }
+
+    private void HandleNodeDrop((SonOfAnton.Shared.Models.NodeDefinition Node, double X, double Y) args)
+    {
+        _showConnectionHint = false;
+        var definition = new SonOfAnton.Shared.DTOs.NodeDefinitionDto
+        {
+            Type = args.Node.Type,
+            Name = args.Node.Name,
+            Icon = args.Node.Icon,
+            Category = args.Node.Category,
+            Color = args.Node.Color
+        };
+        DiagramState.AddNode(definition, args.X, args.Y);
+    }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        // Drop'a izin ver
+    }
+
+    private void HandleDrop(DragEventArgs e)
+    {
+        _showConnectionHint = false;
+        var draggedNode = NodePalette.DraggedNode;
+        if (draggedNode != null)
+        {
+            var x = e.ClientX - 300;
+            var y = e.ClientY - 120;
+            
+            var definition = new SonOfAnton.Shared.DTOs.NodeDefinitionDto
+            {
+                Type = draggedNode.Type,
+                Name = draggedNode.Name,
+                Icon = draggedNode.Icon,
+                Category = draggedNode.Category,
+                Color = draggedNode.Color
+            };
+            DiagramState.AddNode(definition, x, y);
+            NodePalette.ClearDraggedNode();
+        }
+    }
+
+    private async Task AddNodeAsync(string nodeType, double x, double y)
+    {
+        var definition = await ApiService.GetNodeDefinitionAsync(nodeType);
+        if (definition != null)
+        {
+            DiagramState.AddNode(definition, x, y);
+        }
+    }
+
+    private void OpenTemplates()
+    {
+        _isTemplatesPanelOpen = true;
+    }
+
+    private void CloseTemplates()
+    {
+        _isTemplatesPanelOpen = false;
+    }
+
+    private void LoadTemplate(WorkflowTemplate template)
+    {
+        DiagramState.LoadFromTemplate(template);
+        _workflowName = template.Name;
+        _isTemplatesPanelOpen = false;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        DiagramState.OnStateChanged -= HandleStateChanged;
+        
+        if (_executionMonitor != null)
+        {
+            await _executionMonitor.DisposeAsync();
+        }
+    }
+}

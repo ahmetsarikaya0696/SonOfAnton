@@ -1,0 +1,32 @@
+  Geri yüklenecek projeler belirleniyor...
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Shared\SonOfAnton.Shared.csproj : warning NU1510: PackageReference System.Text.Json ayıklanmayacak. Bu paketi bağımlılıklarınızdan kaldırmayı düşünün, çünkü muhtemelen gereksizdir. [C:\Users\pc\source\repos\SonOfAnton\SonOfAnton.slnx]
+  Geri yükleme için tüm projeler güncel.
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Shared\SonOfAnton.Shared.csproj : warning NU1510: PackageReference System.Text.Json ayıklanmayacak. Bu paketi bağımlılıklarınızdan kaldırmayı düşünün, çünkü muhtemelen gereksizdir.
+  SonOfAnton.Shared -> C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Shared\bin\Debug\net10.0\SonOfAnton.Shared.dll
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Controllers\WorkflowsController.cs(95,24): warning CS8600: Null sabit değeri veya olası null değeri, boş değer atanamaz türe dönüştürülüyor. [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Services\WorkflowJobService.cs(142,47): error CS1501: 'RunAsync' yöntemi için hiçbir tekrar yükleme 4 bağımsız değişken almaz [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Controllers\WorkflowsController.cs(223,13): error CS0117: 'ExecutionDto' bir 'Error' tanımı içermiyor [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Controllers\WorkflowsController.cs(246,17): error CS0117: 'ExecutionDto' bir 'Error' tanımı içermiyor [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Infrastructure\Embeddings\OnnxTextEmbeddingService.cs(310,63): warning CS0618: 'ITextEmbeddingGenerationService' artık kullanılmıyor: 'Use Microsoft.Extensions.AI.IEmbeddingGenerator<string, Embedding<float>> instead.' [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Program.cs(86,5): warning CS0618: 'OllamaKernelBuilderExtensions.AddOllamaTextEmbeddingGeneration(IKernelBuilder, string, Uri, string?)' artık kullanılmıyor: 'Use AddOllamaEmbeddingGenerator instead.' [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Infrastructure\Embeddings\OnnxTextEmbeddingService.cs(34,34): error CS0104: 'SessionOptions', 'Microsoft.AspNetCore.Builder.SessionOptions' ile 'Microsoft.ML.OnnxRuntime.SessionOptions' arasında belirsiz bir başvuru [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Services\OllamaStartupService.cs(191,25): warning CA2024: Zaman uyumsuz yöntemlerde "reader.EndOfStream" kullanmayın (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca2024) [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+  SonOfAnton.Frontend -> C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Frontend\bin\Debug\net10.0\SonOfAnton.Frontend.dll
+  SonOfAnton.Frontend (Blazor output) -> C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Frontend\bin\Debug\net10.0\wwwroot
+
+Oluşturma BAŞARISIZ OLDU.
+
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Shared\SonOfAnton.Shared.csproj : warning NU1510: PackageReference System.Text.Json ayıklanmayacak. Bu paketi bağımlılıklarınızdan kaldırmayı düşünün, çünkü muhtemelen gereksizdir. [C:\Users\pc\source\repos\SonOfAnton\SonOfAnton.slnx]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Shared\SonOfAnton.Shared.csproj : warning NU1510: PackageReference System.Text.Json ayıklanmayacak. Bu paketi bağımlılıklarınızdan kaldırmayı düşünün, çünkü muhtemelen gereksizdir.
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Controllers\WorkflowsController.cs(95,24): warning CS8600: Null sabit değeri veya olası null değeri, boş değer atanamaz türe dönüştürülüyor. [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Infrastructure\Embeddings\OnnxTextEmbeddingService.cs(310,63): warning CS0618: 'ITextEmbeddingGenerationService' artık kullanılmıyor: 'Use Microsoft.Extensions.AI.IEmbeddingGenerator<string, Embedding<float>> instead.' [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Program.cs(86,5): warning CS0618: 'OllamaKernelBuilderExtensions.AddOllamaTextEmbeddingGeneration(IKernelBuilder, string, Uri, string?)' artık kullanılmıyor: 'Use AddOllamaEmbeddingGenerator instead.' [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Services\OllamaStartupService.cs(191,25): warning CA2024: Zaman uyumsuz yöntemlerde "reader.EndOfStream" kullanmayın (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca2024) [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Services\WorkflowJobService.cs(142,47): error CS1501: 'RunAsync' yöntemi için hiçbir tekrar yükleme 4 bağımsız değişken almaz [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Controllers\WorkflowsController.cs(223,13): error CS0117: 'ExecutionDto' bir 'Error' tanımı içermiyor [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Controllers\WorkflowsController.cs(246,17): error CS0117: 'ExecutionDto' bir 'Error' tanımı içermiyor [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\Infrastructure\Embeddings\OnnxTextEmbeddingService.cs(34,34): error CS0104: 'SessionOptions', 'Microsoft.AspNetCore.Builder.SessionOptions' ile 'Microsoft.ML.OnnxRuntime.SessionOptions' arasında belirsiz bir başvuru [C:\Users\pc\source\repos\SonOfAnton\src\SonOfAnton.Backend\SonOfAnton.Backend.csproj]
+    6 Uyarı
+    4 Hata
+
+Geçen Süre 00:00:01.61

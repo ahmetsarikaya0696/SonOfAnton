@@ -1,0 +1,193 @@
+@using SonOfAnton.Frontend.Services
+@using SonOfAnton.Shared.DTOs
+@inject DiagramStateService DiagramState
+@inject WorkflowApiService ApiService
+@implements IDisposable
+
+<div class="properties-panel @(_selectedNode != null ? "open" : "")">
+    @if (_selectedNode != null && _nodeDefinition != null)
+    {
+        <div class="panel-header">
+            <span class="node-icon" style="background: @_nodeDefinition.Color">
+                @GetIconEmoji(_nodeDefinition.Icon)
+            </span>
+            <div class="node-title">
+                <input type="text" 
+                       class="node-name-input" 
+                       @bind="_selectedNode.NodeData.Name" 
+                       @bind:event="oninput" />
+                <span class="node-type">@_nodeDefinition.Type</span>
+            </div>
+            <button class="close-btn" @onclick="Close">?</button>
+        </div>
+
+        <div class="panel-body">
+            @if (!string.IsNullOrEmpty(_nodeDefinition.Description))
+            {
+                <div class="node-description">
+                    @_nodeDefinition.Description
+                </div>
+            }
+
+            <div class="parameters">
+                @foreach (var param in _nodeDefinition.Parameters)
+                {
+                    <div class="parameter">
+                        <label class="param-label">
+                            @param.DisplayName
+                            @if (param.Required)
+                            {
+                                <span class="required">*</span>
+                            }
+                        </label>
+                        
+                        @switch (param.Type)
+                        {
+                            case "string":
+                                <input type="text" 
+                                       class="param-input"
+                                       placeholder="@param.Placeholder"
+                                       value="@GetParamValue(param.Name)"
+                                       @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                break;
+                                
+                            case "number":
+                                <input type="number" 
+                                       class="param-input"
+                                       value="@GetParamValue(param.Name)"
+                                       @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                break;
+                                
+                            case "boolean":
+                                <label class="toggle">
+                                    <input type="checkbox" 
+                                           checked="@(GetParamValueBool(param.Name))"
+                                           @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                break;
+                                
+                            case "select":
+                                <select class="param-select"
+                                        @onchange="(e) => SetParamValue(param.Name, e.Value)">
+                                    @if (param.Options != null)
+                                    {
+                                        @foreach (var option in param.Options)
+                                        {
+                                            <option value="@option.Value" 
+                                                    selected="@(GetParamValue(param.Name)?.ToString() == option.Value)">
+                                                @option.Label
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                                break;
+                                
+                            case "code":
+                            case "json":
+                                <textarea class="param-textarea"
+                                          placeholder="@param.Placeholder"
+                                          @onchange="(e) => SetParamValue(param.Name, e.Value)">@GetParamValue(param.Name)</textarea>
+                                break;
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="panel-footer">
+            <button class="btn-delete" @onclick="DeleteNode">
+                ??? D���m� Sil
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="no-selection">
+            <span class="icon">??</span>
+            <p>D�zenlemek i�in bir d���m se�in</p>
+        </div>
+    }
+</div>
+
+@code {
+    private WorkflowNodeModel? _selectedNode;
+    private NodeDefinitionDto? _nodeDefinition;
+
+    protected override void OnInitialized()
+    {
+        DiagramState.OnNodeSelected += HandleNodeSelected;
+    }
+
+    private async void HandleNodeSelected(WorkflowNodeModel? node)
+    {
+        _selectedNode = node;
+        
+        if (node != null)
+        {
+            _nodeDefinition = await ApiService.GetNodeDefinitionAsync(node.NodeData.Type);
+        }
+        else
+        {
+            _nodeDefinition = null;
+        }
+        
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Close()
+    {
+        DiagramState.SelectNode(null);
+    }
+
+    private object? GetParamValue(string name)
+    {
+        return _selectedNode?.NodeData.Parameters.GetValueOrDefault(name);
+    }
+
+    private bool GetParamValueBool(string name)
+    {
+        var value = GetParamValue(name);
+        return value is bool b && b;
+    }
+
+    private void SetParamValue(string name, object? value)
+    {
+        if (_selectedNode != null)
+        {
+            DiagramState.UpdateNodeParameter(_selectedNode.NodeData.Id, name, value);
+        }
+    }
+
+    private void DeleteNode()
+    {
+        DiagramState.RemoveSelectedNode();
+    }
+
+    private string GetIconEmoji(string icon) => icon switch
+    {
+        "play" => "??",
+        "clock" => "?",
+        "webhook" => "??",
+        "globe" => "??",
+        "edit" => "??",
+        "code" => "??",
+        "filter" => "??",
+        "git-branch" => "??",
+        "shuffle" => "??",
+        "git-merge" => "??",
+        "cpu" => "??",
+        "layers" => "??",
+        "search" => "??",
+        "database" => "??",
+        "mail" => "??",
+        "message-square" => "??",
+        _ => "??"
+    };
+
+    public void Dispose()
+    {
+        DiagramState.OnNodeSelected -= HandleNodeSelected;
+    }
+}
+

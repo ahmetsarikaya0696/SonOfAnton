@@ -1,0 +1,209 @@
+@using SonOfAnton.Frontend.Services
+@using SonOfAnton.Shared.Core.GraphEngine
+@implements IAsyncDisposable
+@inject NodeEditorInteropService EditorInterop
+
+<div class="fabric-node-editor">
+    <div class="editor-toolbar">
+        <button class="btn btn-icon" @onclick="FitToScreen" title="Ekrana Sığdır">
+            <Icon Name="maximize" Size="16" />
+        </button>
+        <button class="btn btn-icon" @onclick="ZoomIn" title="Yakınlaştır">
+            <Icon Name="zoom-in" Size="16" />
+        </button>
+        <button class="btn btn-icon" @onclick="ZoomOut" title="Uzaklaştır">
+            <Icon Name="zoom-out" Size="16" />
+        </button>
+        <span class="zoom-level">@($"{_zoomLevel:P0}")</span>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" @onclick="OnRunClicked" disabled="@IsExecuting">
+            <Icon Name="play" Size="14" />
+            Çalıştır
+        </button>
+        <button class="btn btn-danger" @onclick="OnStopClicked" disabled="@(!IsExecuting)">
+            <Icon Name="square" Size="14" />
+            Durdur
+        </button>
+    </div>
+    
+    <div class="canvas-container" @ref="_canvasContainer">
+        <canvas id="@CanvasId"></canvas>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string CanvasId { get; set; } = "node-canvas";
+    [Parameter] public EventCallback OnRun { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+    [Parameter] public EventCallback<string> OnNodeSelected { get; set; }
+    [Parameter] public EventCallback OnSelectionCleared { get; set; }
+    [Parameter] public bool IsExecuting { get; set; }
+    
+    private ElementReference _canvasContainer;
+    private double _zoomLevel = 1.0;
+    private bool _initialized = false;
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = await EditorInterop.InitializeCanvasAsync(CanvasId);
+            
+            if (_initialized)
+            {
+                EditorInterop.OnNodeSelected += HandleNodeSelected;
+                EditorInterop.OnSelectionCleared += HandleSelectionCleared;
+                EditorInterop.OnNodeMoved += HandleNodeMoved;
+                EditorInterop.OnCanvasZoom += HandleZoom;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Canvas'a node ekler
+    /// </summary>
+    public async Task AddNodeAsync(
+        Guid nodeId,
+        string nodeType,
+        string nodeName,
+        double x,
+        double y,
+        string color,
+        List<PinInfo> inputs,
+        List<PinInfo> outputs)
+    {
+        if (!_initialized) return;
+        
+        var config = new NodeConfig
+        {
+            Color = color,
+            Inputs = inputs,
+            Outputs = outputs
+        };
+        
+        await EditorInterop.AddNodeAsync(
+            nodeId.ToString(),
+            nodeType,
+            nodeName,
+            x, y,
+            config);
+    }
+    
+    /// <summary>
+    /// İki node arasına bağlantı ekler
+    /// </summary>
+    public async Task ConnectNodesAsync(
+        Guid connectionId,
+        Guid sourceNodeId,
+        Guid targetNodeId,
+        string sourcePort = "output",
+        string targetPort = "input")
+    {
+        if (!_initialized) return;
+        
+        await EditorInterop.ConnectNodesAsync(
+            connectionId.ToString(),
+            sourceNodeId.ToString(),
+            targetNodeId.ToString(),
+            sourcePort,
+            targetPort);
+    }
+    
+    /// <summary>
+    /// Node'u kaldırır
+    /// </summary>
+    public async Task RemoveNodeAsync(Guid nodeId)
+    {
+        if (!_initialized) return;
+        await EditorInterop.RemoveNodeAsync(nodeId.ToString());
+    }
+    
+    /// <summary>
+    /// Node'un çalışma durumunu günceller
+    /// </summary>
+    public async Task SetNodeExecutingAsync(Guid nodeId, bool isExecuting)
+    {
+        if (!_initialized) return;
+        await EditorInterop.SetExecutingStateAsync(nodeId.ToString(), isExecuting);
+    }
+    
+    /// <summary>
+    /// Node'u hata durumuna geçirir
+    /// </summary>
+    public async Task SetNodeErrorAsync(Guid nodeId, bool hasError)
+    {
+        if (!_initialized) return;
+        await EditorInterop.SetErrorStateAsync(nodeId.ToString(), hasError);
+    }
+    
+    /// <summary>
+    /// Canvas'ı temizler
+    /// </summary>
+    public async Task ClearAsync()
+    {
+        if (!_initialized) return;
+        await EditorInterop.ClearCanvasAsync();
+    }
+    
+    private async Task FitToScreen()
+    {
+        if (!_initialized) return;
+        await EditorInterop.FitToScreenAsync();
+    }
+    
+    private async Task ZoomIn()
+    {
+        _zoomLevel = Math.Min(_zoomLevel * 1.25, 3.0);
+        await EditorInterop.SetZoomAsync(_zoomLevel);
+    }
+    
+    private async Task ZoomOut()
+    {
+        _zoomLevel = Math.Max(_zoomLevel * 0.8, 0.3);
+        await EditorInterop.SetZoomAsync(_zoomLevel);
+    }
+    
+    private void HandleNodeSelected(string nodeId)
+    {
+        OnNodeSelected.InvokeAsync(nodeId);
+    }
+    
+    private void HandleSelectionCleared()
+    {
+        OnSelectionCleared.InvokeAsync();
+    }
+    
+    private void HandleNodeMoved(string nodeId, double x, double y)
+    {
+        // Node hareketi - isteğe bağlı tracking
+    }
+    
+    private void HandleZoom(double zoom)
+    {
+        _zoomLevel = zoom;
+        StateHasChanged();
+    }
+    
+    private async Task OnRunClicked()
+    {
+        await OnRun.InvokeAsync();
+    }
+    
+    private async Task OnStopClicked()
+    {
+        await OnStop.InvokeAsync();
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+        {
+            EditorInterop.OnNodeSelected -= HandleNodeSelected;
+            EditorInterop.OnSelectionCleared -= HandleSelectionCleared;
+            EditorInterop.OnNodeMoved -= HandleNodeMoved;
+            EditorInterop.OnCanvasZoom -= HandleZoom;
+        }
+        
+        await EditorInterop.DisposeAsync();
+    }
+}

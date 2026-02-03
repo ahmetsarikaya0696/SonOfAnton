@@ -1,0 +1,181 @@
+.home-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 16px;
+}
+
+/* Prompt Section */
+.prompt-section {
+    flex-shrink: 0;
+}
+
+.prompt-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.prompt-input-wrapper textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    transition: border-color 0.2s;
+}
+
+.prompt-input-wrapper textarea:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.prompt-input-wrapper textarea:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.prompt-input-wrapper textarea::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.prompt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--accent-blue);
+    color: #1e1e2e;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #7ba8ed;
+}
+
+.btn-cancel {
+    background: var(--accent-red);
+    color: #1e1e2e;
+}
+
+.btn-cancel:hover {
+    background: #e87a99;
+}
+
+/* Code Display */
+.code-display {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-dark);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.code-display pre {
+    margin: 0;
+    padding: 16px;
+}
+
+.code-display code {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* File Tabs */
+.file-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.file-tab {
+    padding: 8px 12px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 6px 6px 0 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.file-tab:hover {
+    background: var(--bg-header);
+    color: var(--text-primary);
+}
+
+.file-tab.active {
+    background: var(--accent-blue);
+    color: #1e1e2e;
+    border-color: var(--accent-blue);
+}
+
+/* Welcome Message */
+.welcome-message {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px;
+}
+
+.welcome-message h2 {
+    margin: 0 0 16px;
+    font-size: 28px;
+    color: var(--text-primary);
+}
+
+.welcome-message p {
+    margin: 0 0 32px;
+    color: var(--text-secondary);
+    font-size: 15px;
+    max-width: 500px;
+}
+
+.features {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.feature {
+    padding: 16px 24px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}

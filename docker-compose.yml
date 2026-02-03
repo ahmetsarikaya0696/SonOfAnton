@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sonofanton-postgres
+    environment:
+      POSTGRES_USER: sonofanton
+      POSTGRES_PASSWORD: sonofanton_dev_password
+      POSTGRES_DB: sonofanton_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonofanton -d sonofanton_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sonofanton-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@sonofanton.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:

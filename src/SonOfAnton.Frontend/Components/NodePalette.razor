@@ -1,0 +1,118 @@
+@using SonOfAnton.Shared.Models
+
+<div class="node-palette">
+    <div class="palette-header">
+        <h3><Icon Name="layers" Size="16" /> Node'lar</h3>
+        <input type="text" 
+               class="search-input" 
+               placeholder="Node ara..." 
+               @bind="searchTerm" 
+               @bind:event="oninput" />
+    </div>
+    
+    <div class="palette-categories">
+        @foreach (var category in FilteredNodes)
+        {
+            <div class="palette-category">
+                <div class="category-header" @onclick="() => ToggleCategory(category.Key)">
+                    <span class="category-icon"><Icon Name="@GetCategoryIconName(category.Key)" Size="14" /></span>
+                    <span class="category-name">@category.Key</span>
+                    <span class="category-toggle">
+                        <Icon Name="@(expandedCategories.Contains(category.Key) ? "chevron-down" : "chevron-right")" Size="12" />
+                    </span>
+                </div>
+                
+                @if (expandedCategories.Contains(category.Key))
+                {
+                    <div class="category-nodes">
+                        @foreach (var node in category.Value)
+                        {
+                            <div class="palette-node" 
+                                 style="--node-color: @node.Color"
+                                 draggable="true"
+                                 @ondragstart="(e) => OnDragStart(e, node)"
+                                 @onclick="() => OnNodeClick(node)">
+                                <span class="node-icon"><Icon Name="@node.Icon" Size="18" /></span>
+                                <div class="node-info">
+                                    <span class="node-name">@node.Name</span>
+                                    <span class="node-desc">@node.Description</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+[Parameter] public EventCallback<NodeDefinition> OnNodeSelected { get; set; }
+[Parameter] public EventCallback<(NodeDefinition Node, double X, double Y)> OnNodeDrop { get; set; }
+    
+private string searchTerm = string.Empty;
+private HashSet<string> expandedCategories = ["Tetikleyiciler", "HTTP", "Donusum"];
+    
+// S�r�klenen node'u tutmak i�in static field
+public static NodeDefinition? DraggedNode { get; private set; }
+    
+    
+    private Dictionary<string, List<NodeDefinition>> FilteredNodes
+    {
+        get
+        {
+            var allNodes = NodeRegistry.GetNodesByCategory();
+            
+            if (string.IsNullOrWhiteSpace(searchTerm))
+                return allNodes;
+                
+            return allNodes
+                .Select(kvp => new
+                {
+                    kvp.Key,
+                    Nodes = kvp.Value.Where(n => 
+                        n.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                        n.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList()
+                })
+                .Where(x => x.Nodes.Count > 0)
+                .ToDictionary(x => x.Key, x => x.Nodes);
+        }
+    }
+    
+    private void ToggleCategory(string category)
+    {
+        if (expandedCategories.Contains(category))
+            expandedCategories.Remove(category);
+        else
+            expandedCategories.Add(category);
+    }
+    
+    private string GetCategoryIconName(string category) => category switch
+    {
+        "Tetikleyiciler" => "zap",
+        "HTTP" => "globe",
+        "Donusum" => "shuffle",
+        "Mantik" => "git-branch",
+        "Yapay Zeka" => "cpu",
+        "Veri" => "database",
+        "Iletisim" => "mail",
+        _ => "layers"
+    };
+    
+    private void OnDragStart(DragEventArgs e, NodeDefinition node)
+    {
+        DraggedNode = node;
+    }
+    
+    public static void ClearDraggedNode()
+    {
+        DraggedNode = null;
+    }
+    
+    
+    private async Task OnNodeClick(NodeDefinition node)
+    {
+        await OnNodeSelected.InvokeAsync(node);
+    }
+}
+

@@ -1,0 +1,193 @@
+@inject IJSRuntime JS
+
+@if (IsVisible)
+{
+    <div class="onboarding-overlay" @onclick="OnOverlayClick">
+        <div class="onboarding-spotlight" style="@GetSpotlightStyle()"></div>
+        
+        <div class="onboarding-tooltip" style="@GetTooltipStyle()" @onclick:stopPropagation>
+            <div class="tooltip-header">
+                <span class="step-indicator">@(CurrentStep + 1) / @Steps.Count</span>
+                <button class="close-btn" @onclick="Close">
+                    <Icon Name="x" Size="16" />
+                </button>
+            </div>
+            
+            <div class="tooltip-content">
+                <h3>@CurrentStepData.Title</h3>
+                <p>@CurrentStepData.Description</p>
+            </div>
+            
+            <div class="tooltip-footer">
+                @if (CurrentStep > 0)
+                {
+                    <button class="btn-secondary" @onclick="Previous">Geri</button>
+                }
+                else
+                {
+                    <button class="btn-skip" @onclick="Close">Atla</button>
+                }
+                
+                @if (CurrentStep < Steps.Count - 1)
+                {
+                    <button class="btn-primary" @onclick="Next">Sonraki</button>
+                }
+                else
+                {
+                    <button class="btn-primary" @onclick="Complete">Baslayalim!</button>
+                }
+            </div>
+            
+            <div class="tooltip-progress">
+                @for (int i = 0; i < Steps.Count; i++)
+                {
+                    var idx = i;
+                    <span class="progress-dot @(idx == CurrentStep ? "active" : "") @(idx < CurrentStep ? "completed" : "")"></span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnComplete { get; set; }
+    
+    public bool IsVisible { get; private set; }
+    private int CurrentStep { get; set; }
+    
+    private OnboardingStep CurrentStepData => Steps[CurrentStep];
+    
+    private List<OnboardingStep> Steps { get; } =
+    [
+        new OnboardingStep
+        {
+            Title = "FlowAI'ye Hosgeldiniz!",
+            Description = "FlowAI ile gorunsel olarak is akislari (workflow) olusturabilirsiniz. Farkli node'lari birbirine baglayarak otomatik islemler tanimlayabilirsiniz.",
+            TargetSelector = ".logo",
+            Position = "bottom"
+        },
+        new OnboardingStep
+        {
+            Title = "Node Paleti",
+            Description = "Sol panelde kullanabileceginiz tum node tipleri yer aliyor. Tetikleyiciler, HTTP istekleri, veri donusumleri ve daha fazlasi! Bir node'u canvas'a surukleyerek ekleyebilirsiniz.",
+            TargetSelector = ".node-palette-panel",
+            Position = "right"
+        },
+        new OnboardingStep
+        {
+            Title = "Calisma Alani (Canvas)",
+            Description = "Orta alan sizin calisma alaniniz. Node'lari buraya ekleyin, surukleyerek konumlandirin ve birbirine baglayarak is akisinizi olusturun.",
+            TargetSelector = ".canvas-panel",
+            Position = "center"
+        },
+        new OnboardingStep
+        {
+            Title = "Node Ozellikleri",
+            Description = "Bir node sectikten sonra sag panelde o node'un ozelliklerini duzenleyebilirsiniz. URL'ler, parametreler ve diger ayarlari buradan yapin.",
+            TargetSelector = ".properties-panel",
+            Position = "left"
+        },
+        new OnboardingStep
+        {
+            Title = "Baglanti Olusturma",
+            Description = "Bir node'un cikis noktasina (sag taraf) tiklayip baska bir node'un giris noktasina (sol taraf) surukleyerek baglanti olusturabilirsiniz.",
+            TargetSelector = ".canvas-panel",
+            Position = "center"
+        },
+        new OnboardingStep
+        {
+            Title = "Is Akisini Calistirma",
+            Description = "Is akisinizi tamamladiginizda 'Calistir' butonuna tiklayarak test edebilir, 'Aktiflestirf' ile kalici olarak calistirilmasini saglayabilirsiniz.",
+            TargetSelector = ".header-actions",
+            Position = "bottom"
+        }
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var hasSeenOnboarding = await JS.InvokeAsync<string>("localStorage.getItem", "flowai_onboarding_complete");
+            if (string.IsNullOrEmpty(hasSeenOnboarding))
+            {
+                IsVisible = true;
+                StateHasChanged();
+            }
+        }
+    }
+
+    public void Show()
+    {
+        CurrentStep = 0;
+        IsVisible = true;
+        StateHasChanged();
+    }
+
+    private void Next()
+    {
+        if (CurrentStep < Steps.Count - 1)
+        {
+            CurrentStep++;
+            StateHasChanged();
+        }
+    }
+
+    private void Previous()
+    {
+        if (CurrentStep > 0)
+        {
+            CurrentStep--;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Complete()
+    {
+        await JS.InvokeVoidAsync("localStorage.setItem", "flowai_onboarding_complete", "true");
+        IsVisible = false;
+        await OnComplete.InvokeAsync();
+    }
+
+    private async Task Close()
+    {
+        await JS.InvokeVoidAsync("localStorage.setItem", "flowai_onboarding_complete", "true");
+        IsVisible = false;
+        StateHasChanged();
+    }
+
+    private void OnOverlayClick()
+    {
+        // Overlay tiklamasi ile kapatma (istege bagli)
+    }
+
+    private string GetSpotlightStyle()
+    {
+        return CurrentStepData.Position switch
+        {
+            "right" => "left: 0; top: 56px; width: 280px; height: calc(100% - 56px);",
+            "left" => "right: 0; top: 56px; width: 320px; height: calc(100% - 56px);",
+            "bottom" => "top: 0; left: 0; right: 0; height: 56px;",
+            _ => "display: none;"
+        };
+    }
+
+    private string GetTooltipStyle()
+    {
+        return CurrentStepData.Position switch
+        {
+            "right" => "left: 300px; top: 50%; transform: translateY(-50%);",
+            "left" => "right: 340px; top: 50%; transform: translateY(-50%);",
+            "bottom" => "left: 50%; top: 80px; transform: translateX(-50%);",
+            "center" => "left: 50%; top: 50%; transform: translate(-50%, -50%);",
+            _ => "left: 50%; top: 50%; transform: translate(-50%, -50%);"
+        };
+    }
+
+    private class OnboardingStep
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string TargetSelector { get; set; } = "";
+        public string Position { get; set; } = "center";
+    }
+}

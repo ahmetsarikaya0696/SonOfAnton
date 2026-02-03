@@ -1,0 +1,338 @@
+@using SonOfAnton.Frontend.Services
+@implements IAsyncDisposable
+@inject SseClientService SseClient
+
+<div class="execution-monitor @(IsVisible ? "visible" : "")">
+    <div class="monitor-header">
+        <div class="header-left">
+            <div class="status-indicator @ConnectionStateClass"></div>
+            <span class="title">Execution Monitor</span>
+            <span class="execution-id">@(ExecutionId?.ToString()[..8] ?? "N/A")...</span>
+        </div>
+        <div class="header-right">
+            <span class="connection-status">@ConnectionStateText</span>
+            <button class="btn-close" @onclick="OnCloseClicked">×</button>
+        </div>
+    </div>
+    
+    <div class="monitor-content">
+        <!-- Progress Section -->
+        <div class="progress-section">
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: @ProgressPercentage%"></div>
+            </div>
+            <div class="progress-text">
+                <span>@NodesCompleted / @TotalNodes node</span>
+                <span>@ProgressPercentage%</span>
+            </div>
+        </div>
+        
+        <!-- Node Status Grid -->
+        <div class="node-status-grid">
+            @foreach (var node in _nodeStatuses.Values.OrderBy(n => n.Order))
+            {
+                <div class="node-status-item @node.StatusClass">
+                    <div class="node-icon">
+                        @if (node.IsExecuting)
+                        {
+                            <div class="spinner"></div>
+                        }
+                        else if (node.IsCompleted)
+                        {
+                            <Icon Name="@(node.HasError ? "x-circle" : "check-circle")" Size="16" />
+                        }
+                        else
+                        {
+                            <Icon Name="circle" Size="16" />
+                        }
+                    </div>
+                    <div class="node-info">
+                        <span class="node-name">@node.Name</span>
+                        @if (node.IsCompleted)
+                        {
+                            <span class="node-duration">@node.DurationMs.ToString("F0")ms</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        
+        <!-- Logs Section -->
+        <div class="logs-section">
+            <div class="logs-header">
+                <span>Logs</span>
+                <button class="btn-clear-logs" @onclick="ClearLogs">Temizle</button>
+            </div>
+            <div class="logs-list" @ref="_logsContainer">
+                @foreach (var log in _logs)
+                {
+                    <div class="log-entry @log.LevelClass">
+                        <span class="log-time">@log.Timestamp.ToString("HH:mm:ss.fff")</span>
+                        <span class="log-level">[@log.Level]</span>
+                        @if (!string.IsNullOrEmpty(log.NodeName))
+                        {
+                            <span class="log-node">@log.NodeName:</span>
+                        }
+                        <span class="log-message">@log.Message</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="monitor-footer">
+        @if (_workflowCompleted)
+        {
+            <div class="completion-status @(_workflowSuccess ? "success" : "error")">
+                <Icon Name="@(_workflowSuccess ? "check-circle" : "x-circle")" Size="18" />
+                <span>@(_workflowSuccess ? "Başarıyla tamamlandı" : "Hata ile tamamlandı")</span>
+                <span class="total-duration">(@_totalDurationMs.ToString("F0")ms)</span>
+            </div>
+        }
+        else if (SseClient.ConnectionState == SseConnectionState.Connected)
+        {
+            <div class="running-status">
+                <div class="spinner small"></div>
+                <span>Çalışıyor...</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? ExecutionId { get; set; }
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Guid> OnNodeExecuting { get; set; }
+    [Parameter] public EventCallback<(Guid NodeId, bool Success)> OnNodeCompleted { get; set; }
+    
+    private ElementReference _logsContainer;
+    private readonly Dictionary<Guid, NodeStatusInfo> _nodeStatuses = new();
+    private readonly List<LogEntry> _logs = new();
+    private int _nodeOrder = 0;
+    
+    private bool _workflowCompleted;
+    private bool _workflowSuccess;
+    private double _totalDurationMs;
+    
+    public int NodesCompleted => _nodeStatuses.Values.Count(n => n.IsCompleted);
+    public int TotalNodes => _nodeStatuses.Count > 0 ? _nodeStatuses.Count : 1;
+    public int ProgressPercentage => TotalNodes > 0 ? (int)(NodesCompleted * 100.0 / TotalNodes) : 0;
+    
+    public string ConnectionStateClass => SseClient.ConnectionState switch
+    {
+        SseConnectionState.Connected => "connected",
+        SseConnectionState.Connecting => "connecting",
+        SseConnectionState.Reconnecting => "reconnecting",
+        _ => "disconnected"
+    };
+    
+    public string ConnectionStateText => SseClient.ConnectionState switch
+    {
+        SseConnectionState.Connected => "Bağlı",
+        SseConnectionState.Connecting => "Bağlanıyor...",
+        SseConnectionState.Reconnecting => "Yeniden bağlanıyor...",
+        _ => "Bağlı değil"
+    };
+    
+    protected override void OnInitialized()
+    {
+        SseClient.OnConnectionStateChanged += HandleConnectionStateChanged;
+        SseClient.OnNodeStarted += HandleNodeStarted;
+        SseClient.OnNodeCompleted += HandleNodeCompleted;
+        SseClient.OnProgress += HandleProgress;
+        SseClient.OnLog += HandleLog;
+        SseClient.OnWorkflowCompleted += HandleWorkflowCompleted;
+    }
+    
+    public async Task ConnectAsync()
+    {
+        if (ExecutionId.HasValue)
+        {
+            Reset();
+            await SseClient.ConnectToExecutionAsync(ExecutionId.Value);
+        }
+    }
+    
+    public async Task DisconnectAsync()
+    {
+        if (ExecutionId.HasValue)
+        {
+            await SseClient.DisconnectAsync(ExecutionId.Value.ToString());
+        }
+    }
+    
+    private void Reset()
+    {
+        _nodeStatuses.Clear();
+        _logs.Clear();
+        _nodeOrder = 0;
+        _workflowCompleted = false;
+        _workflowSuccess = false;
+        _totalDurationMs = 0;
+        StateHasChanged();
+    }
+    
+    private void HandleConnectionStateChanged(SseConnectionState state)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+    
+    private void HandleNodeStarted(NodeStartedEvent evt)
+    {
+        InvokeAsync(() =>
+        {
+            _nodeStatuses[evt.NodeId] = new NodeStatusInfo
+            {
+                Id = evt.NodeId,
+                Name = evt.NodeName,
+                Type = evt.NodeType,
+                IsExecuting = true,
+                Order = _nodeOrder++,
+                StartTime = evt.Timestamp
+            };
+            
+            AddLog("info", $"Node başladı: {evt.NodeName}", evt.NodeName, evt.Timestamp);
+            OnNodeExecuting.InvokeAsync(evt.NodeId);
+            StateHasChanged();
+        });
+    }
+    
+    private void HandleNodeCompleted(NodeCompletedEvent evt)
+    {
+        InvokeAsync(() =>
+        {
+            if (_nodeStatuses.TryGetValue(evt.NodeId, out var status))
+            {
+                status.IsExecuting = false;
+                status.IsCompleted = true;
+                status.HasError = !evt.Success;
+                status.DurationMs = evt.DurationMs;
+                status.Error = evt.Error;
+            }
+            
+            var level = evt.Success ? "info" : "error";
+            var message = evt.Success 
+                ? $"Node tamamlandı ({evt.DurationMs:F0}ms)"
+                : $"Node hata: {evt.Error}";
+            
+            AddLog(level, message, _nodeStatuses.GetValueOrDefault(evt.NodeId)?.Name, evt.Timestamp);
+            OnNodeCompleted.InvokeAsync((evt.NodeId, evt.Success));
+            StateHasChanged();
+        });
+    }
+    
+    private void HandleProgress(ProgressEvent evt)
+    {
+        InvokeAsync(() =>
+        {
+            if (!string.IsNullOrEmpty(evt.Message))
+            {
+                var nodeName = _nodeStatuses.GetValueOrDefault(evt.NodeId)?.Name;
+                AddLog("info", $"[{evt.Current}/{evt.Total}] {evt.Message}", nodeName, evt.Timestamp);
+            }
+            StateHasChanged();
+        });
+    }
+    
+    private void HandleLog(LogEvent evt)
+    {
+        InvokeAsync(() =>
+        {
+            var nodeName = evt.NodeId.HasValue ? _nodeStatuses.GetValueOrDefault(evt.NodeId.Value)?.Name : null;
+            AddLog(evt.Level, evt.Message, nodeName, evt.Timestamp);
+            StateHasChanged();
+        });
+    }
+    
+    private void HandleWorkflowCompleted(WorkflowCompletedEventDto evt)
+    {
+        InvokeAsync(() =>
+        {
+            _workflowCompleted = true;
+            _workflowSuccess = evt.Success;
+            _totalDurationMs = evt.TotalDurationMs;
+            
+            var level = evt.Success ? "info" : "error";
+            var message = evt.Success
+                ? $"Workflow tamamlandı: {evt.NodesExecuted} node, {evt.TotalDurationMs:F0}ms"
+                : $"Workflow hata ile tamamlandı: {evt.Error}";
+            
+            AddLog(level, message, null, evt.Timestamp);
+            StateHasChanged();
+        });
+    }
+    
+    private void AddLog(string level, string message, string? nodeName, DateTime timestamp)
+    {
+        _logs.Add(new LogEntry
+        {
+            Level = level,
+            Message = message,
+            NodeName = nodeName,
+            Timestamp = timestamp
+        });
+        
+        // Max 200 log tut
+        if (_logs.Count > 200)
+        {
+            _logs.RemoveAt(0);
+        }
+    }
+    
+    private void ClearLogs()
+    {
+        _logs.Clear();
+        StateHasChanged();
+    }
+    
+    private async Task OnCloseClicked()
+    {
+        await OnClose.InvokeAsync();
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        SseClient.OnConnectionStateChanged -= HandleConnectionStateChanged;
+        SseClient.OnNodeStarted -= HandleNodeStarted;
+        SseClient.OnNodeCompleted -= HandleNodeCompleted;
+        SseClient.OnProgress -= HandleProgress;
+        SseClient.OnLog -= HandleLog;
+        SseClient.OnWorkflowCompleted -= HandleWorkflowCompleted;
+        
+        await SseClient.DisposeAsync();
+    }
+    
+    private class NodeStatusInfo
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "";
+        public bool IsExecuting { get; set; }
+        public bool IsCompleted { get; set; }
+        public bool HasError { get; set; }
+        public double DurationMs { get; set; }
+        public string? Error { get; set; }
+        public int Order { get; set; }
+        public DateTime StartTime { get; set; }
+        
+        public string StatusClass => IsExecuting ? "executing" : IsCompleted ? (HasError ? "error" : "completed") : "pending";
+    }
+    
+    private class LogEntry
+    {
+        public string Level { get; set; } = "info";
+        public string Message { get; set; } = "";
+        public string? NodeName { get; set; }
+        public DateTime Timestamp { get; set; }
+        
+        public string LevelClass => Level.ToLowerInvariant() switch
+        {
+            "error" => "log-error",
+            "warning" or "warn" => "log-warning",
+            "debug" => "log-debug",
+            _ => "log-info"
+        };
+    }
+}
