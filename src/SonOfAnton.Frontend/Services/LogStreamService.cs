@@ -5,11 +5,16 @@ using SonOfAnton.Shared.DTOs;
 namespace SonOfAnton.Frontend.Services;
 
 /// <summary>
-/// SSE log stream servisi - Backend'den gelen loglar� okur
+/// SSE log stream servisi - Backend'den gelen logları okur
+/// Exponential backoff ile otomatik yeniden bağlanma
 /// </summary>
 public class LogStreamService
 {
     private readonly HttpClient _httpClient;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public LogStreamService(HttpClient httpClient)
     {
@@ -17,31 +22,43 @@ public class LogStreamService
     }
 
     /// <summary>
-    /// Execution loglar�n� stream olarak oku
-    /// Ba�lant� kesilirse otomatik yeniden ba�lan (retry policy)
+    /// Bağlantı durumu
+    /// </summary>
+    public bool IsConnected { get; private set; }
+
+    /// <summary>
+    /// Aktif bağlantı sayısı
+    /// </summary>
+    public int RetryAttempt { get; private set; }
+
+    /// <summary>
+    /// Execution loglarını stream olarak oku
+    /// Bağlantı kesilirse exponential backoff ile yeniden bağlan
     /// </summary>
     public async IAsyncEnumerable<LogEventDto> StreamLogsAsync(
         Guid executionId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        Console.WriteLine($"[LogStreamService] StreamLogsAsync started for: {executionId}");
-        Console.WriteLine($"[LogStreamService] HttpClient BaseAddress: {_httpClient.BaseAddress}");
-        
-        var channel = Channel.CreateUnbounded<LogEventDto>();
+        var channel = Channel.CreateUnbounded<LogEventDto>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true
+        });
         
         _ = Task.Run(async () =>
         {
-            var retryCount = 0;
-            const int maxRetries = 3;
+            RetryAttempt = 0;
+            const int maxRetries = 5;
+            const int baseDelayMs = 500;
+            const int maxDelayMs = 30_000;
 
-            while (retryCount < maxRetries && !cancellationToken.IsCancellationRequested)
+            while (RetryAttempt < maxRetries && !cancellationToken.IsCancellationRequested)
             {
                 HttpResponseMessage? response = null;
                 
                 try
                 {
                     var url = $"api/logs/{executionId}";
-                    Console.WriteLine($"[LogStreamService] Connecting to: {url}");
                     
                     var request = new HttpRequestMessage(HttpMethod.Get, url);
                     request.Headers.Accept.ParseAdd("text/event-stream");
@@ -51,13 +68,12 @@ public class LogStreamService
                         HttpCompletionOption.ResponseHeadersRead,
                         cancellationToken);
 
-                    Console.WriteLine($"[LogStreamService] Response status: {response.StatusCode}");
                     response.EnsureSuccessStatusCode();
+                    IsConnected = true;
+                    RetryAttempt = 0; // Başarılı bağlantı, retry'ı sıfırla
 
                     using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
                     using var reader = new StreamReader(stream);
-
-                    Console.WriteLine("[LogStreamService] Stream opened, reading lines...");
 
                     while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
                     {
@@ -66,50 +82,51 @@ public class LogStreamService
                         if (string.IsNullOrWhiteSpace(line))
                             continue;
 
-                        Console.WriteLine($"[LogStreamService] Received line: {line[..Math.Min(100, line.Length)]}");
-
-
                         if (line.StartsWith("data: "))
                         {
                             var json = line[6..].Trim();
-                            if (json == "{}")
+                            if (json is "{}" or "")
                                 continue;
 
-                            var logEvent = JsonSerializer.Deserialize<LogEventDto>(json, new JsonSerializerOptions
+                            try
                             {
-                                PropertyNameCaseInsensitive = true
-                            });
-
-                            if (logEvent != null)
+                                var logEvent = JsonSerializer.Deserialize<LogEventDto>(json, JsonOptions);
+                                if (logEvent != null)
+                                {
+                                    await channel.Writer.WriteAsync(logEvent, cancellationToken);
+                                }
+                            }
+                            catch (JsonException)
                             {
-                                Console.WriteLine($"[LogStreamService] Parsed log: {logEvent.Message}");
-                                retryCount = 0;
-                                await channel.Writer.WriteAsync(logEvent, cancellationToken);
+                                // Hatalı JSON atla
                             }
                         }
                         else if (line.StartsWith("event: complete"))
                         {
-                            Console.WriteLine("[LogStreamService] Received complete event");
                             break;
                         }
+                        // Heartbeat yorumlarını sessizce atla
                     }
                     
-                    Console.WriteLine("[LogStreamService] Stream reading completed normally");
-                    break; // Normal completion
+                    break; // Normal tamamlanma
                 }
                 catch (OperationCanceledException)
                 {
-                    Console.WriteLine("[LogStreamService] Operation cancelled");
                     break;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Console.WriteLine($"[LogStreamService] Error: {ex.Message}");
-                    retryCount++;
-                    if (retryCount < maxRetries)
+                    IsConnected = false;
+                    RetryAttempt++;
+                    
+                    if (RetryAttempt < maxRetries)
                     {
-                        Console.WriteLine($"[LogStreamService] Retrying ({retryCount}/{maxRetries})...");
-                        await Task.Delay(1000 * retryCount, cancellationToken);
+                        // Exponential backoff with jitter
+                        var delay = Math.Min(
+                            baseDelayMs * (int)Math.Pow(2, RetryAttempt - 1) + Random.Shared.Next(0, 500),
+                            maxDelayMs);
+                        
+                        await Task.Delay(delay, cancellationToken);
                     }
                 }
                 finally
@@ -118,7 +135,7 @@ public class LogStreamService
                 }
             }
             
-            Console.WriteLine("[LogStreamService] Channel writer completing");
+            IsConnected = false;
             channel.Writer.Complete();
         }, cancellationToken);
 
@@ -126,8 +143,6 @@ public class LogStreamService
         {
             yield return log;
         }
-        
-        Console.WriteLine("[LogStreamService] StreamLogsAsync finished");
     }
 }
 

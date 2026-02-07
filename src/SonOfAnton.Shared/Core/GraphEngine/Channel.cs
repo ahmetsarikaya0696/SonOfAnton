@@ -1,6 +1,47 @@
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace SonOfAnton.Shared.Core.GraphEngine;
+
+/// <summary>
+/// Kanal tipi
+/// </summary>
+public enum ChannelType
+{
+    /// <summary>Sınırsız kapasiteli kanal</summary>
+    Unbounded,
+    /// <summary>Sınırlı kapasiteli kanal</summary>
+    Bounded,
+    /// <summary>Tek öğeli kanal (son değer kazanır)</summary>
+    SingleItem
+}
+
+/// <summary>
+/// Kanal istatistikleri
+/// </summary>
+public class ChannelStatistics
+{
+    /// <summary>Toplam yazılan öğe sayısı</summary>
+    public long TotalWritten { get; set; }
+
+    /// <summary>Toplam okunan öğe sayısı</summary>
+    public long TotalRead { get; set; }
+
+    /// <summary>Buffer kullanım oranı (0-1). Unbounded için -1</summary>
+    public double BufferUtilization { get; set; } = -1;
+
+    /// <summary>Saniye başına yazılan öğe</summary>
+    public double WriteThroughput { get; set; }
+
+    /// <summary>Saniye başına okunan öğe</summary>
+    public double ReadThroughput { get; set; }
+
+    /// <summary>İlk yazma zamanı</summary>
+    public DateTime? FirstWriteTime { get; set; }
+
+    /// <summary>Son yazma zamanı</summary>
+    public DateTime? LastWriteTime { get; set; }
+}
 
 /// <summary>
 /// Type-safe veri kanalı - Node'lar arası asenkron veri akışı
@@ -12,11 +53,19 @@ public class DataChannel<T> : IDisposable
     private readonly Channel<T> _channel;
     private readonly CancellationTokenSource _cts;
     private bool _disposed;
+    private long _totalWritten;
+    private long _totalRead;
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     
     /// <summary>
     /// Kanal kapasitesi
     /// </summary>
     public int Capacity { get; }
+
+    /// <summary>
+    /// Kanal tipi
+    /// </summary>
+    public ChannelType ChannelType { get; }
     
     /// <summary>
     /// Kanal aktif mi (yazma/okuma yapılabilir)
@@ -34,27 +83,33 @@ public class DataChannel<T> : IDisposable
     /// <param name="capacity">Kanal kapasitesi (0 = sınırsız)</param>
     /// <param name="singleWriter">Tek yazıcı optimizasyonu</param>
     /// <param name="singleReader">Tek okuyucu optimizasyonu</param>
-    public DataChannel(int capacity = 100, bool singleWriter = true, bool singleReader = true)
+    /// <param name="channelType">Kanal tipi</param>
+    public DataChannel(int capacity = 100, bool singleWriter = true, bool singleReader = true, ChannelType channelType = ChannelType.Bounded)
     {
         Capacity = capacity;
+        ChannelType = channelType;
         _cts = new CancellationTokenSource();
         
-        var options = capacity > 0
-            ? new BoundedChannelOptions(capacity)
+        _channel = channelType switch
+        {
+            ChannelType.SingleItem => Channel.CreateBounded<T>(new BoundedChannelOptions(1)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleWriter = singleWriter,
+                SingleReader = singleReader
+            }),
+            ChannelType.Bounded when capacity > 0 => Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = singleWriter,
                 SingleReader = singleReader
-            }
-            : null;
-        
-        _channel = capacity > 0
-            ? Channel.CreateBounded<T>((BoundedChannelOptions)options!)
-            : Channel.CreateUnbounded<T>(new UnboundedChannelOptions
+            }),
+            _ => Channel.CreateUnbounded<T>(new UnboundedChannelOptions
             {
                 SingleWriter = singleWriter,
                 SingleReader = singleReader
-            });
+            })
+        };
     }
     
     /// <summary>
@@ -65,6 +120,7 @@ public class DataChannel<T> : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, cancellationToken);
         await _channel.Writer.WriteAsync(item, linkedCts.Token);
+        Interlocked.Increment(ref _totalWritten);
     }
     
     /// <summary>
@@ -74,7 +130,9 @@ public class DataChannel<T> : IDisposable
     {
         if (_disposed || _cts.IsCancellationRequested)
             return false;
-        return _channel.Writer.TryWrite(item);
+        var result = _channel.Writer.TryWrite(item);
+        if (result) Interlocked.Increment(ref _totalWritten);
+        return result;
     }
     
     /// <summary>
@@ -84,7 +142,9 @@ public class DataChannel<T> : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, cancellationToken);
-        return await _channel.Reader.ReadAsync(linkedCts.Token);
+        var item = await _channel.Reader.ReadAsync(linkedCts.Token);
+        Interlocked.Increment(ref _totalRead);
+        return item;
     }
     
     /// <summary>
@@ -95,7 +155,9 @@ public class DataChannel<T> : IDisposable
         item = default;
         if (_disposed || _cts.IsCancellationRequested)
             return false;
-        return _channel.Reader.TryRead(out item);
+        var result = _channel.Reader.TryRead(out item);
+        if (result) Interlocked.Increment(ref _totalRead);
+        return result;
     }
     
     /// <summary>
@@ -129,6 +191,39 @@ public class DataChannel<T> : IDisposable
     public void Complete(Exception? error = null)
     {
         _channel.Writer.Complete(error);
+    }
+
+    /// <summary>
+    /// Kanal istatistiklerini döndürür
+    /// </summary>
+    public ChannelStatistics GetStatistics()
+    {
+        var elapsed = _stopwatch.Elapsed;
+        var totalSeconds = elapsed.TotalSeconds > 0 ? elapsed.TotalSeconds : 1;
+        var written = Interlocked.Read(ref _totalWritten);
+        var read = Interlocked.Read(ref _totalRead);
+        var pending = PendingCount;
+
+        return new ChannelStatistics
+        {
+            TotalWritten = written,
+            TotalRead = read,
+            BufferUtilization = ChannelType == ChannelType.Bounded && Capacity > 0 && pending >= 0
+                ? (double)pending / Capacity
+                : -1,
+            WriteThroughput = written / totalSeconds,
+            ReadThroughput = read / totalSeconds,
+        };
+    }
+
+    /// <summary>
+    /// Deadlock riski olup olmadığını kontrol eder
+    /// </summary>
+    public bool HasDeadlockRisk()
+    {
+        if (ChannelType != ChannelType.Bounded) return false;
+        var pending = PendingCount;
+        return pending >= 0 && pending >= Capacity;
     }
     
     public void Dispose()
@@ -213,4 +308,48 @@ public record WorkflowCompletedEvent : WorkflowEvent
     public string? Error { get; init; }
     public TimeSpan TotalDuration { get; init; }
     public int NodesExecuted { get; init; }
+}
+
+/// <summary>
+/// Farklı kanal tiplerine göre DataChannel oluşturan factory
+/// </summary>
+public static class ChannelFactory
+{
+    /// <summary>
+    /// Sınırsız kapasiteli kanal oluşturur
+    /// </summary>
+    public static DataChannel<T> CreateUnbounded<T>(bool singleWriter = true, bool singleReader = true)
+    {
+        return new DataChannel<T>(capacity: 0, singleWriter, singleReader, ChannelType.Unbounded);
+    }
+
+    /// <summary>
+    /// Sınırlı kapasiteli kanal oluşturur
+    /// </summary>
+    public static DataChannel<T> CreateBounded<T>(int capacity, bool singleWriter = true, bool singleReader = true)
+    {
+        return new DataChannel<T>(capacity, singleWriter, singleReader, ChannelType.Bounded);
+    }
+
+    /// <summary>
+    /// Tek öğeli kanal oluşturur (son değer kazanır)
+    /// </summary>
+    public static DataChannel<T> CreateSingleItem<T>(bool singleWriter = true, bool singleReader = true)
+    {
+        return new DataChannel<T>(capacity: 1, singleWriter, singleReader, ChannelType.SingleItem);
+    }
+
+    /// <summary>
+    /// Node gereksinimlerine göre uygun kanal oluşturur
+    /// </summary>
+    public static DataChannel<T> CreateForNode<T>(NodeCategory category)
+    {
+        return category switch
+        {
+            NodeCategory.Trigger => CreateUnbounded<T>(),
+            NodeCategory.AI => CreateBounded<T>(10),
+            NodeCategory.Transform => CreateBounded<T>(100),
+            _ => CreateBounded<T>(50)
+        };
+    }
 }

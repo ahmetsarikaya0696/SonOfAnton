@@ -28,6 +28,22 @@
     
     <div class="canvas-container" @ref="_canvasContainer">
         <canvas id="@CanvasId"></canvas>
+
+        @if (_contextMenu.Visible)
+        {
+            <div class="context-menu" style="left: @(_contextMenu.X)px; top: @(_contextMenu.Y)px;">
+                <button class="context-item" @onclick="() => DuplicateSelectedNode()">
+                    <Icon Name="copy" Size="14" /> Çoğalt
+                </button>
+                <button class="context-item" @onclick="() => DeleteSelectedNode()">
+                    <Icon Name="trash-2" Size="14" /> Sil
+                </button>
+                <hr class="context-divider" />
+                <button class="context-item" @onclick="() => DisconnectSelectedNode()">
+                    <Icon Name="scissors" Size="14" /> Bağlantıları Kes
+                </button>
+            </div>
+        }
     </div>
 </div>
 
@@ -37,11 +53,16 @@
     [Parameter] public EventCallback OnStop { get; set; }
     [Parameter] public EventCallback<string> OnNodeSelected { get; set; }
     [Parameter] public EventCallback OnSelectionCleared { get; set; }
+    [Parameter] public EventCallback<(string FromNode, string FromPort, string ToNode, string ToPort)> OnConnectionCreated { get; set; }
+    [Parameter] public EventCallback<string> OnNodeDeleted { get; set; }
     [Parameter] public bool IsExecuting { get; set; }
+    [Parameter] public bool EnableGridSnapping { get; set; }
     
     private ElementReference _canvasContainer;
     private double _zoomLevel = 1.0;
     private bool _initialized = false;
+    private string? _contextMenuNodeId;
+    private (bool Visible, double X, double Y) _contextMenu;
     
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -55,6 +76,13 @@
                 EditorInterop.OnSelectionCleared += HandleSelectionCleared;
                 EditorInterop.OnNodeMoved += HandleNodeMoved;
                 EditorInterop.OnCanvasZoom += HandleZoom;
+                EditorInterop.OnConnectionCreated += HandleConnectionCreated;
+                EditorInterop.OnContextMenu += HandleContextMenu;
+
+                if (EnableGridSnapping)
+                {
+                    await EditorInterop.SetGridSnappingAsync(true);
+                }
             }
         }
     }
@@ -165,11 +193,13 @@
     
     private void HandleNodeSelected(string nodeId)
     {
+        _contextMenu = (false, 0, 0);
         OnNodeSelected.InvokeAsync(nodeId);
     }
     
     private void HandleSelectionCleared()
     {
+        _contextMenu = (false, 0, 0);
         OnSelectionCleared.InvokeAsync();
     }
     
@@ -181,7 +211,46 @@
     private void HandleZoom(double zoom)
     {
         _zoomLevel = zoom;
+        _contextMenu = (false, 0, 0);
         StateHasChanged();
+    }
+
+    private void HandleConnectionCreated(string fromNode, string fromPort, string toNode, string toPort)
+    {
+        OnConnectionCreated.InvokeAsync((fromNode, fromPort, toNode, toPort));
+    }
+
+    private void HandleContextMenu(string nodeId, double x, double y)
+    {
+        _contextMenuNodeId = nodeId;
+        _contextMenu = (true, x, y);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DuplicateSelectedNode()
+    {
+        _contextMenu = (false, 0, 0);
+        // Duplicate logic is handled by parent component
+    }
+
+    private async Task DeleteSelectedNode()
+    {
+        _contextMenu = (false, 0, 0);
+        if (_contextMenuNodeId != null)
+        {
+            await EditorInterop.RemoveNodeAsync(_contextMenuNodeId);
+            await OnNodeDeleted.InvokeAsync(_contextMenuNodeId);
+        }
+    }
+
+    private async Task DisconnectSelectedNode()
+    {
+        _contextMenu = (false, 0, 0);
+        // Disconnect all connections for this node (parent handles actual logic)
+        if (_contextMenuNodeId != null)
+        {
+            await OnNodeDeleted.InvokeAsync(_contextMenuNodeId);
+        }
     }
     
     private async Task OnRunClicked()
@@ -202,6 +271,8 @@
             EditorInterop.OnSelectionCleared -= HandleSelectionCleared;
             EditorInterop.OnNodeMoved -= HandleNodeMoved;
             EditorInterop.OnCanvasZoom -= HandleZoom;
+            EditorInterop.OnConnectionCreated -= HandleConnectionCreated;
+            EditorInterop.OnContextMenu -= HandleContextMenu;
         }
         
         await EditorInterop.DisposeAsync();

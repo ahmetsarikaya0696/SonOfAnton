@@ -147,6 +147,54 @@ public static class NodeRegistry
                 new NodeParameter { Name = "condition", DisplayName = "Kosul", Type = "string", Required = true, Placeholder = "item.value > 10" }
             ]
         },
+        new NodeDefinition
+        {
+            Type = "transform.template",
+            Name = "Sablon",
+            Icon = "file-text",
+            Category = "Donusum",
+            Description = "Mustache sablonu ile veri formatla",
+            Color = "#f9e2af",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "template", DisplayName = "Sablon", Type = "string", Required = true, Placeholder = "Merhaba {{name}}, siparisiz #{{orderId}} hazirlandi." }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "transform.aggregate",
+            Name = "Toplama",
+            Icon = "bar-chart-2",
+            Category = "Donusum",
+            Description = "Array verilerini topla (count, sum, avg, min, max)",
+            Color = "#f9e2af",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter
+                {
+                    Name = "operation",
+                    DisplayName = "Islem",
+                    Type = "select",
+                    DefaultValue = "count",
+                    Options =
+                    [
+                        new SelectOption { Value = "count", Label = "Say" },
+                        new SelectOption { Value = "sum", Label = "Topla" },
+                        new SelectOption { Value = "avg", Label = "Ortalama" },
+                        new SelectOption { Value = "min", Label = "Minimum" },
+                        new SelectOption { Value = "max", Label = "Maksimum" },
+                        new SelectOption { Value = "first", Label = "Ilk" },
+                        new SelectOption { Value = "last", Label = "Son" },
+                        new SelectOption { Value = "distinct", Label = "Benzersiz" }
+                    ]
+                },
+                new NodeParameter { Name = "field", DisplayName = "Alan (opsiyonel)", Type = "string", Placeholder = "price" }
+            ]
+        },
 
         // Mantik
         new NodeDefinition
@@ -201,6 +249,32 @@ public static class NodeRegistry
                 new NodePort { Name = "input1", Type = "any" },
                 new NodePort { Name = "input2", Type = "any" }
             ],
+            Outputs = [new NodePort { Name = "output", Type = "any" }]
+        },
+        new NodeDefinition
+        {
+            Type = "logic.delay",
+            Name = "Bekle",
+            Icon = "clock",
+            Category = "Mantik",
+            Description = "Belirtilen sure kadar bekle",
+            Color = "#cba6f7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "delay", DisplayName = "Bekleme Suresi (ms)", Type = "number", DefaultValue = 1000, Required = true }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "logic.loop",
+            Name = "Dongu",
+            Icon = "repeat",
+            Category = "Mantik",
+            Description = "Array uzerinde iterasyon yap",
+            Color = "#cba6f7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
             Outputs = [new NodePort { Name = "output", Type = "any" }]
         },
 

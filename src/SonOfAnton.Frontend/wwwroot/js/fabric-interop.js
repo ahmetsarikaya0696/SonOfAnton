@@ -174,6 +174,151 @@ function setupEventListeners(canvasId, canvasData) {
         isPanning = false;
         canvas.selection = true;
     });
+
+    // ===== TOUCH GESTURES =====
+    let lastTouchDistance = 0;
+    let lastTouchCenter = null;
+
+    canvas.upperCanvasEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            // Pinch-to-zoom başlangıcı
+            e.preventDefault();
+            canvas.selection = false;
+            lastTouchDistance = getTouchDistance(e.touches);
+            lastTouchCenter = getTouchCenter(e.touches);
+        }
+    }, { passive: false });
+
+    canvas.upperCanvasEl.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const currentDistance = getTouchDistance(e.touches);
+            const currentCenter = getTouchCenter(e.touches);
+
+            // Pinch zoom
+            if (lastTouchDistance > 0) {
+                const scale = currentDistance / lastTouchDistance;
+                let zoom = canvas.getZoom() * scale;
+                zoom = Math.min(Math.max(0.3, zoom), 3);
+                canvas.zoomToPoint(currentCenter, zoom);
+                canvasData.zoom = zoom;
+
+                if (dotNetRef) {
+                    dotNetRef.invokeMethodAsync('OnCanvasZoom_Internal', zoom);
+                }
+            }
+
+            // Two-finger pan
+            if (lastTouchCenter) {
+                const vpt = canvas.viewportTransform;
+                vpt[4] += currentCenter.x - lastTouchCenter.x;
+                vpt[5] += currentCenter.y - lastTouchCenter.y;
+                canvas.requestRenderAll();
+            }
+
+            lastTouchDistance = currentDistance;
+            lastTouchCenter = currentCenter;
+        }
+    }, { passive: false });
+
+    canvas.upperCanvasEl.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+            lastTouchDistance = 0;
+            lastTouchCenter = null;
+            canvas.selection = true;
+        }
+    });
+
+    // ===== CONNECTION DRAG =====
+    let isDraggingConnection = false;
+    let connectionDragLine = null;
+    let connectionSourceNode = null;
+    let connectionSourcePin = null;
+
+    canvas.on('mouse:down', (opt) => {
+        const target = opt.target;
+        if (!target) return;
+
+        // Pin üzerinde mi kontrol et
+        if (target.pinId && target.pinType === 'output') {
+            isDraggingConnection = true;
+            const parentGroup = target.group;
+            connectionSourceNode = parentGroup?.nodeId;
+            connectionSourcePin = target.pinId;
+
+            const pos = getNodePinPosition(parentGroup, target.pinId, 'output');
+            if (pos) {
+                connectionDragLine = new fabric.Line(
+                    [pos.x, pos.y, pos.x, pos.y],
+                    {
+                        stroke: NODE_CONFIG.colors.pin.output,
+                        strokeWidth: 3,
+                        strokeDashArray: [8, 4],
+                        selectable: false,
+                        evented: false
+                    }
+                );
+                canvas.add(connectionDragLine);
+            }
+        }
+    });
+
+    canvas.on('mouse:move', (opt) => {
+        if (isDraggingConnection && connectionDragLine) {
+            const pointer = canvas.getPointer(opt.e);
+            connectionDragLine.set({ x2: pointer.x, y2: pointer.y });
+            canvas.renderAll();
+        }
+    });
+
+    canvas.on('mouse:up', (opt) => {
+        if (isDraggingConnection) {
+            isDraggingConnection = false;
+
+            if (connectionDragLine) {
+                canvas.remove(connectionDragLine);
+                connectionDragLine = null;
+            }
+
+            // Hedef pin'i bul
+            const target = opt.target;
+            if (target && target.pinId && target.pinType === 'input') {
+                const targetGroup = target.group;
+                if (targetGroup && targetGroup.nodeId && connectionSourceNode &&
+                    targetGroup.nodeId !== connectionSourceNode) {
+                    if (dotNetRef) {
+                        dotNetRef.invokeMethodAsync('OnConnectionCreated_Internal',
+                            connectionSourceNode, connectionSourcePin,
+                            targetGroup.nodeId, target.pinId);
+                    }
+                }
+            }
+
+            connectionSourceNode = null;
+            connectionSourcePin = null;
+            canvas.renderAll();
+        }
+    });
+
+    // ===== CONTEXT MENU =====
+    canvas.on('mouse:down', (opt) => {
+        if (opt.e.button === 2) {
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+            const pointer = canvas.getPointer(opt.e);
+            const target = opt.target;
+
+            if (target && target.nodeId && dotNetRef) {
+                dotNetRef.invokeMethodAsync('OnContextMenu_Internal',
+                    target.nodeId, pointer.x, pointer.y);
+            }
+        }
+    });
+
+    // Sağ tık menüsünü engelle
+    canvas.upperCanvasEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
 }
 
 /**
@@ -533,6 +678,25 @@ function getNodePinPosition(nodeGroup, pinName, pinType) {
 }
 
 /**
+ * Touch yardımcı: iki parmak arası mesafe
+ */
+function getTouchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Touch yardımcı: iki parmak merkez noktası
+ */
+function getTouchCenter(touches) {
+    return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+    };
+}
+
+/**
  * Bezier connection line oluşturur
  */
 function createConnectionLine(start, end) {
@@ -742,6 +906,109 @@ export function updateConnections(canvasId, nodeId) {
             }
         }
     });
+
+    canvasData.canvas.renderAll();
+    return true;
+}
+
+// ===== BATCH OPERATIONS =====
+
+/**
+ * Birden fazla node'u tek seferde ekler (performans)
+ */
+export function addNodesBatch(canvasId, nodesArray) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    canvasData.canvas.renderOnAddRemove = false;
+
+    for (const nodeData of nodesArray) {
+        addNode(canvasId, nodeData.nodeId, nodeData.nodeType, nodeData.nodeName,
+                nodeData.x, nodeData.y, nodeData.config);
+    }
+
+    canvasData.canvas.renderOnAddRemove = true;
+    canvasData.canvas.renderAll();
+    return true;
+}
+
+/**
+ * Birden fazla connection'ı tek seferde ekler (performans)
+ */
+export function connectNodesBatch(canvasId, connectionsArray) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    canvasData.canvas.renderOnAddRemove = false;
+
+    for (const conn of connectionsArray) {
+        connectNodes(canvasId, conn.connectionId, conn.sourceNodeId,
+                     conn.targetNodeId, conn.sourcePort, conn.targetPort);
+    }
+
+    canvasData.canvas.renderOnAddRemove = true;
+    canvasData.canvas.renderAll();
+    return true;
+}
+
+// ===== VIEWPORT STATE =====
+
+/**
+ * Mevcut viewport durumunu döndürür
+ */
+export function getViewportState(canvasId) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return null;
+
+    const vpt = canvasData.canvas.viewportTransform;
+    return {
+        zoom: canvasData.canvas.getZoom(),
+        panX: vpt[4],
+        panY: vpt[5]
+    };
+}
+
+/**
+ * Viewport durumunu geri yükler
+ */
+export function setViewportState(canvasId, state) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    if (state.zoom) {
+        canvasData.canvas.setZoom(state.zoom);
+        canvasData.zoom = state.zoom;
+    }
+    const vpt = canvasData.canvas.viewportTransform;
+    vpt[4] = state.panX || 0;
+    vpt[5] = state.panY || 0;
+    canvasData.canvas.requestRenderAll();
+    return true;
+}
+
+// ===== GRID SNAPPING =====
+
+/**
+ * Grid snapping'i etkinleştirir/devre dışı bırakır
+ */
+export function setGridSnapping(canvasId, enabled, gridSize) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    canvasData.gridSnapping = enabled;
+    canvasData.gridSize = gridSize || 20;
+
+    if (enabled) {
+        canvasData.canvas.on('object:moving', (e) => {
+            if (canvasData.gridSnapping) {
+                const obj = e.target;
+                obj.set({
+                    left: Math.round(obj.left / canvasData.gridSize) * canvasData.gridSize,
+                    top: Math.round(obj.top / canvasData.gridSize) * canvasData.gridSize
+                });
+            }
+        });
+    }
 
     canvasData.canvas.renderAll();
     return true;

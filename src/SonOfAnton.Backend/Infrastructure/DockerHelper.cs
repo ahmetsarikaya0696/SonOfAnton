@@ -8,6 +8,11 @@ namespace SonOfAnton.Backend.Infrastructure;
 /// </summary>
 public static class DockerHelper
 {
+    private const string ContainerName = "sonofanton-postgres";
+    private const string DbUser = "sonofanton";
+    private const string DbPassword = "sonofanton_dev_password";
+    private const string DbName = "sonofanton_db";
+
     /// <summary>
     /// Docker Compose ile servisleri baslatir ve PostgreSQL hazir olana kadar bekler
     /// </summary>
@@ -23,7 +28,7 @@ public static class DockerHelper
         logger.LogInformation("Docker calisiyor.");
 
         // Container'larin durumunu kontrol et
-        var isPostgresRunning = await IsContainerRunningAsync("sonofanton-postgres");
+        var isPostgresRunning = await IsContainerRunningAsync(ContainerName);
         
         if (isPostgresRunning)
         {
@@ -31,35 +36,39 @@ public static class DockerHelper
             
             // Yine de PostgreSQL'in baglanti kabul ettiginden emin ol
             await WaitForPostgresReadyAsync(logger, TimeSpan.FromSeconds(30));
-            return;
-        }
-
-        logger.LogInformation("Docker servisleri baslatiliyor...");
-        
-        // docker-compose.yml dosyasinin yolunu bul
-        var composePath = FindDockerComposeFile(logger);
-        if (composePath == null)
-        {
-            throw new FileNotFoundException("docker-compose.yml dosyasi bulunamadi. Lutfen solution root'ta docker-compose.yml dosyasinin oldugunden emin olun.");
-        }
-
-        logger.LogInformation("docker-compose.yml bulundu: {Path}", composePath);
-
-        // Docker Compose up calistir
-        var result = await RunCommandAsync("docker", $"compose -f \"{composePath}\" up -d postgres", TimeSpan.FromMinutes(3));
-        
-        if (result.ExitCode == 0)
-        {
-            logger.LogInformation("Docker servisleri baslatildi.");
-            
-            // PostgreSQL'in hazir olmasini bekle
-            await WaitForPostgresReadyAsync(logger, TimeSpan.FromSeconds(60));
         }
         else
         {
-            logger.LogError("Docker servisleri baslatilamadi: {Error}", result.Error);
-            throw new InvalidOperationException($"Docker servisleri baslatilamadi: {result.Error}");
+            logger.LogInformation("Docker servisleri baslatiliyor...");
+            
+            // docker-compose.yml dosyasinin yolunu bul
+            var composePath = FindDockerComposeFile(logger);
+            if (composePath == null)
+            {
+                throw new FileNotFoundException("docker-compose.yml dosyasi bulunamadi. Lutfen solution root'ta docker-compose.yml dosyasinin oldugunden emin olun.");
+            }
+
+            logger.LogInformation("docker-compose.yml bulundu: {Path}", composePath);
+
+            // Docker Compose up calistir
+            var result = await RunCommandAsync("docker", $"compose -f \"{composePath}\" up -d postgres", TimeSpan.FromMinutes(3));
+            
+            if (result.ExitCode == 0)
+            {
+                logger.LogInformation("Docker servisleri baslatildi.");
+                
+                // PostgreSQL'in hazir olmasini bekle
+                await WaitForPostgresReadyAsync(logger, TimeSpan.FromSeconds(60));
+            }
+            else
+            {
+                logger.LogError("Docker servisleri baslatilamadi: {Error}", result.Error);
+                throw new InvalidOperationException($"Docker servisleri baslatilamadi: {result.Error}");
+            }
         }
+
+        // Kullanici, veritabani ve extension erisimini dogrula/olustur
+        await EnsureDatabaseAccessAsync(logger);
     }
 
     private static async Task<bool> IsDockerRunningAsync()
@@ -86,6 +95,108 @@ public static class DockerHelper
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// PostgreSQL'de kullanici, veritabani ve pgvector extension erisimini dogrular.
+    /// Eksik olanlari olusturur.
+    /// </summary>
+    private static async Task EnsureDatabaseAccessAsync(ILogger logger)
+    {
+        logger.LogInformation("PostgreSQL kullanici/veritabani erisimi kontrol ediliyor...");
+
+        // 1. Kullanicinin var olup olmadigini kontrol et
+        var userCheck = await RunPsqlCommandAsync(
+            $"SELECT 1 FROM pg_roles WHERE rolname='{DbUser}'",
+            "postgres", logger);
+
+        if (!userCheck.Output.Contains("1"))
+        {
+            logger.LogWarning("Kullanici '{User}' bulunamadi, olusturuluyor...", DbUser);
+            await RunPsqlCommandAsync(
+                $"CREATE USER {DbUser} WITH PASSWORD '{DbPassword}' SUPERUSER",
+                "postgres", logger);
+            logger.LogInformation("Kullanici '{User}' olusturuldu.", DbUser);
+        }
+        else
+        {
+            logger.LogInformation("Kullanici '{User}' mevcut.", DbUser);
+        }
+
+        // 2. Veritabaninin var olup olmadigini kontrol et
+        var dbCheck = await RunPsqlCommandAsync(
+            $"SELECT 1 FROM pg_database WHERE datname='{DbName}'",
+            "postgres", logger);
+
+        if (!dbCheck.Output.Contains("1"))
+        {
+            logger.LogWarning("Veritabani '{Database}' bulunamadi, olusturuluyor...", DbName);
+            await RunPsqlCommandAsync(
+                $"CREATE DATABASE {DbName} OWNER {DbUser}",
+                "postgres", logger);
+            logger.LogInformation("Veritabani '{Database}' olusturuldu.", DbName);
+        }
+        else
+        {
+            logger.LogInformation("Veritabani '{Database}' mevcut.", DbName);
+        }
+
+        // 3. pgvector extension'i olustur
+        var extCheck = await RunPsqlCommandAsync(
+            "SELECT 1 FROM pg_extension WHERE extname='vector'",
+            DbName, logger);
+
+        if (!extCheck.Output.Contains("1"))
+        {
+            logger.LogWarning("pgvector extension bulunamadi, olusturuluyor...");
+            await RunPsqlCommandAsync(
+                "CREATE EXTENSION IF NOT EXISTS vector",
+                DbName, logger);
+            logger.LogInformation("pgvector extension olusturuldu.");
+        }
+        else
+        {
+            logger.LogInformation("pgvector extension mevcut.");
+        }
+
+        // 4. Kullaniciya yetkileri ver
+        await RunPsqlCommandAsync(
+            $"GRANT ALL PRIVILEGES ON DATABASE {DbName} TO {DbUser}",
+            "postgres", logger);
+        await RunPsqlCommandAsync(
+            $"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {DbUser}",
+            DbName, logger);
+        await RunPsqlCommandAsync(
+            $"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {DbUser}",
+            DbName, logger);
+        await RunPsqlCommandAsync(
+            $"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO {DbUser}",
+            DbName, logger);
+        await RunPsqlCommandAsync(
+            $"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO {DbUser}",
+            DbName, logger);
+
+        logger.LogInformation("PostgreSQL kullanici/veritabani erisimi hazir.");
+    }
+
+    /// <summary>
+    /// Docker container icinde psql komutu calistirir.
+    /// </summary>
+    private static async Task<CommandResult> RunPsqlCommandAsync(string sql, string database, ILogger logger)
+    {
+        // postgres superuser ile baglanti kurup komutu calistir
+        var escapedSql = sql.Replace("\"", "\\\"");
+        var result = await RunCommandAsync(
+            "docker",
+            $"exec {ContainerName} psql -U postgres -d {database} -tAc \"{escapedSql}\"",
+            TimeSpan.FromSeconds(15));
+
+        if (result.ExitCode != 0 && !string.IsNullOrWhiteSpace(result.Error))
+        {
+            logger.LogDebug("psql komutu hatasi: {Error} (SQL: {Sql})", result.Error.Trim(), sql);
+        }
+
+        return result;
     }
 
     private static string? FindDockerComposeFile(ILogger logger)
@@ -171,11 +282,11 @@ public static class DockerHelper
     private static async Task WaitForPostgresReadyAsync(ILogger logger, TimeSpan timeout)
     {
         var stopwatch = Stopwatch.StartNew();
-        logger.LogInformation("PostgreSQL'in hazir olmas� bekleniyor (max {Seconds} saniye)...", timeout.TotalSeconds);
+        logger.LogInformation("PostgreSQL'in hazir olmasi bekleniyor (max {Seconds} saniye)...", timeout.TotalSeconds);
         
         while (stopwatch.Elapsed < timeout)
         {
-            var result = await RunCommandAsync("docker", "exec sonofanton-postgres pg_isready -U sonofanton -d sonofanton_db", TimeSpan.FromSeconds(5));
+            var result = await RunCommandAsync("docker", $"exec {ContainerName} pg_isready -U postgres", TimeSpan.FromSeconds(5));
             
             if (result.ExitCode == 0)
             {

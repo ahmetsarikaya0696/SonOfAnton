@@ -1,6 +1,28 @@
 namespace SonOfAnton.Shared.Core.GraphEngine;
 
 /// <summary>
+/// Edge lifecycle event tipleri
+/// </summary>
+public enum EdgeEventType
+{
+    Connected,
+    Disconnected,
+    DataTransferred,
+    Error
+}
+
+/// <summary>
+/// Edge event argümanları
+/// </summary>
+public class EdgeEventArgs : EventArgs
+{
+    public required Edge Edge { get; init; }
+    public EdgeEventType EventType { get; init; }
+    public object? Data { get; init; }
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
 /// Edge durumu
 /// </summary>
 public enum EdgeState
@@ -71,6 +93,68 @@ public class Edge
     /// Aktarım zamanı
     /// </summary>
     public DateTime? LastTransferTime { get; set; }
+
+    /// <summary>
+    /// Transfer sayısı (throughput ölçümü için)
+    /// </summary>
+    public long TransferCount { get; set; }
+
+    /// <summary>
+    /// Bağlantı kurulduğunda tetiklenen event
+    /// </summary>
+    public event EventHandler<EdgeEventArgs>? OnConnected;
+
+    /// <summary>
+    /// Bağlantı koparıldığında tetiklenen event
+    /// </summary>
+    public event EventHandler<EdgeEventArgs>? OnDisconnected;
+
+    /// <summary>
+    /// Veri aktarıldığında tetiklenen event
+    /// </summary>
+    public event EventHandler<EdgeEventArgs>? OnDataTransferred;
+
+    /// <summary>
+    /// Bağlantı kurulduğunu bildirir
+    /// </summary>
+    public void NotifyConnected()
+    {
+        OnConnected?.Invoke(this, new EdgeEventArgs
+        {
+            Edge = this,
+            EventType = EdgeEventType.Connected
+        });
+    }
+
+    /// <summary>
+    /// Bağlantı koparıldığını bildirir
+    /// </summary>
+    public void NotifyDisconnected()
+    {
+        OnDisconnected?.Invoke(this, new EdgeEventArgs
+        {
+            Edge = this,
+            EventType = EdgeEventType.Disconnected
+        });
+    }
+
+    /// <summary>
+    /// Veri aktarımını bildirir
+    /// </summary>
+    public void NotifyDataTransferred(object? data)
+    {
+        TransferCount++;
+        LastTransferredData = data;
+        LastTransferTime = DateTime.UtcNow;
+        State = EdgeState.Transferred;
+
+        OnDataTransferred?.Invoke(this, new EdgeEventArgs
+        {
+            Edge = this,
+            EventType = EdgeEventType.DataTransferred,
+            Data = data
+        });
+    }
     
     /// <summary>
     /// Edge'in bağlantı yapmasının geçerli olup olmadığını kontrol eder
@@ -106,6 +190,22 @@ public class Edge
             error = $"Type mismatch: {sourcePin.Definition.DataType} -> {targetPin.Definition.DataType}";
             return false;
         }
+
+        // Max connections kontrolü (source output pin)
+        if (sourcePin.Definition.MaxConnections > 0 &&
+            sourcePin.ConnectedEdges.Count >= sourcePin.Definition.MaxConnections)
+        {
+            error = $"Output pin '{SourcePinName}' has reached its maximum connection limit ({sourcePin.Definition.MaxConnections})";
+            return false;
+        }
+
+        // Max connections kontrolü (target input pin)
+        if (targetPin.Definition.MaxConnections > 0 &&
+            targetPin.ConnectedEdges.Count >= targetPin.Definition.MaxConnections)
+        {
+            error = $"Input pin '{TargetPinName}' has reached its maximum connection limit ({targetPin.Definition.MaxConnections})";
+            return false;
+        }
         
         return true;
     }
@@ -127,15 +227,39 @@ public class Edge
         if (source == PinType.Number && target == PinType.String)
             return true;
         
-        // Boolean, String'e dönüştürülebilir
-        if (source == PinType.Boolean && target == PinType.String)
+        // Boolean, String'e ve Number'a dönüştürülebilir
+        if (source == PinType.Boolean && (target == PinType.String || target == PinType.Number))
             return true;
-        
+
+        // String, Number'a dönüştürülebilir (parse edilebilir)
+        if (source == PinType.String && target == PinType.Number)
+            return true;
+
         // Object ve Array birbirine dönüştürülebilir (JSON context'inde)
         if ((source == PinType.Object || source == PinType.Array) && 
             (target == PinType.Object || target == PinType.Any))
             return true;
-        
+
+        // Image, Binary'ye dönüştürülebilir
+        if (source == PinType.Image && target == PinType.Binary)
+            return true;
+
+        // Binary, Image'e dönüştürülebilir
+        if (source == PinType.Binary && target == PinType.Image)
+            return true;
+
+        // Vector, Array'e dönüştürülebilir
+        if (source == PinType.Vector && target == PinType.Array)
+            return true;
+
+        // Document, Object'e dönüştürülebilir
+        if (source == PinType.Document && target == PinType.Object)
+            return true;
+
+        // Document, String'e dönüştürülebilir
+        if (source == PinType.Document && target == PinType.String)
+            return true;
+
         return false;
     }
 }

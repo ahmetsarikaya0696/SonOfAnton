@@ -10,6 +10,7 @@ public abstract class NodeBase : INode
 {
     private readonly Dictionary<string, Pin> _inputPins = new();
     private readonly Dictionary<string, Pin> _outputPins = new();
+    private ExecutionState _state = ExecutionState.Idle;
     
     /// <inheritdoc />
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -36,10 +37,29 @@ public abstract class NodeBase : INode
     public Dictionary<string, object?> Parameters { get; } = new();
     
     /// <inheritdoc />
-    public ExecutionState State { get; set; } = ExecutionState.Idle;
+    public ExecutionState State
+    {
+        get => _state;
+        set
+        {
+            if (_state == value) return;
+            if (!ExecutionStateTransitions.IsValidTransition(_state, value))
+                throw ExecutionStateTransitions.InvalidTransition(_state, value);
+            _state = value;
+        }
+    }
     
     /// <inheritdoc />
     public string? LastError { get; set; }
+
+    /// <inheritdoc />
+    public abstract NodeCategory Category { get; }
+
+    /// <inheritdoc />
+    public Dictionary<string, object?> Metadata { get; } = new();
+
+    /// <inheritdoc />
+    public ExecutionProgress Progress { get; } = new();
     
     protected NodeBase()
     {
@@ -190,6 +210,8 @@ public abstract class NodeBase : INode
 /// </summary>
 public abstract class TriggerNodeBase : NodeBase
 {
+    public override NodeCategory Category => NodeCategory.Trigger;
+
     protected TriggerNodeBase()
     {
         // Trigger node'larının default output'u
@@ -208,6 +230,8 @@ public abstract class TriggerNodeBase : NodeBase
 /// </summary>
 public abstract class ProcessNodeBase : NodeBase
 {
+    public override NodeCategory Category => NodeCategory.Action;
+
     protected ProcessNodeBase()
     {
         // Default input ve output
@@ -234,6 +258,8 @@ public abstract class ProcessNodeBase : NodeBase
 /// </summary>
 public abstract class BranchNodeBase : NodeBase
 {
+    public override NodeCategory Category => NodeCategory.Logic;
+
     protected BranchNodeBase()
     {
         DefineInputPin(new PinDefinition

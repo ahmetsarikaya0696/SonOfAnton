@@ -16,7 +16,7 @@ public class GraphExecutionResult
 /// <summary>
 /// Tek bir node'un execution kaydı
 /// </summary>
-public class NodeExecutionRecord
+public record NodeExecutionRecord
 {
     public Guid NodeId { get; init; }
     public string NodeName { get; init; } = string.Empty;
@@ -28,6 +28,137 @@ public class NodeExecutionRecord
     public string? Error { get; init; }
     public object? InputData { get; init; }
     public object? OutputData { get; init; }
+    public int RetryCount { get; init; }
+}
+
+/// <summary>
+/// Retry policy konfigürasyonu
+/// </summary>
+public class RetryPolicy
+{
+    /// <summary>Maksimum deneme sayısı (ilk deneme dahil)</summary>
+    public int MaxRetries { get; init; } = 3;
+
+    /// <summary>İlk bekleme süresi</summary>
+    public TimeSpan InitialDelay { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>Exponential backoff çarpanı</summary>
+    public double BackoffMultiplier { get; init; } = 2.0;
+
+    /// <summary>Maksimum bekleme süresi</summary>
+    public TimeSpan MaxDelay { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Retry yapılmayacak exception tipleri</summary>
+    public HashSet<Type> NonRetryableExceptions { get; init; } = [typeof(ArgumentException), typeof(InvalidOperationException)];
+
+    public static RetryPolicy Default => new();
+    public static RetryPolicy None => new() { MaxRetries = 0 };
+}
+
+/// <summary>
+/// Circuit breaker durumu
+/// </summary>
+public enum CircuitState
+{
+    Closed,
+    Open,
+    HalfOpen
+}
+
+/// <summary>
+/// Circuit breaker pattern implementasyonu
+/// </summary>
+public class CircuitBreaker
+{
+    private CircuitState _state = CircuitState.Closed;
+    private int _failureCount;
+    private DateTime _lastFailureTime = DateTime.MinValue;
+    private readonly object _lock = new();
+
+    /// <summary>Circuit açılmadan önceki maksimum hata sayısı</summary>
+    public int FailureThreshold { get; init; } = 5;
+
+    /// <summary>Circuit açık kaldıktan sonra half-open'a geçiş süresi</summary>
+    public TimeSpan RecoveryTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Mevcut circuit durumu</summary>
+    public CircuitState State
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_state == CircuitState.Open &&
+                    DateTime.UtcNow - _lastFailureTime >= RecoveryTimeout)
+                {
+                    _state = CircuitState.HalfOpen;
+                }
+                return _state;
+            }
+        }
+    }
+
+    /// <summary>İşlem yapılabilir mi kontrol eder</summary>
+    public bool AllowRequest()
+    {
+        var currentState = State;
+        return currentState != CircuitState.Open;
+    }
+
+    /// <summary>Başarılı bir işlem sonrası circuit'ı günceller</summary>
+    public void RecordSuccess()
+    {
+        lock (_lock)
+        {
+            _failureCount = 0;
+            _state = CircuitState.Closed;
+        }
+    }
+
+    /// <summary>Başarısız bir işlem sonrası circuit'ı günceller</summary>
+    public void RecordFailure()
+    {
+        lock (_lock)
+        {
+            _failureCount++;
+            _lastFailureTime = DateTime.UtcNow;
+            if (_failureCount >= FailureThreshold)
+            {
+                _state = CircuitState.Open;
+            }
+        }
+    }
+
+    /// <summary>Circuit'ı sıfırlar</summary>
+    public void Reset()
+    {
+        lock (_lock)
+        {
+            _failureCount = 0;
+            _state = CircuitState.Closed;
+        }
+    }
+}
+
+/// <summary>
+/// Execution checkpoint (hata sonrası kaldığı yerden devam için)
+/// </summary>
+public class ExecutionCheckpoint
+{
+    /// <summary>Checkpoint ID</summary>
+    public Guid Id { get; init; } = Guid.NewGuid();
+
+    /// <summary>Oluşturulma zamanı</summary>
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+
+    /// <summary>Tamamlanmış node'ların ID'leri</summary>
+    public HashSet<Guid> CompletedNodeIds { get; init; } = [];
+
+    /// <summary>Tamamlanmış node'ların çıktıları</summary>
+    public Dictionary<Guid, object?> NodeOutputs { get; init; } = new();
+
+    /// <summary>Execution kayıtları</summary>
+    public List<NodeExecutionRecord> Records { get; init; } = [];
 }
 
 /// <summary>
@@ -64,6 +195,21 @@ public class ExecutionContext
     /// Logging delegate
     /// </summary>
     public Action<string, string, object?>? Log { get; init; }
+
+    /// <summary>
+    /// Retry policy
+    /// </summary>
+    public RetryPolicy RetryPolicy { get; init; } = RetryPolicy.Default;
+
+    /// <summary>
+    /// Parallel execution etkin mi
+    /// </summary>
+    public bool EnableParallelExecution { get; init; }
+
+    /// <summary>
+    /// Son checkpoint (resume desteği için)
+    /// </summary>
+    public ExecutionCheckpoint? Checkpoint { get; set; }
 }
 
 /// <summary>
@@ -84,6 +230,7 @@ public delegate Task<(bool Success, object? Output, string? Error)> NodeExecutor
 public class GraphExecutor
 {
     private readonly NodeExecutorDelegate _nodeExecutor;
+    private readonly CircuitBreaker _circuitBreaker = new();
     
     public GraphExecutor(NodeExecutorDelegate nodeExecutor)
     {
@@ -98,6 +245,17 @@ public class GraphExecutor
         var startTime = DateTime.UtcNow;
         var records = new List<NodeExecutionRecord>();
         var nodeOutputs = new Dictionary<Guid, object?>();
+        var completedNodeIds = new HashSet<Guid>();
+
+        // Checkpoint'ten devam et
+        if (context.Checkpoint is { } checkpoint)
+        {
+            foreach (var kvp in checkpoint.NodeOutputs)
+                nodeOutputs[kvp.Key] = kvp.Value;
+            foreach (var id in checkpoint.CompletedNodeIds)
+                completedNodeIds.Add(id);
+            records.AddRange(checkpoint.Records);
+        }
         
         try
         {
@@ -121,38 +279,16 @@ public class GraphExecutor
                 Message = $"Starting workflow execution: {context.Graph.Name}"
             });
             
-            // Node'ları sıfırla
+            // Node'ları sıfırla (checkpoint'ten devam edenler hariç)
             context.Graph.ResetAllNodes();
-            
-            // Topological order al
-            var executionOrder = context.Graph.GetTopologicalOrder();
-            
-            foreach (var node in executionOrder)
+
+            if (context.EnableParallelExecution)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
-                
-                // Input değerlerini hazırla
-                var inputData = PrepareInputData(context.Graph, node, nodeOutputs);
-                
-                // Node çalıştır
-                var record = await ExecuteNodeAsync(node, inputData, context);
-                records.Add(record);
-                
-                if (!record.Success)
-                {
-                    return new GraphExecutionResult
-                    {
-                        Success = false,
-                        Error = $"Node '{node.Name}' failed: {record.Error}",
-                        Duration = DateTime.UtcNow - startTime,
-                        NodesExecuted = records.Count,
-                        ExecutionRecords = records,
-                        NodeOutputs = nodeOutputs
-                    };
-                }
-                
-                // Output'u kaydet
-                nodeOutputs[node.Id] = record.OutputData;
+                await ExecuteParallelAsync(context, records, nodeOutputs, completedNodeIds);
+            }
+            else
+            {
+                await ExecuteSequentialAsync(context, records, nodeOutputs, completedNodeIds);
             }
             
             // Success event
@@ -175,6 +311,9 @@ public class GraphExecutor
         }
         catch (OperationCanceledException)
         {
+            // Checkpoint oluştur
+            context.Checkpoint = CreateCheckpoint(completedNodeIds, nodeOutputs, records);
+
             await EmitEventAsync(context, new WorkflowCompletedEvent
             {
                 ExecutionId = context.ExecutionId,
@@ -196,6 +335,9 @@ public class GraphExecutor
         }
         catch (Exception ex)
         {
+            // Checkpoint oluştur
+            context.Checkpoint = CreateCheckpoint(completedNodeIds, nodeOutputs, records);
+
             await EmitEventAsync(context, new WorkflowCompletedEvent
             {
                 ExecutionId = context.ExecutionId,
@@ -214,6 +356,71 @@ public class GraphExecutor
                 ExecutionRecords = records,
                 NodeOutputs = nodeOutputs
             };
+        }
+    }
+
+    private async Task ExecuteSequentialAsync(
+        ExecutionContext context,
+        List<NodeExecutionRecord> records,
+        Dictionary<Guid, object?> nodeOutputs,
+        HashSet<Guid> completedNodeIds)
+    {
+        var executionOrder = context.Graph.GetTopologicalOrder();
+
+        foreach (var node in executionOrder)
+        {
+            if (completedNodeIds.Contains(node.Id)) continue;
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var inputData = PrepareInputData(context.Graph, node, nodeOutputs);
+            var record = await ExecuteNodeWithRetryAsync(node, inputData, context);
+            records.Add(record);
+
+            if (!record.Success)
+            {
+                throw new InvalidOperationException($"Node '{node.Name}' failed: {record.Error}");
+            }
+
+            nodeOutputs[node.Id] = record.OutputData;
+            completedNodeIds.Add(node.Id);
+        }
+    }
+
+    private async Task ExecuteParallelAsync(
+        ExecutionContext context,
+        List<NodeExecutionRecord> records,
+        Dictionary<Guid, object?> nodeOutputs,
+        HashSet<Guid> completedNodeIds)
+    {
+        var levels = context.Graph.GetParallelExecutionLevels();
+
+        foreach (var level in levels)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+
+            var nodesToRun = level.Where(n => !completedNodeIds.Contains(n.Id)).ToList();
+            if (nodesToRun.Count == 0) continue;
+
+            var tasks = nodesToRun.Select(async node =>
+            {
+                var inputData = PrepareInputData(context.Graph, node, nodeOutputs);
+                return (Node: node, Record: await ExecuteNodeWithRetryAsync(node, inputData, context));
+            }).ToList();
+
+            var results = await Task.WhenAll(tasks);
+
+            foreach (var (node, record) in results)
+            {
+                records.Add(record);
+
+                if (!record.Success)
+                {
+                    throw new InvalidOperationException($"Node '{node.Name}' failed: {record.Error}");
+                }
+
+                nodeOutputs[node.Id] = record.OutputData;
+                completedNodeIds.Add(node.Id);
+            }
         }
     }
     
@@ -260,7 +467,7 @@ public class GraphExecutor
                     ? initialInput
                     : PrepareInputData(context.Graph, node, nodeOutputs);
                 
-                var record = await ExecuteNodeAsync(node, inputData, context);
+                var record = await ExecuteNodeWithRetryAsync(node, inputData, context);
                 records.Add(record);
                 
                 if (!record.Success)
@@ -301,6 +508,75 @@ public class GraphExecutor
             };
         }
     }
+
+    /// <summary>
+    /// Retry policy ile node çalıştırır
+    /// </summary>
+    private async Task<NodeExecutionRecord> ExecuteNodeWithRetryAsync(
+        INode node,
+        object? inputData,
+        ExecutionContext context)
+    {
+        var policy = context.RetryPolicy;
+        var retryCount = 0;
+        NodeExecutionRecord? lastRecord = null;
+
+        for (var attempt = 0; attempt <= policy.MaxRetries; attempt++)
+        {
+            // Circuit breaker kontrolü
+            if (!_circuitBreaker.AllowRequest())
+            {
+                return new NodeExecutionRecord
+                {
+                    NodeId = node.Id,
+                    NodeName = node.Name,
+                    NodeType = node.Type,
+                    StartTime = DateTime.UtcNow,
+                    EndTime = DateTime.UtcNow,
+                    Success = false,
+                    Error = "Circuit breaker is open. Too many failures.",
+                    InputData = inputData,
+                    RetryCount = retryCount
+                };
+            }
+
+            lastRecord = await ExecuteNodeAsync(node, inputData, context);
+
+            if (lastRecord.Success)
+            {
+                _circuitBreaker.RecordSuccess();
+                return lastRecord with { RetryCount = retryCount };
+            }
+
+            _circuitBreaker.RecordFailure();
+            retryCount++;
+
+            // Son deneme ise retry yapma
+            if (attempt >= policy.MaxRetries) break;
+
+            // Exponential backoff ile bekle
+            var delay = TimeSpan.FromMilliseconds(
+                Math.Min(
+                    policy.InitialDelay.TotalMilliseconds * Math.Pow(policy.BackoffMultiplier, attempt),
+                    policy.MaxDelay.TotalMilliseconds));
+
+            await EmitEventAsync(context, new LogEmittedEvent
+            {
+                ExecutionId = context.ExecutionId,
+                NodeId = node.Id,
+                Level = "warning",
+                Message = $"Node '{node.Name}' failed (attempt {attempt + 1}/{policy.MaxRetries + 1}). Retrying in {delay.TotalSeconds:F1}s..."
+            });
+
+            await Task.Delay(delay, context.CancellationToken);
+
+            // Node durumunu sıfırla
+            if (node is NodeBase nodeBase)
+                nodeBase.Reset();
+        }
+
+        return lastRecord! with { RetryCount = retryCount };
+    }
     
     private async Task<NodeExecutionRecord> ExecuteNodeAsync(
         INode node,
@@ -311,6 +587,9 @@ public class GraphExecutor
         
         try
         {
+            // State transition: Idle -> Pending -> Running
+            if (node.State == ExecutionState.Idle)
+                node.State = ExecutionState.Pending;
             node.State = ExecutionState.Running;
             
             // Emit start event
@@ -429,5 +708,18 @@ public class GraphExecutor
                 : $"Workflow failed: {completed.Error}",
             _ => evt.ToString()
         }, evt);
+    }
+
+    private static ExecutionCheckpoint CreateCheckpoint(
+        HashSet<Guid> completedNodeIds,
+        Dictionary<Guid, object?> nodeOutputs,
+        List<NodeExecutionRecord> records)
+    {
+        return new ExecutionCheckpoint
+        {
+            CompletedNodeIds = [.. completedNodeIds],
+            NodeOutputs = new Dictionary<Guid, object?>(nodeOutputs),
+            Records = [.. records]
+        };
     }
 }

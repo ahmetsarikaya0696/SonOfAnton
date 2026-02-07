@@ -7,26 +7,31 @@ namespace SonOfAnton.Backend.Infrastructure.VectorDatabase;
 
 /// <summary>
 /// PostgreSQL + pgvector implementasyonu
-/// Dapper kullanarak AOT-uyumlu
+/// NpgsqlDataSource pooling ile optimize edilmiş bağlantı yönetimi
 /// </summary>
-public class PgVectorService : IVectorDatabaseService
+public class PgVectorService : IVectorDatabaseService, IAsyncDisposable
 {
-    private readonly string _connectionString;
+    private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<PgVectorService> _logger;
     
     public PgVectorService(string connectionString, ILogger<PgVectorService> logger)
     {
-        _connectionString = connectionString;
         _logger = logger;
+        
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        dataSourceBuilder.UseVector();
+        _dataSource = dataSourceBuilder.Build();
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        await _dataSource.DisposeAsync();
+        GC.SuppressFinalize(this);
     }
     
     private async Task<NpgsqlConnection> GetConnectionAsync(CancellationToken cancellationToken)
     {
-        var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
-        dataSourceBuilder.UseVector();
-        await using var dataSource = dataSourceBuilder.Build();
-        
-        var connection = dataSource.CreateConnection();
+        var connection = _dataSource.CreateConnection();
         await connection.OpenAsync(cancellationToken);
         return connection;
     }

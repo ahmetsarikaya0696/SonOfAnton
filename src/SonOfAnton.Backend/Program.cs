@@ -1,7 +1,9 @@
 using Hangfire;
 using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.SemanticKernel;
 using SonOfAnton.Backend.Data;
 using SonOfAnton.Backend.Engine;
@@ -10,6 +12,8 @@ using SonOfAnton.Backend.Infrastructure.Embeddings;
 using SonOfAnton.Backend.Infrastructure.VectorDatabase;
 using SonOfAnton.Backend.Services;
 using SonOfAnton.Shared.Core.GraphEngine;
+using System.Text.Json;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,8 +26,89 @@ var ollamaEmbeddingModel = builder.Configuration.GetValue<string>("Ollama:Embedd
 
 // Add services
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Info = new()
+        {
+            Title = "SonOfAnton Workflow Engine API",
+            Version = "v1",
+            Description = """
+                SonOfAnton, görsel workflow oluşturma ve çalıştırma platformudur.
+                
+                ## Temel Kavramlar
+                - **Workflow**: Node'lardan oluşan iş akışı şablonu
+                - **Node**: Tek bir işlem birimi (tetikleyici, dönüşüm, mantık vb.)
+                - **Execution**: Bir workflow'un tek seferlik çalıştırılması
+                - **Edge**: İki node arasındaki veri bağlantısı
+                
+                ## Hızlı Başlangıç
+                1. `GET /api/nodes` ile kullanılabilir node tiplerini keşfedin
+                2. `POST /api/workflow` ile bir workflow oluşturun
+                3. `POST /api/workflow/{id}/execute` ile çalıştırın
+                4. `GET /api/executions/{id}/logs` ile sonuçları görün
+                """,
+            Contact = new() { Name = "SonOfAnton Ekibi" },
+            License = new() { Name = "MIT" }
+        };
+        return Task.CompletedTask;
+    });
+});
 builder.Services.AddHttpClient();
+
+// Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    
+    // Genel API rate limit
+    options.AddPolicy("api", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+    
+    // Workflow execution rate limit (daha kısıtlı)
+    options.AddPolicy("workflow-execution", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 5
+            }));
+});
+
+// Health Checks
+builder.Services.AddHealthChecks()
+    .AddNpgSql(connectionString, name: "postgresql", tags: ["db", "ready"])
+    .AddCheck("hangfire", () =>
+    {
+        try
+        {
+            var storage = Hangfire.JobStorage.Current;
+            return storage != null
+                ? HealthCheckResult.Healthy("Hangfire bağlı")
+                : HealthCheckResult.Degraded("Hangfire storage yok");
+        }
+        catch
+        {
+            return HealthCheckResult.Degraded("Hangfire kontrol edilemiyor");
+        }
+    }, tags: ["ready"]);
+
+// Response Compression
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
 
 // Memory Cache (Embedding cache için)
 builder.Services.AddMemoryCache(options =>
@@ -118,12 +203,19 @@ builder.Services.AddScoped<INodeHandler, HttpRequestHandler>();
 builder.Services.AddScoped<INodeHandler, SetValueHandler>();
 builder.Services.AddScoped<INodeHandler, FilterHandler>();
 builder.Services.AddScoped<INodeHandler, CodeHandler>();
+builder.Services.AddScoped<INodeHandler, TemplateHandler>();
+builder.Services.AddScoped<INodeHandler, AggregateHandler>();
 builder.Services.AddScoped<INodeHandler, IfHandler>();
 builder.Services.AddScoped<INodeHandler, SwitchHandler>();
 builder.Services.AddScoped<INodeHandler, MergeHandler>();
+builder.Services.AddScoped<INodeHandler, DelayHandler>();
+builder.Services.AddScoped<INodeHandler, LoopHandler>();
 builder.Services.AddScoped<INodeHandler, DebugHandler>();
 builder.Services.AddScoped<INodeHandler, EndHandler>();
 builder.Services.AddScoped<INodeHandler, LLMHandler>();
+builder.Services.AddScoped<INodeHandler, DatabaseHandler>();
+builder.Services.AddScoped<INodeHandler, EmailHandler>();
+builder.Services.AddScoped<INodeHandler, SlackHandler>();
 
 // Vector Node Handlers
 builder.Services.AddScoped<INodeHandler, GenerateEmbeddingHandler>();
@@ -137,11 +229,21 @@ builder.Services.AddScoped<WorkflowRunner>();
 // Workflow Job Service (Hangfire)
 builder.Services.AddScoped<WorkflowJobService>();
 
+// Performance Metrics Service (Singleton - uygulama ömrü boyunca yaşar)
+builder.Services.AddSingleton<PerformanceMetricsService>();
+
 // Model Download Service (ONNX models auto-download)
 builder.Services.AddHostedService<ModelDownloadService>();
 builder.Services.AddSingleton<ModelDownloadService>();
 
 var app = builder.Build();
+
+// Docker servislerini otomatik baslat (PostgreSQL vb.)
+if (app.Environment.IsDevelopment())
+{
+    var dockerLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    await SonOfAnton.Backend.Infrastructure.DockerHelper.EnsureDockerServicesRunningAsync(dockerLogger);
+}
 
 // Auto-migrate database
 using (var scope = app.Services.CreateScope())
@@ -150,15 +252,76 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline
+
+// Response Compression (en üstte)
+app.UseResponseCompression();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
+// Global exception handler
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        
+        var response = new { error = "Sunucu hatası oluştu", requestId = context.TraceIdentifier };
+        await context.Response.WriteAsJsonAsync(response);
+    });
+});
+
+// Security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    await next();
+});
+
 app.UseCors("BlazorWasm");
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 
-// Hangfire Dashboard (Basic Auth ile gvenli hale getirilebilir)
+// Health Check Endpoints
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false, // Sadece canlılık kontrolü
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new { status = "alive", timestamp = DateTime.UtcNow });
+    }
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration.TotalMilliseconds
+            }),
+            totalDuration = report.TotalDuration.TotalMilliseconds
+        };
+        await context.Response.WriteAsJsonAsync(result);
+    }
+});
+
+// Hangfire Dashboard (Basic Auth ile güvenli hale getirilebilir)
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = app.Environment.IsDevelopment() 
@@ -166,10 +329,11 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
         : []
 });
 
-// SSE Endpoint - Workflow execution events stream
+// SSE Endpoint - Workflow execution events stream (enhanced with session tracking, topic filtering)
 app.MapGet("/api/workflow/execution/{executionId:guid}/stream", async (
     Guid executionId,
     SseEventService sseService,
+    [Microsoft.AspNetCore.Mvc.FromQuery] string? topics,
     CancellationToken cancellationToken) =>
 {
     var channel = sseService.GetChannel(executionId);
@@ -178,15 +342,19 @@ app.MapGet("/api/workflow/execution/{executionId:guid}/stream", async (
         return Results.NotFound(new { error = "Execution not found or already completed" });
     }
     
+    // Client session oluştur
+    var topicList = topics?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+    var session = sseService.RegisterSession(executionId, topicList);
+    
     return Results.Stream(async stream =>
     {
         var writer = new StreamWriter(stream) { AutoFlush = true };
         
         // Initial connection event
-        await writer.WriteAsync(SseFormatter.FormatComment("connected"));
+        await writer.WriteAsync(SseFormatter.FormatComment($"connected session={session.SessionId}"));
         
         // Heartbeat timer
-        using var heartbeatTimer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        using var heartbeatTimer = new PeriodicTimer(TimeSpan.FromSeconds(15));
         var heartbeatTask = Task.Run(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -194,18 +362,25 @@ app.MapGet("/api/workflow/execution/{executionId:guid}/stream", async (
                 if (!await heartbeatTimer.WaitForNextTickAsync(cancellationToken))
                     break;
                 await writer.WriteAsync(SseFormatter.FormatHeartbeat());
+                sseService.UpdateSessionHeartbeat(session.SessionId);
             }
         }, cancellationToken);
         
         try
         {
-            await foreach (var evt in channel.Reader.ReadAllAsync(cancellationToken))
+            await foreach (var prioritizedEvent in channel.Reader.ReadAllAsync(cancellationToken))
             {
-                var sseFormatted = SseFormatter.FormatEvent(evt);
+                var sseFormatted = SseFormatter.FormatPrioritizedEvent(prioritizedEvent, session);
+                
+                // Topic filtresi tarafından atlandıysa boş string döner
+                if (string.IsNullOrEmpty(sseFormatted))
+                    continue;
+                
                 await writer.WriteAsync(sseFormatted);
+                sseService.TrackBytesTransferred(sseFormatted.Length * 2); // UTF-16
                 
                 // Workflow tamamlandıysa stream'i kapat
-                if (evt is WorkflowCompletedEvent)
+                if (prioritizedEvent.Event is WorkflowCompletedEvent)
                 {
                     break;
                 }
@@ -215,8 +390,24 @@ app.MapGet("/api/workflow/execution/{executionId:guid}/stream", async (
         {
             // Client disconnected
         }
+        finally
+        {
+            sseService.UnregisterSession(session.SessionId);
+        }
     }, "text/event-stream");
 }).WithName("StreamWorkflowExecution");
+
+// SSE Statistics endpoint
+app.MapGet("/api/sse/stats", (SseEventService sseService) =>
+{
+    return Results.Ok(sseService.GetStatistics());
+}).WithName("GetSseStatistics");
+
+// Performance Metrics endpoint
+app.MapGet("/api/metrics", (PerformanceMetricsService metricsService) =>
+{
+    return Results.Ok(metricsService.GetSummary());
+}).WithName("GetPerformanceMetrics");
 
 app.MapControllers();
 

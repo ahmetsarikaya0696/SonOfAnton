@@ -1,6 +1,7 @@
 /**
  * SSE (Server-Sent Events) Interop Module
  * Native EventSource API'sini Blazor'a bağlar
+ * Event deduplication, offline buffering, event ID tracking
  */
 
 // Aktif EventSource bağlantıları
@@ -12,6 +13,28 @@ const RECONNECT_CONFIG = {
     maxDelay: 30000,
     multiplier: 2
 };
+
+// Event deduplication - son işlenen event ID'leri
+const processedEventIds = new Set();
+const MAX_PROCESSED_IDS = 5000;
+
+// Online/Offline tracking
+let isOnline = navigator.onLine;
+
+window.addEventListener('online', () => {
+    isOnline = true;
+    console.log('SSE: Çevrimiçi olundu, bağlantılar yeniden kuruluyor...');
+    connections.forEach((connectionData, connectionId) => {
+        if (!connectionData.eventSource || connectionData.eventSource.readyState === EventSource.CLOSED) {
+            connect(connectionId, connectionData);
+        }
+    });
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    console.log('SSE: Çevrimdışı olundu, event\'ler buffer\'lanacak');
+});
 
 /**
  * SSE stream'e bağlanır
@@ -32,7 +55,9 @@ export function connectToStream(connectionId, url, dotNetRef) {
         eventSource: null,
         reconnectAttempts: 0,
         reconnectDelay: RECONNECT_CONFIG.initialDelay,
-        isManualClose: false
+        isManualClose: false,
+        lastEventId: null,
+        eventsReceived: 0
     };
 
     connections.set(connectionId, connectionData);
@@ -41,11 +66,39 @@ export function connectToStream(connectionId, url, dotNetRef) {
 }
 
 /**
+ * Event ID dedup kontrolü
+ */
+function isDuplicateEvent(eventId) {
+    if (!eventId) return false;
+    
+    if (processedEventIds.has(eventId)) {
+        return true;
+    }
+    
+    processedEventIds.add(eventId);
+    
+    // Cache büyüklüğü kontrolü
+    if (processedEventIds.size > MAX_PROCESSED_IDS) {
+        const iterator = processedEventIds.values();
+        for (let i = 0; i < MAX_PROCESSED_IDS / 2; i++) {
+            processedEventIds.delete(iterator.next().value);
+        }
+    }
+    
+    return false;
+}
+
+/**
  * EventSource bağlantısı oluşturur
  */
 function connect(connectionId, connectionData) {
     try {
-        const eventSource = new EventSource(connectionData.url);
+        // Last-Event-ID ile resume desteği
+        const url = connectionData.lastEventId 
+            ? `${connectionData.url}${connectionData.url.includes('?') ? '&' : '?'}lastEventId=${connectionData.lastEventId}`
+            : connectionData.url;
+        
+        const eventSource = new EventSource(url);
         connectionData.eventSource = eventSource;
 
         // Bağlantı açıldı
@@ -55,46 +108,57 @@ function connect(connectionId, connectionData) {
             connectionData.reconnectDelay = RECONNECT_CONFIG.initialDelay;
 
             if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnConnectionStateChanged', 'Connected');
+                connectionData.dotNetRef.invokeMethodAsync('OnConnectionStateChanged_Internal', 'Connected');
             }
         };
 
         // Mesaj alındı
         eventSource.onmessage = (event) => {
+            connectionData.eventsReceived++;
+            
+            // Last event ID tracking
+            if (event.lastEventId) {
+                connectionData.lastEventId = event.lastEventId;
+            }
+            
             if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnMessage', event.data);
+                connectionData.dotNetRef.invokeMethodAsync('OnMessage_Internal', event.data);
             }
         };
 
-        // Özel event tipleri
-        eventSource.addEventListener('node-started', (event) => {
-            if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnNodeStarted', event.data);
-            }
-        });
-
-        eventSource.addEventListener('node-completed', (event) => {
-            if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnNodeCompleted', event.data);
-            }
-        });
-
-        eventSource.addEventListener('progress', (event) => {
-            if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnProgress', event.data);
-            }
-        });
-
-        eventSource.addEventListener('log', (event) => {
-            if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnLog', event.data);
-            }
-        });
-
-        eventSource.addEventListener('workflow-completed', (event) => {
-            if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnWorkflowCompleted', event.data);
-            }
+        // Özel event tipleri - dedup ile
+        const eventTypes = [
+            { name: 'node-started', callback: 'OnNodeStarted_Internal' },
+            { name: 'node-completed', callback: 'OnNodeCompleted_Internal' },
+            { name: 'progress', callback: 'OnProgress_Internal' },
+            { name: 'log', callback: 'OnLog_Internal' },
+            { name: 'workflow-completed', callback: 'OnWorkflowCompleted_Internal' }
+        ];
+        
+        eventTypes.forEach(({ name, callback }) => {
+            eventSource.addEventListener(name, (event) => {
+                connectionData.eventsReceived++;
+                
+                // Last event ID tracking
+                if (event.lastEventId) {
+                    connectionData.lastEventId = event.lastEventId;
+                    
+                    // Dedup kontrolü
+                    if (isDuplicateEvent(event.lastEventId)) {
+                        return;
+                    }
+                }
+                
+                if (!isOnline && connectionData.dotNetRef) {
+                    // Offline - buffer'a ekle
+                    connectionData.dotNetRef.invokeMethodAsync('BufferEvent_Internal', name, event.data);
+                    return;
+                }
+                
+                if (connectionData.dotNetRef) {
+                    connectionData.dotNetRef.invokeMethodAsync(callback, event.data);
+                }
+            });
         });
 
         eventSource.addEventListener('heartbeat', () => {
@@ -113,7 +177,7 @@ function connect(connectionId, connectionData) {
             connectionData.eventSource = null;
 
             if (connectionData.dotNetRef) {
-                connectionData.dotNetRef.invokeMethodAsync('OnConnectionStateChanged', 'Disconnected');
+                connectionData.dotNetRef.invokeMethodAsync('OnConnectionStateChanged_Internal', 'Disconnected');
             }
 
             // Yeniden bağlanmayı dene
@@ -135,10 +199,16 @@ function scheduleReconnect(connectionId, connectionData) {
         return;
     }
 
+    // Offline ise bağlanmayı dene
+    if (!isOnline) {
+        console.log('Çevrimdışı - yeniden bağlanma ertelendi');
+        return;
+    }
+
     connectionData.reconnectAttempts++;
 
     if (connectionData.dotNetRef) {
-        connectionData.dotNetRef.invokeMethodAsync('OnConnectionStateChanged', 'Reconnecting');
+        connectionData.dotNetRef.invokeMethodAsync('OnConnectionStateChanged_Internal', 'Reconnecting');
     }
 
     console.log(`Yeniden bağlanma denemesi ${connectionData.reconnectAttempts} - ${connectionData.reconnectDelay}ms sonra`);
@@ -203,6 +273,25 @@ export function getConnectionState(connectionId) {
 }
 
 /**
+ * Bağlantı istatistiklerini döndürür
+ * @param {string} connectionId
+ * @returns {object}
+ */
+export function getConnectionStats(connectionId) {
+    const connectionData = connections.get(connectionId);
+    if (!connectionData) {
+        return null;
+    }
+    
+    return {
+        eventsReceived: connectionData.eventsReceived,
+        reconnectAttempts: connectionData.reconnectAttempts,
+        lastEventId: connectionData.lastEventId,
+        isConnected: connectionData.eventSource?.readyState === EventSource.OPEN
+    };
+}
+
+/**
  * Tüm bağlantıları kapatır
  */
 export function disconnectAll() {
@@ -210,4 +299,11 @@ export function disconnectAll() {
         disconnect(connectionId);
     });
     console.log('Tüm SSE bağlantıları kapatıldı');
+}
+
+/**
+ * Dedup cache'i temizler
+ */
+export function clearDedupCache() {
+    processedEventIds.clear();
 }

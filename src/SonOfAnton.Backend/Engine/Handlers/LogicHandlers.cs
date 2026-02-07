@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace SonOfAnton.Backend.Engine.Handlers;
 
 /// <summary>
-/// Ko�ullu dallanma (IF) node'u
+/// Koşullu dallanma (IF) node'u
 /// </summary>
 public class IfHandler : INodeHandler
 {
@@ -15,47 +15,110 @@ public class IfHandler : INodeHandler
         
         if (string.IsNullOrEmpty(condition))
         {
-            return Task.FromResult(NodeExecutionResult.Fail("Ko�ul parametresi gerekli"));
+            return Task.FromResult(NodeExecutionResult.Fail("Koşul parametresi gerekli"));
         }
 
-        context.Log($"Ko�ul de�erlendiriliyor: {condition}", Shared.Enums.LogLevel.Debug, null);
+        context.Log($"Koşul değerlendiriliyor: {condition}", Shared.Enums.LogLevel.Debug, null);
         
-        // Basit ko�ul de�erlendirmesi
-        bool result = EvaluateSimpleCondition(condition, context.InputData);
+        bool result = EvaluateCondition(condition, context.InputData, context.Memory);
         
         var outputPort = result ? "true" : "false";
-        context.Log($"Ko�ul sonucu: {result} -> Port: {outputPort}", Shared.Enums.LogLevel.Info, null);
+        context.Log($"Koşul sonucu: {result} -> Port: {outputPort}", Shared.Enums.LogLevel.Info, null);
         
         return Task.FromResult(NodeExecutionResult.Ok(context.InputData, outputPort));
     }
 
-    private static bool EvaluateSimpleCondition(string condition, object? data)
+    private static bool EvaluateCondition(string condition, object? data, Dictionary<string, object?> memory)
     {
-        // Basit boolean de�erlendirmesi
+        // Boolean değer
         if (bool.TryParse(condition, out var boolResult))
             return boolResult;
         
-        // Data'dan de�er kontrol�
+        // Data null kontrolü
+        if (condition.Equals("hasData", StringComparison.OrdinalIgnoreCase))
+            return data != null;
+        
+        if (condition.Equals("isEmpty", StringComparison.OrdinalIgnoreCase))
+            return data == null || data.ToString() == string.Empty;
+        
+        // JSON property kontrolü
         if (data is JsonElement json)
         {
-            // "statusCode == 200" gibi basit ko�ullar i�in
+            // "property == value" formatı
             if (condition.Contains("=="))
             {
                 var parts = condition.Split("==").Select(p => p.Trim()).ToArray();
-                if (parts.Length == 2 && json.TryGetProperty(parts[0], out var prop))
+                if (parts.Length == 2)
                 {
-                    return prop.ToString() == parts[1];
+                    var propValue = GetJsonPropertyValue(json, parts[0]);
+                    return propValue == parts[1];
                 }
             }
+            
+            // "property != value" formatı
+            if (condition.Contains("!="))
+            {
+                var parts = condition.Split("!=").Select(p => p.Trim()).ToArray();
+                if (parts.Length == 2)
+                {
+                    var propValue = GetJsonPropertyValue(json, parts[0]);
+                    return propValue != parts[1];
+                }
+            }
+            
+            // "property > value" formatı (sayısal)
+            if (condition.Contains('>') && !condition.Contains(">="))
+            {
+                var parts = condition.Split('>').Select(p => p.Trim()).ToArray();
+                if (parts.Length == 2)
+                {
+                    var propValue = GetJsonPropertyValue(json, parts[0]);
+                    if (double.TryParse(propValue, out var left) && double.TryParse(parts[1], out var right))
+                        return left > right;
+                }
+            }
+            
+            // "property < value" formatı (sayısal)
+            if (condition.Contains('<') && !condition.Contains("<="))
+            {
+                var parts = condition.Split('<').Select(p => p.Trim()).ToArray();
+                if (parts.Length == 2)
+                {
+                    var propValue = GetJsonPropertyValue(json, parts[0]);
+                    if (double.TryParse(propValue, out var left) && double.TryParse(parts[1], out var right))
+                        return left < right;
+                }
+            }
+            
+            // Property varlık kontrolü
+            if (json.ValueKind == JsonValueKind.Object && json.TryGetProperty(condition, out _))
+                return true;
         }
         
-        // Varsay�lan olarak true
+        // Varsayılan
         return true;
+    }
+    
+    private static string GetJsonPropertyValue(JsonElement json, string propertyPath)
+    {
+        var current = json;
+        foreach (var part in propertyPath.Split('.'))
+        {
+            if (current.ValueKind == JsonValueKind.Object && current.TryGetProperty(part, out var next))
+            {
+                current = next;
+            }
+            else
+            {
+                return string.Empty;
+            }
+        }
+        return current.ToString();
     }
 }
 
 /// <summary>
-/// Switch/Router node'u
+/// Switch/Router node'u - değere göre farklı portlara yönlendirir
 /// </summary>
 public class SwitchHandler : INodeHandler
 {
@@ -65,15 +128,58 @@ public class SwitchHandler : INodeHandler
     {
         var valueExpr = context.Node.Parameters.GetValueOrDefault("value")?.ToString();
         
-        context.Log($"Y�nlendirme de�eri: {valueExpr}", Shared.Enums.LogLevel.Debug, null);
+        if (string.IsNullOrEmpty(valueExpr))
+        {
+            return Task.FromResult(NodeExecutionResult.Ok(context.InputData, "output0"));
+        }
         
-        // Basit implementasyon - varsay�lan olarak output0'a y�nlendir
+        // Input data'dan değeri çıkar
+        string resolvedValue = ResolveValue(valueExpr, context.InputData);
+        
+        context.Log($"Yönlendirme değeri: {resolvedValue}", Shared.Enums.LogLevel.Debug, null);
+        
+        // Eşleşen case'i bul
+        var cases = context.Node.Parameters
+            .Where(p => p.Key.StartsWith("case_"))
+            .ToDictionary(p => p.Key.Replace("case_", "output"), p => p.Value?.ToString() ?? "");
+        
+        foreach (var (outputPort, caseValue) in cases)
+        {
+            if (resolvedValue.Equals(caseValue, StringComparison.OrdinalIgnoreCase))
+            {
+                context.Log($"Eşleşme: {caseValue} -> {outputPort}", Shared.Enums.LogLevel.Info, null);
+                return Task.FromResult(NodeExecutionResult.Ok(context.InputData, outputPort));
+            }
+        }
+        
+        // Sayısal eşleşme: değer 0,1,2... ise output0, output1, output2... 
+        if (int.TryParse(resolvedValue, out var index) && index >= 0 && index <= 9)
+        {
+            var port = $"output{index}";
+            context.Log($"Sayısal yönlendirme: {index} -> {port}", Shared.Enums.LogLevel.Info, null);
+            return Task.FromResult(NodeExecutionResult.Ok(context.InputData, port));
+        }
+        
+        // Varsayılan port
+        context.Log("Eşleşme bulunamadı, varsayılan: output0", Shared.Enums.LogLevel.Info, null);
         return Task.FromResult(NodeExecutionResult.Ok(context.InputData, "output0"));
+    }
+    
+    private static string ResolveValue(string expression, object? data)
+    {
+        if (data is JsonElement json && json.ValueKind == JsonValueKind.Object)
+        {
+            if (json.TryGetProperty(expression, out var prop))
+            {
+                return prop.ToString();
+            }
+        }
+        return expression;
     }
 }
 
 /// <summary>
-/// Merge node'u - birden fazla giri�i birle�tirir
+/// Merge node'u - birden fazla girişi birleştirir
 /// </summary>
 public class MergeHandler : INodeHandler
 {
@@ -81,10 +187,76 @@ public class MergeHandler : INodeHandler
 
     public Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
     {
-        context.Log("Girdiler birle�tiriliyor", Shared.Enums.LogLevel.Debug, null);
+        context.Log("Girdiler birleştiriliyor", Shared.Enums.LogLevel.Debug, null);
         
-        // Gelen veriyi oldu�u gibi ge�ir
+        // Gelen veriyi olduğu gibi geçir
         return Task.FromResult(NodeExecutionResult.Ok(context.InputData));
     }
 }
+
+/// <summary>
+/// Delay/Wait node'u - belirtilen süre bekler
+/// </summary>
+public class DelayHandler : INodeHandler
+{
+    public string NodeType => "logic.delay";
+
+    public async Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
+    {
+        var delayMs = 1000; // varsayılan 1 saniye
+        
+        if (context.Node.Parameters.TryGetValue("delay", out var delayParam))
+        {
+            if (int.TryParse(delayParam?.ToString(), out var parsed))
+            {
+                delayMs = parsed;
+            }
+        }
+        
+        context.Log($"Bekleniyor: {delayMs}ms", Shared.Enums.LogLevel.Info, null);
+        
+        await Task.Delay(delayMs, context.CancellationToken);
+        
+        context.Log("Bekleme tamamlandı", Shared.Enums.LogLevel.Info, null);
+        
+        return NodeExecutionResult.Ok(context.InputData);
+    }
+}
+
+/// <summary>
+/// Loop/Iterator node'u - array/list üzerinde döngü yapar
+/// </summary>
+public class LoopHandler : INodeHandler
+{
+    public string NodeType => "logic.loop";
+
+    public Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
+    {
+        context.Log("Döngü başlatılıyor", Shared.Enums.LogLevel.Info, null);
+        
+        // Array input'u kontrol et
+        if (context.InputData is JsonElement json)
+        {
+            if (json.ValueKind == JsonValueKind.Array)
+            {
+                var items = json.EnumerateArray().ToList();
+                context.Log($"Döngü: {items.Count} öğe üzerinde iterasyon", Shared.Enums.LogLevel.Info, null);
+                
+                // Her item'ı output olarak geçir (workflow runner tarafından sırayla işlenecek)
+                var results = items.Select((item, index) => new
+                {
+                    index,
+                    item,
+                    totalItems = items.Count
+                }).ToList();
+                
+                return Task.FromResult(NodeExecutionResult.Ok(results));
+            }
+        }
+        
+        // Tekil veriyi array olarak sarmalı
+        return Task.FromResult(NodeExecutionResult.Ok(new[] { context.InputData }));
+    }
+}
+
 

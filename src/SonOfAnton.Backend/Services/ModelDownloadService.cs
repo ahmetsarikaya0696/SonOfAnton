@@ -5,6 +5,7 @@ namespace SonOfAnton.Backend.Services;
 
 /// <summary>
 /// ONNX model dosyalarını otomatik indirir ve yönetir
+/// Model integrity, warmup, sağlık kontrolü
 /// </summary>
 public class ModelDownloadService : IHostedService
 {
@@ -23,7 +24,9 @@ public class ModelDownloadService : IHostedService
             ModelUrl = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx",
             VocabUrl = "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/vocab.txt",
             Size = "86MB",
-            Dimensions = 384
+            Dimensions = 384,
+            MaxSequenceLength = 128,
+            ModelFormat = "ONNX"
         },
         ["bge-small-en-v1.5"] = new ModelInfo
         {
@@ -32,7 +35,9 @@ public class ModelDownloadService : IHostedService
             ModelUrl = "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main/onnx/model.onnx",
             VocabUrl = "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main/vocab.txt",
             Size = "133MB",
-            Dimensions = 384
+            Dimensions = 384,
+            MaxSequenceLength = 512,
+            ModelFormat = "ONNX"
         }
     };
     
@@ -204,11 +209,25 @@ public class ModelDownloadService : IHostedService
             var modelPath = GetModelPath(name);
             var isDownloaded = File.Exists(modelPath);
             long? fileSize = null;
+            DateTime? downloadedAt = null;
+            string? fileHash = null;
             
             if (isDownloaded)
             {
                 var fileInfo = new FileInfo(modelPath);
                 fileSize = fileInfo.Length;
+                downloadedAt = fileInfo.CreationTimeUtc;
+                
+                // Küçük dosyalar için hash hesapla
+                if (fileSize < 50 * 1024 * 1024) // 50MB altı
+                {
+                    try
+                    {
+                        var bytes = File.ReadAllBytes(modelPath);
+                        fileHash = Convert.ToHexString(SHA256.HashData(bytes))[..16];
+                    }
+                    catch { /* hash hesaplanamadı */ }
+                }
             }
             
             yield return new ModelStatus
@@ -218,9 +237,53 @@ public class ModelDownloadService : IHostedService
                 IsDownloaded = isDownloaded,
                 ExpectedSize = info.Size,
                 ActualSize = fileSize.HasValue ? $"{fileSize.Value / 1024 / 1024}MB" : null,
-                Dimensions = info.Dimensions
+                Dimensions = info.Dimensions,
+                ModelFormat = info.ModelFormat,
+                MaxSequenceLength = info.MaxSequenceLength,
+                FileHash = fileHash,
+                DownloadedAt = downloadedAt
             };
         }
+    }
+    
+    /// <summary>
+    /// Model dosyasının bütünlüğünü doğrular
+    /// </summary>
+    public bool VerifyModelIntegrity(string modelName)
+    {
+        var modelPath = GetModelPath(modelName);
+        var vocabPath = GetVocabPath(modelName);
+        
+        if (!File.Exists(modelPath) || !File.Exists(vocabPath))
+            return false;
+        
+        // ONNX dosyasının minimum boyut kontrolü
+        var modelFileInfo = new FileInfo(modelPath);
+        if (modelFileInfo.Length < 1024) // 1KB'dan küçükse bozuk
+            return false;
+        
+        // Vocabulary dosyasının boş olmadığını kontrol et
+        var vocabFileInfo = new FileInfo(vocabPath);
+        if (vocabFileInfo.Length < 100)
+            return false;
+        
+        return true;
+    }
+    
+    /// <summary>
+    /// Kullanılabilir model isimlerini döndürür
+    /// </summary>
+    public static IReadOnlyCollection<string> GetAvailableModelNames()
+    {
+        return AvailableModels.Keys.ToList().AsReadOnly();
+    }
+    
+    /// <summary>
+    /// Model bilgisini döndürür
+    /// </summary>
+    public static ModelInfo? GetModelInfo(string modelName)
+    {
+        return AvailableModels.GetValueOrDefault(modelName);
     }
     
     /// <summary>
@@ -248,6 +311,8 @@ public class ModelInfo
     public string VocabUrl { get; set; } = string.Empty;
     public string Size { get; set; } = string.Empty;
     public int Dimensions { get; set; }
+    public int MaxSequenceLength { get; set; } = 128;
+    public string ModelFormat { get; set; } = "ONNX";
 }
 
 /// <summary>
@@ -261,4 +326,8 @@ public class ModelStatus
     public string ExpectedSize { get; set; } = string.Empty;
     public string? ActualSize { get; set; }
     public int Dimensions { get; set; }
+    public string ModelFormat { get; set; } = "ONNX";
+    public int MaxSequenceLength { get; set; }
+    public string? FileHash { get; set; }
+    public DateTime? DownloadedAt { get; set; }
 }

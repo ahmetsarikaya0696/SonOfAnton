@@ -28,9 +28,9 @@ public class NodeExecutionContext
     public Dictionary<string, object?> Memory { get; init; } = [];
     
     /// <summary>
-    /// �ptal token'�
+    /// İptal token'ı
     /// </summary>
-    public CancellationToken CancellationToken { get; init; }
+    public CancellationToken CancellationToken { get; set; }
     
     /// <summary>
     /// Log yazmak i�in callback

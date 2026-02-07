@@ -161,6 +161,9 @@ public class Graph
         // Pin'lere edge referansı ekle
         sourceNode.OutputPins[edge.SourcePinName].ConnectedEdges.Add(edge.Id);
         targetNode.InputPins[edge.TargetPinName].ConnectedEdges.Add(edge.Id);
+
+        // Edge bağlantı event'ini tetikle
+        edge.NotifyConnected();
         
         return ValidationResult.Success();
     }
@@ -179,7 +182,10 @@ public class Graph
         
         if (_nodes.TryGetValue(edge.TargetNodeId, out var targetNode))
             targetNode.InputPins[edge.TargetPinName].ConnectedEdges.Remove(edgeId);
-        
+
+        // Edge bağlantı koparma event'ini tetikle
+        edge.NotifyDisconnected();
+
         return _edges.Remove(edgeId);
     }
     
@@ -231,6 +237,150 @@ public class Graph
         // Tüm node'lar işlenmediyse cycle var
         return processedCount != _nodes.Count;
     }
+
+    /// <summary>
+    /// Tarjan's strongly connected components algoritması ile cycle'ları bulur
+    /// </summary>
+    public List<List<INode>> FindStronglyConnectedComponents()
+    {
+        var index = 0;
+        var stack = new Stack<Guid>();
+        var onStack = new HashSet<Guid>();
+        var nodeIndex = new Dictionary<Guid, int>();
+        var lowLink = new Dictionary<Guid, int>();
+        var result = new List<List<INode>>();
+
+        void StrongConnect(Guid nodeId)
+        {
+            nodeIndex[nodeId] = index;
+            lowLink[nodeId] = index;
+            index++;
+            stack.Push(nodeId);
+            onStack.Add(nodeId);
+
+            foreach (var edge in _edges.Values.Where(e => e.SourceNodeId == nodeId))
+            {
+                var targetId = edge.TargetNodeId;
+                if (!nodeIndex.ContainsKey(targetId))
+                {
+                    StrongConnect(targetId);
+                    lowLink[nodeId] = Math.Min(lowLink[nodeId], lowLink[targetId]);
+                }
+                else if (onStack.Contains(targetId))
+                {
+                    lowLink[nodeId] = Math.Min(lowLink[nodeId], nodeIndex[targetId]);
+                }
+            }
+
+            if (lowLink[nodeId] == nodeIndex[nodeId])
+            {
+                var component = new List<INode>();
+                Guid w;
+                do
+                {
+                    w = stack.Pop();
+                    onStack.Remove(w);
+                    if (_nodes.TryGetValue(w, out var node))
+                        component.Add(node);
+                } while (w != nodeId);
+
+                result.Add(component);
+            }
+        }
+
+        foreach (var nodeId in _nodes.Keys)
+        {
+            if (!nodeIndex.ContainsKey(nodeId))
+                StrongConnect(nodeId);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Bağlantısız (disconnected) bileşenleri bulur
+    /// </summary>
+    public List<List<INode>> FindDisconnectedComponents()
+    {
+        var visited = new HashSet<Guid>();
+        var components = new List<List<INode>>();
+
+        foreach (var nodeId in _nodes.Keys)
+        {
+            if (visited.Contains(nodeId)) continue;
+
+            var component = new List<INode>();
+            var queue = new Queue<Guid>();
+            queue.Enqueue(nodeId);
+            visited.Add(nodeId);
+
+            while (queue.Count > 0)
+            {
+                var currentId = queue.Dequeue();
+                if (_nodes.TryGetValue(currentId, out var node))
+                    component.Add(node);
+
+                // İki yönlü komşuları ekle (undirected graph gibi davran)
+                foreach (var edge in _edges.Values)
+                {
+                    Guid? neighborId = null;
+                    if (edge.SourceNodeId == currentId) neighborId = edge.TargetNodeId;
+                    else if (edge.TargetNodeId == currentId) neighborId = edge.SourceNodeId;
+
+                    if (neighborId.HasValue && visited.Add(neighborId.Value))
+                        queue.Enqueue(neighborId.Value);
+                }
+            }
+
+            components.Add(component);
+        }
+
+        return components;
+    }
+
+    /// <summary>
+    /// Parallel execution seviyelerini hesaplar.
+    /// Aynı seviyedeki node'lar paralel çalıştırılabilir.
+    /// </summary>
+    public List<List<INode>> GetParallelExecutionLevels()
+    {
+        var levels = new List<List<INode>>();
+        var inDegree = _nodes.Keys.ToDictionary(id => id, _ => 0);
+
+        foreach (var edge in _edges.Values)
+        {
+            inDegree[edge.TargetNodeId]++;
+        }
+
+        var currentLevel = _nodes.Keys.Where(id => inDegree[id] == 0).ToList();
+
+        while (currentLevel.Count > 0)
+        {
+            var levelNodes = new List<INode>();
+            var nextLevel = new List<Guid>();
+
+            foreach (var nodeId in currentLevel)
+            {
+                if (_nodes.TryGetValue(nodeId, out var node))
+                    levelNodes.Add(node);
+
+                foreach (var edge in _edges.Values.Where(e => e.SourceNodeId == nodeId))
+                {
+                    inDegree[edge.TargetNodeId]--;
+                    if (inDegree[edge.TargetNodeId] == 0)
+                        nextLevel.Add(edge.TargetNodeId);
+                }
+            }
+
+            if (levelNodes.Count > 0)
+                levels.Add(levelNodes);
+
+            currentLevel = nextLevel;
+        }
+
+        return levels;
+    }
+    
     
     /// <summary>
     /// Topological sort (execution order)
@@ -289,10 +439,16 @@ public class Graph
             errors.Add("Graph has no trigger nodes (nodes without input connections)");
         }
         
-        // 3. Cycle kontrolü
-        if (HasCycle())
+        // 3. Cycle kontrolü (Tarjan's SCC ile detaylı)
+        var sccs = FindStronglyConnectedComponents();
+        var cyclicComponents = sccs.Where(c => c.Count > 1).ToList();
+        if (cyclicComponents.Count > 0)
         {
-            errors.Add("Graph contains a cycle");
+            foreach (var component in cyclicComponents)
+            {
+                var nodeNames = string.Join(", ", component.Select(n => $"'{n.Name}' ({n.Type})"));
+                errors.Add($"Cycle detected among nodes: {nodeNames}");
+            }
         }
         
         // 4. Required pin kontrolü
@@ -316,6 +472,26 @@ public class Graph
             if (!hasInput && !hasOutput && _nodes.Count > 1)
             {
                 warnings.Add($"Node '{node.Name}' ({node.Type}) is not connected to the graph");
+            }
+        }
+
+        // 6. Disconnected component analizi (warning)
+        var components = FindDisconnectedComponents();
+        if (components.Count > 1)
+        {
+            warnings.Add($"Graph has {components.Count} disconnected components. Consider connecting them or splitting into separate workflows.");
+        }
+
+        // 7. Pin uyumluluk matrisi validasyonu (tüm edge'ler)
+        foreach (var edge in _edges.Values)
+        {
+            if (!_nodes.TryGetValue(edge.SourceNodeId, out var sourceNode) ||
+                !_nodes.TryGetValue(edge.TargetNodeId, out var targetNode))
+                continue;
+
+            if (!edge.IsValid(sourceNode, targetNode, out var edgeError))
+            {
+                errors.Add($"Edge {edge.Id}: {edgeError}");
             }
         }
         

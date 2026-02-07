@@ -20,6 +20,7 @@ public class NodeEditorInteropService : IAsyncDisposable
     public event Action<double>? OnCanvasZoom;
     public event Action<string, string, string, string>? OnConnectionCreated;
     public event Action<string>? OnConnectionDeleted;
+    public event Action<string, double, double>? OnContextMenu;
     
     public NodeEditorInteropService(IJSRuntime jsRuntime)
     {
@@ -222,7 +223,107 @@ public class NodeEditorInteropService : IAsyncDisposable
     {
         OnConnectionCreated?.Invoke(fromNode, fromPort, toNode, toPort);
     }
+
+    [JSInvokable]
+    public void OnConnectionDeleted_Internal(string connectionId)
+    {
+        OnConnectionDeleted?.Invoke(connectionId);
+    }
+
+    [JSInvokable]
+    public void OnContextMenu_Internal(string nodeId, double x, double y)
+    {
+        OnContextMenu?.Invoke(nodeId, x, y);
+    }
     
+    #endregion
+
+    #region Batch Operations
+
+    /// <summary>
+    /// Birden fazla node'u tek JS çağrısıyla ekler (performans)
+    /// </summary>
+    public async Task<bool> AddNodesBatchAsync(IEnumerable<BatchNodeData> nodes)
+    {
+        if (_module == null || _currentCanvasId == null)
+            return false;
+
+        var nodesArray = nodes.Select(n => new
+        {
+            nodeId = n.NodeId,
+            nodeType = n.NodeType,
+            nodeName = n.NodeName,
+            x = n.X,
+            y = n.Y,
+            config = new
+            {
+                color = n.Config.Color,
+                icon = n.Config.Icon,
+                inputs = n.Config.Inputs.Select(p => new { name = p.Name, type = p.Type.ToString().ToLower() }).ToArray(),
+                outputs = n.Config.Outputs.Select(p => new { name = p.Name, type = p.Type.ToString().ToLower() }).ToArray()
+            }
+        }).ToArray();
+
+        return await _module.InvokeAsync<bool>("addNodesBatch", _currentCanvasId, nodesArray);
+    }
+
+    /// <summary>
+    /// Birden fazla connection'ı tek JS çağrısıyla ekler (performans)
+    /// </summary>
+    public async Task<bool> ConnectNodesBatchAsync(IEnumerable<BatchConnectionData> connections)
+    {
+        if (_module == null || _currentCanvasId == null)
+            return false;
+
+        var connsArray = connections.Select(c => new
+        {
+            connectionId = c.ConnectionId,
+            sourceNodeId = c.SourceNodeId,
+            targetNodeId = c.TargetNodeId,
+            sourcePort = c.SourcePort,
+            targetPort = c.TargetPort
+        }).ToArray();
+
+        return await _module.InvokeAsync<bool>("connectNodesBatch", _currentCanvasId, connsArray);
+    }
+
+    #endregion
+
+    #region Viewport State
+
+    /// <summary>
+    /// Mevcut viewport durumunu döndürür
+    /// </summary>
+    public async Task<ViewportState?> GetViewportStateAsync()
+    {
+        if (_module == null || _currentCanvasId == null)
+            return null;
+
+        return await _module.InvokeAsync<ViewportState>("getViewportState", _currentCanvasId);
+    }
+
+    /// <summary>
+    /// Viewport durumunu restore eder
+    /// </summary>
+    public async Task<bool> SetViewportStateAsync(ViewportState state)
+    {
+        if (_module == null || _currentCanvasId == null)
+            return false;
+
+        return await _module.InvokeAsync<bool>("setViewportState", _currentCanvasId, state);
+    }
+
+    /// <summary>
+    /// Grid snapping'i etkinleştirir/devre dışı bırakır
+    /// </summary>
+    public async Task<bool> SetGridSnappingAsync(bool enabled, int gridSize = 20)
+    {
+        if (_module == null || _currentCanvasId == null)
+            return false;
+
+        return await _module.InvokeAsync<bool>("setGridSnapping", _currentCanvasId, enabled, gridSize);
+    }
+
     #endregion
     
     public async ValueTask DisposeAsync()
@@ -266,4 +367,39 @@ public record PinInfo
 {
     public required string Name { get; init; }
     public PinType Type { get; init; } = PinType.Any;
+}
+
+/// <summary>
+/// Batch node ekleme verisi
+/// </summary>
+public record BatchNodeData
+{
+    public required string NodeId { get; init; }
+    public required string NodeType { get; init; }
+    public required string NodeName { get; init; }
+    public double X { get; init; }
+    public double Y { get; init; }
+    public required NodeConfig Config { get; init; }
+}
+
+/// <summary>
+/// Batch connection ekleme verisi
+/// </summary>
+public record BatchConnectionData
+{
+    public required string ConnectionId { get; init; }
+    public required string SourceNodeId { get; init; }
+    public required string TargetNodeId { get; init; }
+    public string SourcePort { get; init; } = "output";
+    public string TargetPort { get; init; } = "input";
+}
+
+/// <summary>
+/// Viewport durumu (zoom/pan state persistence)
+/// </summary>
+public record ViewportState
+{
+    public double Zoom { get; init; } = 1.0;
+    public double PanX { get; init; }
+    public double PanY { get; init; }
 }

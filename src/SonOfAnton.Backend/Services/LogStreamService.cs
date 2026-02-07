@@ -1,39 +1,43 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using SonOfAnton.Shared.DTOs;
 
 namespace SonOfAnton.Backend.Services;
 
 /// <summary>
-/// In-memory log stream servisi - SSE i�in
-/// System.Threading.Channels kullanarak thread-safe ileti�im
+/// In-memory log stream servisi - SSE için
+/// ConcurrentDictionary ile thread-safe, stale channel temizleme
 /// </summary>
 public class LogStreamService
 {
-    private readonly Dictionary<Guid, Channel<LogEventDto>> _channels = [];
-    private readonly object _lock = new();
+    private readonly ConcurrentDictionary<Guid, ChannelEntry> _channels = new();
 
     /// <summary>
-    /// Execution i�in channel olu�tur veya var olan� getir
+    /// Aktif channel sayısı
+    /// </summary>
+    public int ActiveChannelCount => _channels.Count;
+
+    /// <summary>
+    /// Execution için channel oluştur veya var olanı getir
     /// </summary>
     public Channel<LogEventDto> GetOrCreateChannel(Guid executionId)
     {
-        lock (_lock)
+        var entry = _channels.GetOrAdd(executionId, _ => new ChannelEntry
         {
-            if (!_channels.TryGetValue(executionId, out var channel))
+            Channel = Channel.CreateUnbounded<LogEventDto>(new UnboundedChannelOptions
             {
-                channel = Channel.CreateUnbounded<LogEventDto>(new UnboundedChannelOptions
-                {
-                    SingleReader = false,
-                    SingleWriter = false
-                });
-                _channels[executionId] = channel;
-            }
-            return channel;
-        }
+                SingleReader = false,
+                SingleWriter = false
+            }),
+            CreatedAt = DateTime.UtcNow
+        });
+        
+        entry.LastAccessedAt = DateTime.UtcNow;
+        return entry.Channel;
     }
 
     /// <summary>
-    /// Log yaz (Writer taraf� - Hangfire job'lar�)
+    /// Log yaz (Writer tarafı - Hangfire job'ları)
     /// </summary>
     public async Task WriteAsync(Guid executionId, LogEventDto logEvent)
     {
@@ -42,7 +46,7 @@ public class LogStreamService
     }
 
     /// <summary>
-    /// Log oku (Reader taraf� - SSE endpoint)
+    /// Log oku (Reader tarafı - SSE endpoint)
     /// </summary>
     public async IAsyncEnumerable<LogEventDto> ReadAsync(
         Guid executionId,
@@ -57,32 +61,56 @@ public class LogStreamService
     }
 
     /// <summary>
-    /// Channel'� tamamla (execution bitti�inde)
+    /// Channel'ı tamamla (execution bittiğinde)
     /// </summary>
     public void Complete(Guid executionId)
     {
-        lock (_lock)
+        if (_channels.TryGetValue(executionId, out var entry))
         {
-            if (_channels.TryGetValue(executionId, out var channel))
-            {
-                channel.Writer.Complete();
-            }
+            entry.Channel.Writer.TryComplete();
+            entry.CompletedAt = DateTime.UtcNow;
         }
     }
 
     /// <summary>
-    /// Channel'� temizle (bellek y�netimi i�in)
+    /// Channel'ı temizle (bellek yönetimi için)
     /// </summary>
     public void Remove(Guid executionId)
     {
-        lock (_lock)
+        if (_channels.TryRemove(executionId, out var entry))
         {
-            if (_channels.TryGetValue(executionId, out var channel))
+            entry.Channel.Writer.TryComplete();
+        }
+    }
+
+    /// <summary>
+    /// Eski tamamlanmış channel'ları temizle
+    /// </summary>
+    public int CleanupStaleChannels(TimeSpan maxAge)
+    {
+        var cutoff = DateTime.UtcNow - maxAge;
+        var removed = 0;
+
+        foreach (var kvp in _channels)
+        {
+            if (kvp.Value.CompletedAt.HasValue && kvp.Value.CompletedAt.Value < cutoff)
             {
-                channel.Writer.Complete();
-                _channels.Remove(executionId);
+                if (_channels.TryRemove(kvp.Key, out _))
+                {
+                    removed++;
+                }
             }
         }
+
+        return removed;
+    }
+
+    private class ChannelEntry
+    {
+        public required Channel<LogEventDto> Channel { get; init; }
+        public DateTime CreatedAt { get; init; }
+        public DateTime LastAccessedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
     }
 }
 

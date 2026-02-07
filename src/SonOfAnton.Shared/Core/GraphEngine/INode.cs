@@ -15,6 +15,99 @@ public enum ExecutionState
 }
 
 /// <summary>
+/// Node kategori sınıflandırması
+/// </summary>
+public enum NodeCategory
+{
+    Trigger,
+    Action,
+    Transform,
+    Logic,
+    AI,
+    Integration,
+    Utility
+}
+
+/// <summary>
+/// Geçerli state geçişlerini tanımlar
+/// </summary>
+public static class ExecutionStateTransitions
+{
+    private static readonly Dictionary<ExecutionState, HashSet<ExecutionState>> _validTransitions = new()
+    {
+        [ExecutionState.Idle] = [ExecutionState.Pending, ExecutionState.Cancelled],
+        [ExecutionState.Pending] = [ExecutionState.Running, ExecutionState.Cancelled],
+        [ExecutionState.Running] = [ExecutionState.Completed, ExecutionState.Failed, ExecutionState.Cancelled],
+        [ExecutionState.Completed] = [ExecutionState.Idle],
+        [ExecutionState.Failed] = [ExecutionState.Idle],
+        [ExecutionState.Cancelled] = [ExecutionState.Idle],
+        [ExecutionState.Skipped] = [ExecutionState.Idle],
+    };
+
+    /// <summary>
+    /// İki state arasında geçişin geçerli olup olmadığını kontrol eder
+    /// </summary>
+    public static bool IsValidTransition(ExecutionState from, ExecutionState to)
+    {
+        return _validTransitions.TryGetValue(from, out var targets) && targets.Contains(to);
+    }
+
+    /// <summary>
+    /// Geçersiz bir geçiş yapılmaya çalışıldığında fırlatılacak exception
+    /// </summary>
+    public static InvalidOperationException InvalidTransition(ExecutionState from, ExecutionState to)
+    {
+        return new InvalidOperationException(
+            $"Invalid state transition from '{from}' to '{to}'");
+    }
+}
+
+/// <summary>
+/// Execution ilerleme bilgisi
+/// </summary>
+public class ExecutionProgress
+{
+    /// <summary>
+    /// İşlenen mevcut adım
+    /// </summary>
+    public int Current { get; set; }
+
+    /// <summary>
+    /// Toplam adım sayısı
+    /// </summary>
+    public int Total { get; set; }
+
+    /// <summary>
+    /// Yüzdelik ilerleme (0-100)
+    /// </summary>
+    public double Percentage => Total > 0 ? (double)Current / Total * 100 : 0;
+
+    /// <summary>
+    /// İlerleme mesajı
+    /// </summary>
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// İlerleme başlangıç zamanı
+    /// </summary>
+    public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Tahmini kalan süre
+    /// </summary>
+    public TimeSpan? EstimatedRemaining
+    {
+        get
+        {
+            if (Current <= 0 || Total <= 0) return null;
+            var elapsed = DateTime.UtcNow - StartedAt;
+            var perItem = elapsed / Current;
+            return perItem * (Total - Current);
+        }
+    }
+}
+
+/// <summary>
 /// Pin yönünü belirler
 /// </summary>
 public enum PinDirection
@@ -75,7 +168,12 @@ public class PinDefinition
     /// Bu pin'e bağlantı zorunlu mu
     /// </summary>
     public bool Required { get; init; }
-    
+
+    /// <summary>
+    /// Maksimum bağlantı sayısı (0 = sınırsız)
+    /// </summary>
+    public int MaxConnections { get; init; }
+
     /// <summary>
     /// Varsayılan değer (bağlantı yoksa kullanılır)
     /// </summary>
@@ -165,4 +263,19 @@ public interface INode
     /// Son hata mesajı
     /// </summary>
     string? LastError { get; set; }
+
+    /// <summary>
+    /// Node kategori sınıflandırması
+    /// </summary>
+    NodeCategory Category { get; }
+
+    /// <summary>
+    /// Extensible metadata property bag
+    /// </summary>
+    Dictionary<string, object?> Metadata { get; }
+
+    /// <summary>
+    /// Execution ilerleme bilgisi
+    /// </summary>
+    ExecutionProgress Progress { get; }
 }

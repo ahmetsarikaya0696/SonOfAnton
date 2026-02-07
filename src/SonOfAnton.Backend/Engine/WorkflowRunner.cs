@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
@@ -10,31 +11,45 @@ using LogLevel = SonOfAnton.Shared.Enums.LogLevel;
 namespace SonOfAnton.Backend.Engine;
 
 /// <summary>
-/// Workflow �al��t�rma motoru
-/// JSON'dan ak��� okur, node'lar� s�rayla �al��t�r�r
+/// Workflow çalıştırma motoru
+/// JSON'dan akışı okur, node'ları sırayla çalıştırır
+/// Retry, timeout ve hata izolasyonu desteği
 /// </summary>
 public class WorkflowRunner
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<WorkflowRunner> _logger;
     private readonly LogStreamService _logStream;
+    private readonly PerformanceMetricsService _metrics;
     private readonly Dictionary<string, INodeHandler> _handlers;
     private readonly SemaphoreSlim _dbLock = new(1, 1);
+
+    /// <summary>
+    /// Node bazında varsayılan timeout (30 saniye)
+    /// </summary>
+    private static readonly TimeSpan DefaultNodeTimeout = TimeSpan.FromSeconds(30);
+    
+    /// <summary>
+    /// Node başına maksimum retry sayısı
+    /// </summary>
+    private const int MaxNodeRetries = 3;
 
     public WorkflowRunner(
         IServiceProvider serviceProvider,
         ILogger<WorkflowRunner> logger,
         LogStreamService logStream,
+        PerformanceMetricsService metrics,
         IEnumerable<INodeHandler> handlers)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _logStream = logStream;
+        _metrics = metrics;
         _handlers = handlers.ToDictionary(h => h.NodeType, h => h);
     }
 
     /// <summary>
-    /// Execution'� �al��t�r - Hangfire taraf�ndan �a�r�l�r
+    /// Execution'ı çalıştır - Hangfire tarafından çağrılır
     /// </summary>
     public async Task RunAsync(Guid executionId, CancellationToken cancellationToken = default)
     {
@@ -47,43 +62,36 @@ public class WorkflowRunner
 
         if (execution == null)
         {
-            _logger.LogError("Execution bulunamad�: {ExecutionId}", executionId);
+            _logger.LogError("Execution bulunamadı: {ExecutionId}", executionId);
             return;
         }
 
         var workflow = execution.Workflow;
         if (workflow.GraphData == null)
         {
-            await FailExecution(dbContext, execution, "Workflow graph verisi bulunamad�");
+            await FailExecution(dbContext, execution, "Workflow graph verisi bulunamadı");
             return;
         }
 
+        var sw = Stopwatch.StartNew();
+        _metrics.RecordWorkflowStarted(execution.WorkflowId);
 
         try
         {
             // Status'u Running yap
-            await _dbLock.WaitAsync(cancellationToken);
-            try
-            {
-                execution.Status = ExecutionStatus.Running;
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
+            await UpdateExecutionStatusAsync(dbContext, execution, ExecutionStatus.Running, cancellationToken);
 
-            await WriteLog(dbContext, execution, null, LogLevel.Info, $"Workflow ba�lat�l�yor: {workflow.Name}");
+            await WriteLog(dbContext, execution, null, LogLevel.Info, $"Workflow başlatılıyor: {workflow.Name}");
 
-            // Graph'� parse et
+            // Graph'ı parse et
             var graph = JsonSerializer.Deserialize<WorkflowGraphDto>(workflow.GraphData.RootElement.GetRawText());
             if (graph == null || graph.Nodes.Count == 0)
             {
-                await FailExecution(dbContext, execution, "Workflow bo� veya ge�ersiz");
+                await FailExecution(dbContext, execution, "Workflow boş veya geçersiz");
                 return;
             }
 
-            // Memory'i haz�rla
+            // Memory'i hazırla
             var memory = new Dictionary<string, object?>();
             if (execution.Memory != null)
             {
@@ -91,26 +99,31 @@ public class WorkflowRunner
                     execution.Memory.RootElement.GetRawText()) ?? [];
             }
 
-            // Trigger node'lar�n� bul (giri�i olmayan node'lar)
+            // Çevrimsel bağımlılık kontrolü
+            var visitedNodes = new HashSet<Guid>();
+
+            // Trigger node'larını bul (girişi olmayan node'lar)
             var triggerNodes = graph.Nodes
                 .Where(n => !graph.Connections.Any(c => c.TargetNodeId == n.Id))
                 .ToList();
 
             if (triggerNodes.Count == 0)
             {
-                await FailExecution(dbContext, execution, "Ba�lang�� node'u bulunamad�");
+                await FailExecution(dbContext, execution, "Başlangıç node'u bulunamadı");
                 return;
             }
 
-            // Her trigger'dan ba�layarak �al��t�r
+            // Her trigger'dan başlayarak çalıştır
             foreach (var triggerNode in triggerNodes)
             {
                 await ExecuteNodeChainAsync(
                     dbContext, execution, graph, triggerNode,
-                    null, memory, cancellationToken);
+                    null, memory, visitedNodes, cancellationToken);
             }
 
-            // Ba�ar�l� tamamla
+            sw.Stop();
+
+            // Başarılı tamamla
             await _dbLock.WaitAsync(cancellationToken);
             try
             {
@@ -124,19 +137,27 @@ public class WorkflowRunner
                 _dbLock.Release();
             }
 
-            await WriteLog(dbContext, execution, null, LogLevel.Info, "Workflow ba�ar�yla tamamland�");
+            _metrics.RecordWorkflowCompleted(execution.WorkflowId, sw.ElapsedMilliseconds);
+
+            await WriteLog(dbContext, execution, null, LogLevel.Info, 
+                $"Workflow başarıyla tamamlandı ({sw.ElapsedMilliseconds}ms)");
             
             // SSE stream'i tamamla
             _logStream.Complete(executionId);
         }
         catch (OperationCanceledException)
         {
-            await FailExecution(dbContext, execution, "�ptal edildi");
+            sw.Stop();
+            _metrics.RecordWorkflowFailed(execution.WorkflowId, "İptal edildi", sw.ElapsedMilliseconds);
+            await FailExecution(dbContext, execution, $"İptal edildi ({sw.ElapsedMilliseconds}ms)");
             _logStream.Complete(executionId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Workflow execution hatas�: {ExecutionId}", executionId);
+            sw.Stop();
+            _metrics.RecordWorkflowFailed(execution.WorkflowId, ex.Message, sw.ElapsedMilliseconds);
+            _logger.LogError(ex, "Workflow execution hatası: {ExecutionId} ({Elapsed}ms)", 
+                executionId, sw.ElapsedMilliseconds);
             await FailExecution(dbContext, execution, ex.Message);
             _logStream.Complete(executionId);
         }
@@ -149,70 +170,195 @@ public class WorkflowRunner
         WorkflowNodeDto node,
         object? inputData,
         Dictionary<string, object?> memory,
+        HashSet<Guid> visitedNodes,
         CancellationToken cancellationToken)
     {
-        // Current node'u g�ncelle
-        await _dbLock.WaitAsync(cancellationToken);
-        try
+        // Çevrimsel bağımlılık kontrolü
+        if (!visitedNodes.Add(node.Id))
         {
-            execution.CurrentNodeId = node.Id;
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        finally
-        {
-            _dbLock.Release();
-        }
-
-        await WriteLog(dbContext, execution, node.Id, LogLevel.Info, 
-            $"Node �al��t�r�l�yor: {node.Name} ({node.Type})");
-
-        // Handler'� bul
-        if (!_handlers.TryGetValue(node.Type, out var handler))
-        {
-            _logger.LogWarning("Handler bulunamad�: {NodeType}, veri ge�iriliyor", node.Type);
-            // Handler yoksa veriyi oldu�u gibi ge�ir
-            await ExecuteNextNodes(dbContext, execution, graph, node, inputData, "output", memory, cancellationToken);
+            await WriteLog(dbContext, execution, node.Id, LogLevel.Warning,
+                $"Çevrimsel bağımlılık algılandı, node atlanıyor: {node.Name}");
             return;
         }
 
-        // Node log'lar�n� topla
-        var pendingLogs = new List<(string msg, LogLevel level, object? data)>();
-
-        // Context olu�tur
-        var context = new NodeExecutionContext
+        try
         {
-            ExecutionId = execution.Id,
-            Node = node,
-            InputData = inputData,
-            Memory = memory,
-            CancellationToken = cancellationToken,
-            Log = (msg, level, data) =>
+            // Current node'u güncelle
+            await _dbLock.WaitAsync(cancellationToken);
+            try
             {
-                // Log'lar� kuyru�a ekle, sonra toplu yaz�lacak
-                pendingLogs.Add((msg, level, data));
+                execution.CurrentNodeId = node.Id;
+                await dbContext.SaveChangesAsync(cancellationToken);
             }
-        };
+            finally
+            {
+                _dbLock.Release();
+            }
 
-        // Node'u �al��t�r
-        var result = await handler.ExecuteAsync(context);
+            await WriteLog(dbContext, execution, node.Id, LogLevel.Info, 
+                $"Node çalıştırılıyor: {node.Name} ({node.Type})");
 
-        // Biriken log'lar� yaz
-        foreach (var (msg, level, data) in pendingLogs)
+            // Handler'ı bul
+            if (!_handlers.TryGetValue(node.Type, out var handler))
+            {
+                _logger.LogWarning("Handler bulunamadı: {NodeType}, veri geçiriliyor", node.Type);
+                await ExecuteNextNodes(dbContext, execution, graph, node, inputData, "output", 
+                    memory, visitedNodes, cancellationToken);
+                return;
+            }
+
+            // Retry mekanizması ile node çalıştır
+            var result = await ExecuteNodeWithRetryAsync(
+                dbContext, execution, handler, node, inputData, memory, cancellationToken);
+
+            if (!result.Success)
+            {
+                // continueOnError parametresini kontrol et
+                var continueOnError = node.Parameters.TryGetValue("continueOnError", out var coe) 
+                    && coe?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+                
+                if (continueOnError)
+                {
+                    await WriteLog(dbContext, execution, node.Id, LogLevel.Warning,
+                        $"Node hatası (devam ediliyor): {result.Error}");
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Node hatası ({node.Name}): {result.Error}");
+                }
+            }
+
+            // Memory'e yaz
+            memory[$"node_{node.Id}"] = result.OutputData;
+
+            // Sonraki node'ları çalıştır
+            await ExecuteNextNodes(dbContext, execution, graph, node, result.OutputData, 
+                result.OutputPort, memory, visitedNodes, cancellationToken);
+        }
+        finally
         {
-            await WriteLog(dbContext, execution, node.Id, level, msg, data);
+            // Ziyaret setinden çıkar (aynı node farklı yollardan tekrar ziyaret edilebilir)
+            visitedNodes.Remove(node.Id);
+        }
+    }
+
+    /// <summary>
+    /// Node'u retry ve timeout ile çalıştırır
+    /// </summary>
+    private async Task<NodeExecutionResult> ExecuteNodeWithRetryAsync(
+        SonOfAntonDbContext dbContext,
+        ExecutionEntity execution,
+        INodeHandler handler,
+        WorkflowNodeDto node,
+        object? inputData,
+        Dictionary<string, object?> memory,
+        CancellationToken cancellationToken)
+    {
+        // Node-spesifik timeout
+        var nodeTimeout = DefaultNodeTimeout;
+        if (node.Parameters.TryGetValue("timeout", out var timeoutParam) 
+            && int.TryParse(timeoutParam?.ToString(), out var timeoutMs))
+        {
+            nodeTimeout = TimeSpan.FromMilliseconds(timeoutMs);
         }
 
-        if (!result.Success)
+        // Node-spesifik retry sayısı
+        var maxRetries = MaxNodeRetries;
+        if (node.Parameters.TryGetValue("retries", out var retryParam) 
+            && int.TryParse(retryParam?.ToString(), out var retryCount))
         {
-            throw new InvalidOperationException($"Node hatas� ({node.Name}): {result.Error}");
+            maxRetries = Math.Min(retryCount, 5); // Maksimum 5
         }
 
-        // Memory'e yaz
-        memory[$"node_{node.Id}"] = result.OutputData;
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            if (attempt > 0)
+            {
+                var delay = TimeSpan.FromMilliseconds(Math.Pow(2, attempt - 1) * 500);
+                await WriteLog(dbContext, execution, node.Id, LogLevel.Warning,
+                    $"Retry {attempt}/{maxRetries}, {delay.TotalMilliseconds}ms bekleniyor...");
+                await Task.Delay(delay, cancellationToken);
+            }
 
-        // Sonraki node'lar� �al��t�r
-        await ExecuteNextNodes(dbContext, execution, graph, node, result.OutputData, 
-            result.OutputPort, memory, cancellationToken);
+            try
+            {
+                // Node log'larını topla
+                var pendingLogs = new List<(string msg, LogLevel level, object? data)>();
+
+                // Context oluştur
+                var context = new NodeExecutionContext
+                {
+                    ExecutionId = execution.Id,
+                    Node = node,
+                    InputData = inputData,
+                    Memory = memory,
+                    CancellationToken = cancellationToken,
+                    Log = (msg, level, data) =>
+                    {
+                        pendingLogs.Add((msg, level, data));
+                    }
+                };
+
+                // Timeout ile çalıştır
+                var sw = Stopwatch.StartNew();
+                NodeExecutionResult result;
+                
+                using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    cts.CancelAfter(nodeTimeout);
+                    context.CancellationToken = cts.Token;
+                    
+                    try
+                    {
+                        result = await handler.ExecuteAsync(context);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        // Timeout oldu
+                        result = NodeExecutionResult.Fail(
+                            $"Node timeout ({nodeTimeout.TotalSeconds}s aşıldı)");
+                    }
+                }
+                
+                sw.Stop();
+
+                // Biriken log'ları yaz
+                foreach (var (msg, level, data) in pendingLogs)
+                {
+                    await WriteLog(dbContext, execution, node.Id, level, msg, data);
+                }
+
+                // Node metriği kaydet
+                _metrics.RecordNodeExecution(node.Type, sw.ElapsedMilliseconds, result.Success);
+
+                if (result.Success)
+                {
+                    if (attempt > 0)
+                    {
+                        await WriteLog(dbContext, execution, node.Id, LogLevel.Info,
+                            $"Node başarılı (retry {attempt}, {sw.ElapsedMilliseconds}ms)");
+                    }
+                    return result;
+                }
+
+                // Retry edilebilecek hata mı kontrol et
+                if (attempt == maxRetries)
+                {
+                    return result; // Son deneme, hatayı döndür
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw; // İptal durumunu yukarı ilet
+            }
+            catch (Exception ex) when (attempt < maxRetries)
+            {
+                await WriteLog(dbContext, execution, node.Id, LogLevel.Warning,
+                    $"Node hatası (retry {attempt + 1}): {ex.Message}");
+            }
+        }
+
+        return NodeExecutionResult.Fail("Maksimum retry sayısına ulaşıldı");
     }
 
     private async Task ExecuteNextNodes(
@@ -223,9 +369,10 @@ public class WorkflowRunner
         object? outputData,
         string outputPort,
         Dictionary<string, object?> memory,
+        HashSet<Guid> visitedNodes,
         CancellationToken cancellationToken)
     {
-        // Belirtilen port'tan ��kan ba�lant�lar� bul
+        // Belirtilen port'tan çıkan bağlantıları bul
         var connections = graph.Connections
             .Where(c => c.SourceNodeId == currentNode.Id && c.SourcePort == outputPort)
             .ToList();
@@ -237,11 +384,28 @@ public class WorkflowRunner
             {
                 await ExecuteNodeChainAsync(
                     dbContext, execution, graph, nextNode,
-                    outputData, memory, cancellationToken);
+                    outputData, memory, visitedNodes, cancellationToken);
             }
         }
     }
 
+    private async Task UpdateExecutionStatusAsync(
+        SonOfAntonDbContext dbContext,
+        ExecutionEntity execution,
+        ExecutionStatus status,
+        CancellationToken cancellationToken)
+    {
+        await _dbLock.WaitAsync(cancellationToken);
+        try
+        {
+            execution.Status = status;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
 
     private async Task WriteLog(
         SonOfAntonDbContext dbContext,
@@ -300,7 +464,7 @@ public class WorkflowRunner
             _dbLock.Release();
         }
 
-        await WriteLog(dbContext, execution, null, LogLevel.Error, $"Workflow ba�ar�s�z: {error}");
+        await WriteLog(dbContext, execution, null, LogLevel.Error, $"Workflow başarısız: {error}");
     }
 }
 
