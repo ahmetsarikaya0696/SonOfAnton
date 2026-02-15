@@ -5,11 +5,26 @@
 @inject WorkflowApiService ApiService
 @inject SseClientService SseClient
 @inject ChatDiagramBridge ChatBridge
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <div class="workflow-editor" @onkeydown="HandleGlobalKeyDown" tabindex="-1">
     <div class="toolbar">
         <div class="toolbar-left">
+            <div class="brand-logo" style="margin-right: 1rem; display: flex; align-items: center;">
+                <svg width="32" height="32" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M100 30L150 100H120L100 70L80 100H50L100 30Z" fill="var(--accent-color)" fill-opacity="0.2"/>
+                  <path d="M100 30L130 170M100 30L70 170" stroke="var(--accent-color)" stroke-width="12" stroke-linecap="round"/>
+                  <path d="M70 120H130" stroke="var(--accent-color)" stroke-width="12" stroke-linecap="round"/>
+                  
+                  <circle cx="100" cy="30" r="8" fill="var(--success-color)"/>
+                  <circle cx="70" cy="120" r="6" fill="var(--accent-color)"/>
+                  <circle cx="130" cy="120" r="6" fill="var(--accent-color)"/>
+                  <circle cx="70" cy="170" r="6" fill="var(--accent-color)"/>
+                  <circle cx="130" cy="170" r="6" fill="var(--accent-color)"/>
+                </svg>
+                <span class="brand-name" style="font-weight: 800; font-size: 14px; margin-left: 8px; color: var(--text-primary); letter-spacing: 1px;">SON OF ANTON</span>
+            </div>
             <button class="btn btn-ghost" @onclick="() => _isFolderTreeOpen = !_isFolderTreeOpen" title="Klasörler">
                 <Icon Name="folder" Size="14" />
             </button>
@@ -44,13 +59,16 @@
             <button class="btn btn-ghost" @onclick="() => _isSearchOpen = true" title="Ara (Ctrl+K)">
                 <Icon Name="search" Size="14" />
             </button>
-            <button class="btn btn-ghost" @onclick="() => _isChatOpen = !_isChatOpen" title="AI Asistan">
+            <button class="btn btn-ghost" @onclick="ToggleTheme" title="@(_currentTheme == "dark" ? "Aydınlık Mod" : "Karanlık Mod")">
+                <Icon Name="@(_currentTheme == "dark" ? "sun" : "moon")" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isChatOpen))" title="AI Asistan">
                 <Icon Name="message-circle" Size="14" />
             </button>
-            <button class="btn btn-ghost" @onclick="() => _isYamlOpen = !_isYamlOpen" title="YAML">
+            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isYamlOpen))" title="YAML">
                 <Icon Name="file-text" Size="14" />
             </button>
-            <button class="btn btn-ghost" @onclick="() => _isVariablesOpen = !_isVariablesOpen" title="Değişkenler">
+            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isVariablesOpen))" title="Değişkenler">
                 <Icon Name="variable" Size="14" />
             </button>
             <span class="toolbar-divider"></span>
@@ -132,12 +150,12 @@
 
 <GlobalSearch IsOpen="_isSearchOpen" OnClose="() => _isSearchOpen = false" />
 
-<WorkflowChatPanel IsOpen="_isChatOpen" IsOpenChanged="v => _isChatOpen = v"
+<WorkflowChatPanel IsOpen="_isChatOpen" IsOpenChanged="v => { _isChatOpen = v; if (!v) StateHasChanged(); }"
                    WorkflowId="DiagramState.CurrentWorkflow?.Id" />
 
-<YamlPreviewPanel IsOpen="_isYamlOpen" IsOpenChanged="v => _isYamlOpen = v" />
+<YamlPreviewPanel IsOpen="_isYamlOpen" IsOpenChanged="v => { _isYamlOpen = v; if (!v) StateHasChanged(); }" />
 
-<VariablesPanel IsOpen="_isVariablesOpen" IsOpenChanged="v => _isVariablesOpen = v" />
+<VariablesPanel IsOpen="_isVariablesOpen" IsOpenChanged="v => { _isVariablesOpen = v; if (!v) StateHasChanged(); }" />
 
 <SnapshotPanel IsOpen="_isSnapshotOpen" IsOpenChanged="v => _isSnapshotOpen = v"
                ExecutionId="_currentExecutionId ?? Guid.Empty" />
@@ -167,6 +185,50 @@
     private bool _isSnapshotOpen;
     private bool _isPaused;
     private bool _isFolderTreeOpen;
+    private string _currentTheme = "dark";
+
+    private async Task ToggleTheme()
+    {
+        _currentTheme = await JS.InvokeAsync<string>("themeManager.toggleTheme");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _currentTheme = await JS.InvokeAsync<string>("themeManager.getTheme");
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private void TogglePanel(string panelName)
+    {
+        // Tıklanan panelin mevcut durumunu al
+        var willOpen = panelName switch
+        {
+            nameof(_isChatOpen) => !_isChatOpen,
+            nameof(_isYamlOpen) => !_isYamlOpen,
+            nameof(_isVariablesOpen) => !_isVariablesOpen,
+            _ => false
+        };
+
+        // Tüm panelleri kapat
+        _isChatOpen = false;
+        _isYamlOpen = false;
+        _isVariablesOpen = false;
+
+        // Sadece tıklanan paneli aç (eğer kapalıysa)
+        if (willOpen)
+        {
+            switch (panelName)
+            {
+                case nameof(_isChatOpen): _isChatOpen = true; break;
+                case nameof(_isYamlOpen): _isYamlOpen = true; break;
+                case nameof(_isVariablesOpen): _isVariablesOpen = true; break;
+            }
+        }
+    }
 
     protected override void OnInitialized()
     {

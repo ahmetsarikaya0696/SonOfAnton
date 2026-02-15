@@ -2,6 +2,7 @@
 @using SonOfAnton.Shared.Core.GraphEngine
 @implements IAsyncDisposable
 @inject NodeEditorInteropService EditorInterop
+@inject IJSRuntime JSRuntime
 
 <div class="fabric-node-editor">
     <div class="editor-toolbar">
@@ -15,7 +16,18 @@
             <Icon Name="zoom-out" Size="16" />
         </button>
         <span class="zoom-level">@($"{_zoomLevel:P0}")</span>
+        
         <div class="spacer"></div>
+        
+        <button class="btn btn-icon" @onclick="AddNote" title="Not Ekle">
+            <Icon Name="sticky-note" Size="16" />
+        </button>
+        <button class="btn btn-icon" @onclick="AddGroup" title="Grup Ekle">
+            <Icon Name="box-select" Size="16" />
+        </button>
+
+        <div class="spacer"></div>
+
         <button class="btn btn-primary" @onclick="OnRunClicked" disabled="@IsExecuting">
             <Icon Name="play" Size="14" />
             Çalıştır
@@ -32,6 +44,13 @@
         @if (_contextMenu.Visible)
         {
             <div class="context-menu" style="left: @(_contextMenu.X)px; top: @(_contextMenu.Y)px;">
+                <button class="context-item" @onclick="() => RenameSelectedNode()">
+                    <Icon Name="edit-2" Size="14" /> Yeniden Adlandır
+                </button>
+                <button class="context-item" @onclick="() => ToggleBypassSelectedNode()">
+                    <Icon Name="skip-forward" Size="14" /> Bypass
+                </button>
+                <hr class="context-divider" />
                 <button class="context-item" @onclick="() => DuplicateSelectedNode()">
                     <Icon Name="copy" Size="14" /> Çoğalt
                 </button>
@@ -55,6 +74,9 @@
     [Parameter] public EventCallback OnSelectionCleared { get; set; }
     [Parameter] public EventCallback<(string FromNode, string FromPort, string ToNode, string ToPort)> OnConnectionCreated { get; set; }
     [Parameter] public EventCallback<string> OnNodeDeleted { get; set; }
+    [Parameter] public EventCallback<string> OnNodeRenamed { get; set; }
+    [Parameter] public EventCallback<(string NodeId, bool IsBypassed)> OnNodeBypassToggled { get; set; }
+    
     [Parameter] public bool IsExecuting { get; set; }
     [Parameter] public bool EnableGridSnapping { get; set; }
     
@@ -172,6 +194,16 @@
         if (!_initialized) return;
         await EditorInterop.ClearCanvasAsync();
     }
+
+    private async Task AddNote()
+    {
+        await EditorInterop.AddNoteAsync(Guid.NewGuid().ToString(), "Yeni Not", 100, 100, "#f9e2af");
+    }
+
+    private async Task AddGroup()
+    {
+        await EditorInterop.AddGroupAsync(Guid.NewGuid().ToString(), "Yeni Grup", 100, 100, 400, 300, "#313244");
+    }
     
     private async Task FitToScreen()
     {
@@ -227,10 +259,36 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private async Task RenameSelectedNode()
+    {
+        _contextMenu = (false, 0, 0);
+        if (_contextMenuNodeId != null)
+        {
+            var newName = await JSRuntime.InvokeAsync<string>("prompt", "Node ismi:", "Yeni İsim");
+            if (!string.IsNullOrWhiteSpace(newName))
+            {
+                await EditorInterop.UpdateNodeNameAsync(_contextMenuNodeId, newName);
+                await OnNodeRenamed.InvokeAsync(_contextMenuNodeId);
+            }
+        }
+    }
+
+    private async Task ToggleBypassSelectedNode()
+    {
+        _contextMenu = (false, 0, 0);
+        if (_contextMenuNodeId != null)
+        {
+            // Basit toggle - client state tutmadığımız için şimdilik visual olarak sadece set ediyoruz
+            // Gerçek state parent component'te tutulmalı
+            await EditorInterop.SetNodeBypassAsync(_contextMenuNodeId, true);
+            await OnNodeBypassToggled.InvokeAsync((_contextMenuNodeId, true));
+        }
+    }
+
     private async Task DuplicateSelectedNode()
     {
         _contextMenu = (false, 0, 0);
-        // Duplicate logic is handled by parent component
+        // Duplicate logic for parent
     }
 
     private async Task DeleteSelectedNode()
@@ -246,10 +304,10 @@
     private async Task DisconnectSelectedNode()
     {
         _contextMenu = (false, 0, 0);
-        // Disconnect all connections for this node (parent handles actual logic)
+        // Disconnect logic (parent handles)
         if (_contextMenuNodeId != null)
         {
-            await OnNodeDeleted.InvokeAsync(_contextMenuNodeId);
+            // Just reusing OnNodeDeleted for now is incorrect, bypassing for placeholder
         }
     }
     

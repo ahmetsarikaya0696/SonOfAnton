@@ -1,0 +1,159 @@
+/* Custom Login Theme for SonOfAnton */
+
+/* Import Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --bg-base: #1e1e2e;
+    --bg-surface: #313244;
+    --text-primary: #cdd6f4;
+    --text-secondary: #a6adc8;
+    --accent-color: #89b4fa;
+    --accent-gradient: linear-gradient(135deg, #89b4fa, #8b5cf6);
+    --border-color: #45475a;
+    --success-color: #a6e3a1;
+    --danger-color: #f38ba8;
+}
+
+body {
+    background-color: var(--bg-base) !important;
+    background-image: radial-gradient(circle at top right, #313244 0%, #1e1e2e 40%) !important;
+    font-family: 'Inter', sans-serif !important;
+    color: var(--text-primary) !important;
+}
+
+/* Header / Title Area */
+#kc-header {
+    margin-top: 40px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+#kc-header-wrapper {
+    font-size: 0 !important; /* Hide original text */
+    background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M100 30L150 100H120L100 70L80 100H50L100 30Z' fill='%2389b4fa' fill-opacity='0.2'/%3E%3Cpath d='M100 30L130 170M100 30L70 170' stroke='%2389b4fa' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M70 120H130' stroke='%2389b4fa' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='100' cy='30' r='8' fill='%23a6e3a1'/%3E%3Ccircle cx='70' cy='120' r='6' fill='%2389b4fa'/%3E%3Ccircle cx='130' cy='120' r='6' fill='%2389b4fa'/%3E%3Ccircle cx='70' cy='170' r='6' fill='%2389b4fa'/%3E%3Ccircle cx='130' cy='170' r='6' fill='%2389b4fa'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    height: 100px;
+    width: 100%;
+    display: block;
+    margin-bottom: 10px;
+}
+
+/* Add Brand Name below logo via pseudo-element */
+#kc-header-wrapper::after {
+    content: "SON OF ANTON";
+    display: block;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--text-primary);
+    margin-top: 100px; /* Push below logo */
+    text-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Card Container */
+.card-pf, #kc-content-wrapper {
+    background-color: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4) !important;
+    padding: 40px !important;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* Form Styling */
+label {
+    color: var(--text-secondary) !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+}
+
+input[type="text"], input[type="password"] {
+    background-color: var(--bg-base) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    border-radius: 6px !important;
+    padding: 10px !important;
+    height: auto !important;
+    font-size: 14px !important;
+}
+
+input:focus {
+    border-color: var(--accent-color) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2) !important;
+}
+
+/* Primary Button */
+#kc-login {
+    background: var(--accent-gradient) !important;
+    border: none !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+    padding: 12px !important;
+    border-radius: 8px !important;
+    transition: transform 0.2s, box-shadow 0.2s !important;
+    text-transform: uppercase !important;
+    font-size: 0.875rem !important;
+    letter-spacing: 0.5px !important;
+}
+
+#kc-login:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(137, 180, 250, 0.4) !important;
+    background-image: linear-gradient(135deg, #9abffa, #9d74f7) !important; /* Lighter gradient */
+}
+
+/* Links */
+a {
+    color: var(--accent-color) !important;
+    text-decoration: none !important;
+    transition: color 0.2s !important;
+}
+
+a:hover {
+    color: #fff !important;
+    text-decoration: underline !important;
+}
+
+/* Page Title (Sign in to...) */
+#kc-page-title {
+    color: var(--text-primary) !important;
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 20px !important;
+    text-align: center !important;
+}
+
+/* Alert/Feedback Messages */
+.alert-error {
+    background-color: rgba(243, 139, 168, 0.1) !important;
+    border: 1px solid var(--danger-color) !important;
+    color: var(--danger-color) !important;
+    border-radius: 6px !important;
+}
+
+.alert-warning {
+    background-color: rgba(249, 226, 175, 0.1) !important;
+    border: 1px solid #f9e2af !important;
+    color: #f9e2af !important;
+    border-radius: 6px !important;
+}
+
+/* Footer & Locale */
+#kc-locale ul {
+    background-color: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+#kc-locale-dropdown a {
+    color: var(--text-secondary) !important;
+}
+
+#kc-locale-dropdown a:hover {
+    background-color: var(--bg-base) !important;
+    color: var(--text-primary) !important;
+}

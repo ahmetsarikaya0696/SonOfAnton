@@ -179,6 +179,42 @@ public class NodeEditorInteropService : IAsyncDisposable
         
         return await _module.InvokeAsync<bool>("fitToScreen", _currentCanvasId);
     }
+
+    /// <summary>
+    /// Canvas'a sticky note ekler
+    /// </summary>
+    public async Task<bool> AddNoteAsync(string noteId, string content, double x, double y, string color)
+    {
+        if (_module == null || _currentCanvasId == null) return false;
+        return await _module.InvokeAsync<bool>("addNote", _currentCanvasId, noteId, content, x, y, color);
+    }
+
+    /// <summary>
+    /// Canvas'a grup ekler
+    /// </summary>
+    public async Task<bool> AddGroupAsync(string groupId, string name, double x, double y, double width, double height, string color)
+    {
+        if (_module == null || _currentCanvasId == null) return false;
+        return await _module.InvokeAsync<bool>("addGroup", _currentCanvasId, groupId, name, x, y, width, height, color);
+    }
+
+    /// <summary>
+    /// Node ismini günceller
+    /// </summary>
+    public async Task<bool> UpdateNodeNameAsync(string nodeId, string newName)
+    {
+        if (_module == null || _currentCanvasId == null) return false;
+        return await _module.InvokeAsync<bool>("updateNodeName", _currentCanvasId, nodeId, newName);
+    }
+
+    /// <summary>
+    /// Node bypass durumunu günceller
+    /// </summary>
+    public async Task<bool> SetNodeBypassAsync(string nodeId, bool isBypassed)
+    {
+        if (_module == null || _currentCanvasId == null) return false;
+        return await _module.InvokeAsync<bool>("setNodeBypass", _currentCanvasId, nodeId, isBypassed);
+    }
     
     /// <summary>
     /// Node hareket ettiğinde connection'ları günceller

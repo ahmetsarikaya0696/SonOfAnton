@@ -9,14 +9,15 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 12px;
-    border-bottom: 1px solid var(--border-color, #313244);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .tree-header h4 {
     margin: 0;
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-muted, #6c7086);
+    font-weight: 600;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     display: flex;
@@ -34,8 +35,8 @@
 }
 
 .add-folder-btn:hover {
-    background: var(--bg-hover, #313244);
-    color: var(--accent, #89b4fa);
+    background: var(--border-hover);
+    color: var(--accent-color);
 }
 
 .tree-content {
@@ -51,18 +52,18 @@
     padding: 6px 12px;
     cursor: pointer;
     font-size: 13px;
-    color: var(--text-primary, #cdd6f4);
+    color: var(--text-primary);
     transition: background 0.1s;
     user-select: none;
 }
 
 .tree-item:hover, .folder-row:hover {
-    background: var(--bg-hover, #313244);
+    background: var(--bg-surface);
 }
 
 .tree-item.selected, .folder-node.selected > .folder-row {
-    background: rgba(137, 180, 250, 0.1);
-    color: var(--accent, #89b4fa);
+    background: rgba(137, 180, 250, 0.1); /* Consider separate var for bg selection */
+    color: var(--accent-color);
 }
 
 .tree-loading {
@@ -97,8 +98,9 @@
 
 .folder-count {
     font-size: 10px;
-    color: var(--text-muted, #6c7086);
-    background: var(--bg-tertiary, #45475a);
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg-surface);
     padding: 1px 5px;
     border-radius: 8px;
     flex-shrink: 0;
@@ -107,7 +109,7 @@
 .delete-btn {
     background: none;
     border: none;
-    color: var(--text-muted, #6c7086);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 2px;
     opacity: 0;
@@ -119,20 +121,20 @@
 }
 
 .delete-btn:hover {
-    color: #f38ba8;
+    color: var(--danger-color);
 }
 
 .create-folder-dialog {
     padding: 12px;
-    border-top: 1px solid var(--border-color, #313244);
+    border-top: 1px solid var(--border-color);
 }
 
 .folder-name-input {
     width: 100%;
-    background: var(--bg-tertiary, #313244);
-    border: 1px solid var(--border-color, #45475a);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
-    color: var(--text-primary, #cdd6f4);
+    color: var(--text-primary);
     padding: 6px 10px;
     font-size: 13px;
     outline: none;
@@ -140,7 +142,7 @@
 }
 
 .folder-name-input:focus {
-    border-color: var(--accent, #89b4fa);
+    border-color: var(--accent-color);
 }
 
 .dialog-actions {
@@ -158,21 +160,21 @@
 }
 
 .btn-cancel {
-    background: var(--bg-tertiary, #313244);
-    color: var(--text-muted, #6c7086);
+    background: var(--bg-surface);
+    color: var(--text-muted);
 }
 
 .btn-create {
-    background: var(--accent, #89b4fa);
-    color: var(--bg-primary, #1e1e2e);
+    background: var(--accent-color);
+    color: var(--bg-primary);
     font-weight: 600;
 }
 
 .spinner-sm {
     width: 14px;
     height: 14px;
-    border: 2px solid var(--border-color, #313244);
-    border-top-color: var(--accent, #89b4fa);
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent-color);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
 }

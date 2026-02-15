@@ -1,14 +1,22 @@
 .snapshot-panel {
-    display: none;
+    display: flex;
     flex-direction: column;
-    height: 100%;
-    background: var(--bg-secondary, #1e1e2e);
-    border-left: 1px solid var(--border-color, #313244);
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: 100vh;
+    z-index: 10000;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
     width: 320px;
+    box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateX(100%);
 }
 
 .snapshot-panel.open {
-    display: flex;
+    transform: translateX(0);
 }
 
 .panel-header {
@@ -16,14 +24,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--border-color, #313244);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .panel-header h4 {
     margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary, #cdd6f4);
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -36,9 +44,9 @@
 }
 
 .take-btn {
-    background: rgba(137, 180, 250, 0.15);
+    background: rgba(137, 180, 250, 0.15); /* Consider var */
     border: 1px solid rgba(137, 180, 250, 0.3);
-    color: #89b4fa;
+    color: var(--accent-color);
     padding: 4px 10px;
     border-radius: 6px;
     cursor: pointer;
@@ -54,13 +62,13 @@
 .close-btn {
     background: none;
     border: none;
-    color: var(--text-muted, #6c7086);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 4px;
     border-radius: 4px;
 }
 
-.close-btn:hover { background: var(--bg-hover, #313244); }
+.close-btn:hover { background: var(--bg-surface); }
 
 .snapshot-list {
     flex: 1;
@@ -72,18 +80,18 @@
 }
 
 .snapshot-card {
-    background: var(--bg-tertiary, #313244);
-    border: 1px solid var(--border-color, #45475a);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 10px;
 }
 
 .snapshot-card.auto {
-    border-left: 3px solid #f9e2af;
+    border-left: 3px solid var(--warning-color);
 }
 
 .snapshot-card.manual {
-    border-left: 3px solid #89b4fa;
+    border-left: 3px solid var(--accent-color);
 }
 
 .snapshot-header {
@@ -102,18 +110,18 @@
 }
 
 .auto .snapshot-badge {
-    background: rgba(249, 226, 175, 0.15);
-    color: #f9e2af;
+    background: rgba(249, 226, 175, 0.15); /* Consider var */
+    color: var(--warning-color);
 }
 
 .manual .snapshot-badge {
     background: rgba(137, 180, 250, 0.15);
-    color: #89b4fa;
+    color: var(--accent-color);
 }
 
 .snapshot-time {
     font-size: 11px;
-    color: var(--text-muted, #6c7086);
+    color: var(--text-muted);
 }
 
 .snapshot-body {
@@ -125,12 +133,12 @@
 
 .snapshot-label {
     font-size: 12px;
-    color: var(--text-primary, #cdd6f4);
+    color: var(--text-primary);
 }
 
 .snapshot-node {
     font-size: 11px;
-    color: var(--text-muted, #6c7086);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -143,8 +151,8 @@
 
 .restore-btn {
     background: none;
-    border: 1px solid var(--border-color, #45475a);
-    color: var(--text-primary, #cdd6f4);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
     padding: 4px 10px;
     border-radius: 6px;
     cursor: pointer;
@@ -156,7 +164,7 @@
 }
 
 .restore-btn:hover {
-    border-color: var(--accent, #89b4fa);
+    border-color: var(--accent-color);
     background: rgba(137, 180, 250, 0.1);
 }
 
@@ -166,7 +174,7 @@
     align-items: center;
     gap: 8px;
     padding: 32px 16px;
-    color: var(--text-muted, #6c7086);
+    color: var(--text-muted);
     text-align: center;
 }
 
@@ -182,8 +190,8 @@
 .spinner-sm {
     width: 14px;
     height: 14px;
-    border: 2px solid var(--border-color, #313244);
-    border-top-color: var(--accent, #89b4fa);
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent-color);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
 }

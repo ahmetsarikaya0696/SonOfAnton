@@ -1,28 +1,54 @@
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Navigation
 
 <AuthorizeView>
     <Authorized>
-        <div class="login-display">
-            <span class="login-display__user" title="@context.User.Identity?.Name">
-                @context.User.Identity?.Name
-            </span>
-            <button class="login-display__btn login-display__btn--logout" @onclick="BeginLogout">
-                Çıkış
+        <div class="user-profile">
+            <div class="user-info">
+                <div class="avatar">
+                    @(context.User.Identity?.Name?.Substring(0, 1).ToUpper() ?? "U")
+                </div>
+                <span class="username" title="@context.User.Identity?.Name">
+                    @context.User.Identity?.Name
+                </span>
+            </div>
+            <button class="logout-btn" @onclick="BeginLogout" title="Çıkış Yap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
             </button>
         </div>
     </Authorized>
     <NotAuthorized>
-        <div class="login-display">
-            <a class="login-display__btn login-display__btn--login" href="authentication/login">
+        <div class="login-wrapper">
+            <div class="login-brand">
+                 <svg width="24" height="24" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M100 30L150 100H120L100 70L80 100H50L100 30Z" fill="var(--accent-color)" fill-opacity="0.2"/>
+                  <path d="M100 30L130 170M100 30L70 170" stroke="var(--accent-color)" stroke-width="12" stroke-linecap="round"/>
+                  <path d="M70 120H130" stroke="var(--accent-color)" stroke-width="12" stroke-linecap="round"/>
+                  
+                  <circle cx="100" cy="30" r="8" fill="var(--success-color)"/>
+                  <circle cx="70" cy="120" r="6" fill="var(--accent-color)"/>
+                  <circle cx="130" cy="120" r="6" fill="var(--accent-color)"/>
+                  <circle cx="70" cy="170" r="6" fill="var(--accent-color)"/>
+                  <circle cx="130" cy="170" r="6" fill="var(--accent-color)"/>
+                </svg>
+                <span>SON OF ANTON</span>
+            </div>
+            <a class="login-btn" href="authentication/login">
                 Giriş Yap
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
             </a>
         </div>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
-    [Inject] private NavigationManager Navigation { get; set; } = default!;
-
     private void BeginLogout()
     {
         Navigation.NavigateToLogout("authentication/logout");
@@ -30,52 +56,112 @@
 }
 
 <style>
-    .login-display {
+    .user-profile {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: var(--bg-surface);
+        padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+        border-radius: 99px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
+    }
+
+    .user-profile:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent-color);
+    }
+
+    .user-info {
         display: flex;
         align-items: center;
         gap: 0.5rem;
     }
 
-    .login-display__user {
-        color: rgba(255, 255, 255, 0.85);
+    .avatar {
+        width: 28px;
+        height: 28px;
+        background: var(--accent-color);
+        color: var(--bg-primary);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
         font-size: 0.85rem;
-        max-width: 160px;
+    }
+
+    .username {
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        font-weight: 500;
+        max-width: 120px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    .login-display__btn {
-        padding: 0.35rem 0.75rem;
-        border-radius: 6px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        cursor: pointer;
+    .logout-btn {
+        background: transparent;
         border: none;
-        transition: all 0.2s ease;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .logout-btn:hover {
+        background: var(--danger-color);
+        color: var(--bg-primary);
+    }
+
+    /* Login State */
+    .login-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .login-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 800;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+        color: var(--text-primary);
+    }
+
+    .login-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, var(--accent-color), #8b5cf6);
+        color: var(--bg-primary);
+        padding: 0.5rem 1.25rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
         text-decoration: none;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(137, 180, 250, 0.2);
     }
 
-    .login-display__btn--login {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: #fff;
-    }
-
-    .login-display__btn--login:hover {
-        background: linear-gradient(135deg, #818cf8, #a78bfa);
+    .login-btn:hover {
         transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        box-shadow: 0 6px 16px rgba(137, 180, 250, 0.3);
+        opacity: 0.95;
+        color: var(--bg-primary);
     }
 
-    .login-display__btn--logout {
-        background: rgba(255, 255, 255, 0.08);
-        color: rgba(255, 255, 255, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-    }
-
-    .login-display__btn--logout:hover {
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-        border-color: rgba(239, 68, 68, 0.3);
+    /* Responsive adjustments */
+    @@media (max-width: 768px) {
+        .username { display: none; }
+        .login-brand span { display: none; }
     }
 </style>

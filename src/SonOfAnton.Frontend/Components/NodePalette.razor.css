@@ -1,7 +1,7 @@
 .node-palette {
     width: 240px;
-    background: #181825;
-    border-right: 1px solid #313244;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -10,7 +10,8 @@
 .palette-header {
     padding: 1rem;
     font-weight: 600;
-    border-bottom: 1px solid #313244;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -23,16 +24,16 @@
 .palette-search input {
     width: 100%;
     padding: 0.5rem;
-    background: #1e1e2e;
-    border: 1px solid #313244;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
-    color: #cdd6f4;
+    color: var(--text-primary);
     font-size: 0.875rem;
 }
 
 .palette-search input:focus {
     outline: none;
-    border-color: #89b4fa;
+    border-color: var(--accent-color);
 }
 
 .palette-categories {
@@ -54,11 +55,11 @@
     border-radius: 4px;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #a6adc8;
+    color: var(--text-secondary);
 }
 
 .category-header:hover {
-    background: #1e1e2e;
+    background: var(--bg-surface);
 }
 
 .expand-icon {
@@ -76,9 +77,10 @@
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     margin: 0.25rem 0;
-    background: #1e1e2e;
-    border: 1px solid #313244;
-    border-left: 3px solid var(--node-color, #89b4fa);
+    margin: 0.25rem 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--node-color, var(--accent-color));
     border-radius: 6px;
     cursor: grab;
     font-size: 0.8125rem;
@@ -86,7 +88,7 @@
 }
 
 .palette-node:hover {
-    background: #313244;
+    background: var(--bg-surface);
     transform: translateX(2px);
 }
 

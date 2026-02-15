@@ -2,6 +2,7 @@
   "realm": "sonofanton",
   "enabled": true,
   "displayName": "SonOfAnton",
+  "loginTheme": "sonofanton",
   "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,

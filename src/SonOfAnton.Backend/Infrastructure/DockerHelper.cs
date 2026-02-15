@@ -70,6 +70,9 @@ public static class DockerHelper
 
         // Kullanici, veritabani ve extension erisimini dogrula/olustur
         await EnsureDatabaseAccessAsync(logger);
+
+        // Keycloak servisini baslat/kontrol et
+        await EnsureKeycloakRunningAsync(logger);
     }
 
     /// <summary>
@@ -92,7 +95,7 @@ public static class DockerHelper
         if (isKeycloakRunning)
         {
             logger.LogInformation("Keycloak container zaten calisiyor.");
-            await WaitForKeycloakReadyAsync(logger, TimeSpan.FromSeconds(30));
+            await WaitForKeycloakReadyAsync(logger, TimeSpan.FromSeconds(60));
         }
         else
         {
@@ -113,7 +116,7 @@ public static class DockerHelper
                 logger.LogInformation("Keycloak servisi baslatildi.");
                 
                 // Keycloak'in hazir olmasini bekle (Java baslangici biraz surebilir)
-                await WaitForKeycloakReadyAsync(logger, TimeSpan.FromSeconds(60));
+                await WaitForKeycloakReadyAsync(logger, TimeSpan.FromSeconds(180));
             }
             else
             {
@@ -140,8 +143,10 @@ public static class DockerHelper
     {
         try
         {
-            var result = await RunCommandAsync("docker", $"inspect -f \"{{{{.State.Running}}}}\" {containerName}", TimeSpan.FromSeconds(5));
-            return result.ExitCode == 0 && result.Output.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+            // docker ps -q -f name=^/container_name$ -f status=running
+            // Eger cikti bos degilse container calisiyor demektir
+            var result = await RunCommandAsync("docker", $"ps -q -f \"name=^/{containerName}$\" -f \"status=running\"", TimeSpan.FromSeconds(5));
+            return result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.Output);
         }
         catch
         {
@@ -357,23 +362,34 @@ public static class DockerHelper
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation("Keycloak'in hazir olmasi bekleniyor (max {Seconds} saniye)...", timeout.TotalSeconds);
         
-        using var httpClient = new HttpClient();
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+
+        // Kontrol edilecek endpoint'ler (sirali oncelik)
+        var endpoints = new[]
+        {
+            "http://localhost:8080/health/ready",
+            "http://localhost:8080/realms/master"
+        };
         
         while (stopwatch.Elapsed < timeout)
         {
-            try
+            foreach (var endpoint in endpoints)
             {
-                // Keycloak health endpoint kontrolu
-                var response = await httpClient.GetAsync("http://localhost:8080/health/ready");
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    logger.LogInformation("Keycloak hazir! (Bekleme suresi: {Elapsed:F1} saniye)", stopwatch.Elapsed.TotalSeconds);
-                    return;
+                    var response = await httpClient.GetAsync(endpoint);
+                    // Herhangi bir HTTP yaniti geliyorsa Keycloak ayakta demektir
+                    if ((int)response.StatusCode < 500)
+                    {
+                        logger.LogInformation("Keycloak hazir! (Endpoint: {Endpoint}, Status: {Status}, Bekleme: {Elapsed:F1}s)",
+                            endpoint, (int)response.StatusCode, stopwatch.Elapsed.TotalSeconds);
+                        return;
+                    }
                 }
-            }
-            catch
-            {
-                // Henuz baglanti saglanamadi, devam et
+                catch
+                {
+                    // Henuz baglanti saglanamadi, sonraki endpoint'i dene
+                }
             }
             
             await Task.Delay(2000);

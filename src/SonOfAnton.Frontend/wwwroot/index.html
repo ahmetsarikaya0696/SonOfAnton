@@ -19,11 +19,28 @@
 <body>
     <div id="app">
         <div class="loading-container">
-            <svg class="loading-progress">
-                <circle r="40%" cx="50%" cy="50%" />
-                <circle r="40%" cx="50%" cy="50%" />
-            </svg>
-            <div class="loading-progress-text">Yukleniyor...</div>
+            <div class="loading-content">
+                <div class="logo-wrapper">
+                    <svg class="app-logo" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M100 30L150 100H120L100 70L80 100H50L100 30Z" fill="var(--accent-color)"
+                            fill-opacity="0.2" />
+                        <path d="M100 30L130 170M100 30L70 170" stroke="var(--accent-color)" stroke-width="4"
+                            stroke-linecap="round" />
+                        <path d="M70 120H130" stroke="var(--accent-color)" stroke-width="4" stroke-linecap="round" />
+
+                        <circle cx="100" cy="30" r="8" fill="var(--success-color)" />
+                        <circle cx="70" cy="120" r="6" fill="var(--accent-color)" />
+                        <circle cx="130" cy="120" r="6" fill="var(--accent-color)" />
+                        <circle cx="70" cy="170" r="6" fill="var(--accent-color)" />
+                        <circle cx="130" cy="170" r="6" fill="var(--accent-color)" />
+                    </svg>
+                </div>
+                <div class="loading-text">SonOfAnton</div>
+                <div class="loading-bar-container">
+                    <div class="loading-bar"></div>
+                </div>
+                <div class="loading-percentage">Yükleniyor...</div>
+            </div>
         </div>
     </div>
 
@@ -32,6 +49,8 @@
         <a href="." class="reload">Yeniden Yukle</a>
         <span class="dismiss">X</span>
     </div>
+    <!-- Theme Manager -->
+    <script src="js/theme.js"></script>
     <!-- SSE Helper -->
     <script src="js/sse-helper.js"></script>
     <!-- Clipboard & Keyboard helpers -->
@@ -50,4 +69,3 @@
 </body>
 
 </html>
-

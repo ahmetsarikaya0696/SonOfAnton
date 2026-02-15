@@ -2,8 +2,9 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: #1e1e2e;
-    color: #cdd6f4;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background 0.3s, color 0.3s;
 }
 
 .toolbar {
@@ -11,8 +12,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    background: linear-gradient(180deg, #181825 0%, #11111b 100%);
-    border-bottom: 1px solid #313244;
+    padding-right: 320px; /* LoginDisplay alanı için boşluk */
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-bottom: 1px solid var(--border-color);
     position: relative;
     z-index: 100;
 }
@@ -31,11 +33,11 @@
 }
 
 .workflow-name-input {
-    background: #313244;
-    border: 1px solid #45475a;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.5rem 1rem;
-    color: #cdd6f4;
+    color: var(--text-primary);
     font-size: 1rem;
     font-weight: 500;
     text-align: center;
@@ -45,8 +47,8 @@
 
 .workflow-name-input:focus {
     outline: none;
-    border-color: #89b4fa;
-    box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2); /* Adjust alpha manually or use color-mix if available */
 }
 
 .toolbar .btn {
@@ -73,9 +75,9 @@
 }
 
 .toolbar .btn-secondary {
-    background: #45475a;
-    color: #cdd6f4;
-    border: 1px solid #585b70;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-hover);
 }
 
 .toolbar .btn-secondary:hover {
@@ -153,8 +155,8 @@
 
 .folder-sidebar {
     width: 220px;
-    border-right: 1px solid #313244;
-    background: #181825;
+    border-right: 1px solid var(--border-color);
+    background: var(--bg-secondary);
     overflow-y: auto;
     flex-shrink: 0;
 }
@@ -162,9 +164,9 @@
 .canvas-container {
     flex: 1;
     position: relative;
-    background: #1e1e2e;
+    background: var(--bg-primary);
     background-image: 
-        radial-gradient(circle, #313244 1px, transparent 1px);
+        radial-gradient(circle, var(--grid-color) 1px, transparent 1px);
     background-size: 20px 20px;
     min-height: 0;
     height: 100%;
@@ -172,9 +174,9 @@
 
 .connection-hint {
     position: absolute;
-    bottom: 20px;
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -50%);
     background: rgba(49, 50, 68, 0.9);
     backdrop-filter: blur(10px);
     border: 1px solid #45475a;
@@ -184,16 +186,17 @@
     font-size: 0.875rem;
     animation: fadeInUp 0.5s ease;
     z-index: 50;
+    pointer-events: none; /* Etkileşimi engelleme */
 }
 
 @keyframes fadeInUp {
     from {
         opacity: 0;
-        transform: translateX(-50%) translateY(10px);
+        transform: translate(-50%, -30%);
     }
     to {
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        transform: translate(-50%, -50%);
     }
 }
 
@@ -289,16 +292,16 @@
 /* Ghost button - toolbar icon buttons */
 .toolbar .btn-ghost {
     background: transparent;
-    color: #6c7086;
+    color: var(--text-muted);
     padding: 0.4rem 0.6rem;
     border: 1px solid transparent;
     text-decoration: none;
 }
 
 .toolbar .btn-ghost:hover {
-    background: #313244;
-    color: #cdd6f4;
-    border-color: #45475a;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--border-color);
 }
 
 /* Toolbar divider */

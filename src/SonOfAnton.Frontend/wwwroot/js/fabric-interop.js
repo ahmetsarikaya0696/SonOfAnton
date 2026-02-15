@@ -922,13 +922,18 @@ export function addNodesBatch(canvasId, nodesArray) {
 
     canvasData.canvas.renderOnAddRemove = false;
 
-    for (const nodeData of nodesArray) {
-        addNode(canvasId, nodeData.nodeId, nodeData.nodeType, nodeData.nodeName,
-                nodeData.x, nodeData.y, nodeData.config);
-    }
+    // Batch işlem
+    fabric.util.enlivenObjects(nodesArray, (enlivenedObjects) => {
+        enlivenedObjects.forEach((obj, index) => {
+            const data = nodesArray[index];
+            // Burada normal addNode mantığını kullanmak daha güvenli çünkü karmaşık bir grup structure var
+            addNode(canvasId, data.nodeId, data.nodeType, data.nodeName, data.x, data.y, data.config);
+        });
+        
+        canvasData.canvas.renderOnAddRemove = true;
+        canvasData.canvas.renderAll();
+    });
 
-    canvasData.canvas.renderOnAddRemove = true;
-    canvasData.canvas.renderAll();
     return true;
 }
 
@@ -999,17 +1004,175 @@ export function setGridSnapping(canvasId, enabled, gridSize) {
     canvasData.gridSize = gridSize || 20;
 
     if (enabled) {
-        canvasData.canvas.on('object:moving', (e) => {
-            if (canvasData.gridSnapping) {
-                const obj = e.target;
-                obj.set({
-                    left: Math.round(obj.left / canvasData.gridSize) * canvasData.gridSize,
-                    top: Math.round(obj.top / canvasData.gridSize) * canvasData.gridSize
-                });
-            }
-        });
+        // Event listener daha önce eklenmiş mi kontrol etmemiz lazım aslında
+        // Ama basitçe object:moving üzerinde işlem yapabiliriz
+        if (!canvasData._gridSnapHandler) {
+            canvasData._gridSnapHandler = (e) => {
+                if (canvasData.gridSnapping) {
+                    const obj = e.target;
+                    obj.set({
+                        left: Math.round(obj.left / canvasData.gridSize) * canvasData.gridSize,
+                        top: Math.round(obj.top / canvasData.gridSize) * canvasData.gridSize
+                    });
+                }
+            };
+            canvasData.canvas.on('object:moving', canvasData._gridSnapHandler);
+        }
+    } else {
+        if (canvasData._gridSnapHandler) {
+            canvasData.canvas.off('object:moving', canvasData._gridSnapHandler);
+            canvasData._gridSnapHandler = null;
+        }
     }
 
+    canvasData.canvas.renderAll();
+    return true;
+}
+
+// ===== NEW FEATURES =====
+
+/**
+ * Canvas'a sticky note ekler
+ */
+export function addNote(canvasId, noteId, content, x, y, color) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const width = 200;
+    const height = 150;
+
+    const rect = new fabric.Rect({
+        width: width,
+        height: height,
+        fill: color,
+        stroke: '#00000020',
+        strokeWidth: 1,
+        rx: 2,
+        ry: 2,
+        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.2)', blur: 5, offsetX: 2, offsetY: 2 })
+    });
+
+    // Textbox düzenlenebilir
+    const text = new fabric.Textbox(content, {
+        width: width - 20,
+        height: height - 20,
+        fontSize: 14,
+        fontFamily: 'Inter, sans-serif',
+        fill: '#4c4f69',
+        left: 10,
+        top: 10,
+        splitByGrapheme: true,
+        editable: true
+    });
+
+    const group = new fabric.Group([rect, text], {
+        left: x,
+        top: y,
+        subTargetCheck: true,
+        hasBorders: true,
+        borderColor: '#f9e2af',
+        cornerColor: '#f9e2af',
+        cornerSize: 8,
+        transparentCorners: false
+    });
+
+    group.noteId = noteId;
+    group.isNote = true;
+
+    canvasData.canvas.add(group);
+    canvasData.canvas.sendToBack(group); 
+    canvasData.canvas.renderAll();
+    return true;
+}
+
+/**
+ * Canvas'a grup ekler
+ */
+export function addGroup(canvasId, groupId, name, x, y, width, height, color) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const rect = new fabric.Rect({
+        width: width,
+        height: height,
+        fill: color + '20', // Low opacity
+        stroke: color,
+        strokeWidth: 2,
+        strokeDashArray: [5, 5],
+        rx: 10,
+        ry: 10
+    });
+
+    const text = new fabric.Text(name, {
+        fontSize: 16,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 'bold',
+        fill: color,
+        left: 10,
+        top: -25
+    });
+
+    const group = new fabric.Group([rect, text], {
+        left: x,
+        top: y,
+        subTargetCheck: true,
+        hasBorders: true,
+        borderColor: color,
+        cornerColor: color,
+        cornerSize: 8,
+        transparentCorners: false
+    });
+
+    group.groupId = groupId;
+    group.isGroup = true;
+
+    canvasData.canvas.add(group);
+    canvasData.canvas.sendToBack(group); 
+    canvasData.canvas.renderAll();
+    return true;
+}
+
+/**
+ * Node ismini günceller
+ */
+export function updateNodeName(canvasId, nodeId, newName) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const node = canvasData.nodes.get(nodeId);
+    if (!node) return false;
+    
+    // Group nesneleri
+    const objects = node.getObjects();
+    // Node başlığı 13px bold, text tipinde
+    const titleObj = objects.find(o => o.type === 'text' && o.fontSize === 13 && o.fontWeight === 'bold');
+
+    if (titleObj) {
+        titleObj.set('text', newName);
+        node.addWithUpdate(); // Grubu güncelle
+        canvasData.canvas.renderAll();
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Node bypass durumunu görselleştirir
+ */
+export function setNodeBypass(canvasId, nodeId, isBypassed) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const node = canvasData.nodes.get(nodeId);
+    if (!node) return false;
+
+    if (isBypassed) {
+        node.set('opacity', 0.5);
+    } else {
+        node.set('opacity', 1.0);
+    }
+    
     canvasData.canvas.renderAll();
     return true;
 }

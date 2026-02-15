@@ -10,13 +10,15 @@ public class Workflow
     public string Description { get; set; } = string.Empty;
     public List<WorkflowNode> Nodes { get; set; } = [];
     public List<NodeConnection> Connections { get; set; } = [];
+    public List<WorkflowGroup> Groups { get; set; } = [];
+    public List<WorkflowNote> Notes { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public bool IsActive { get; set; }
 }
 
 /// <summary>
-/// Workflow i�indeki bir node
+/// Workflow içindeki bir node
 /// </summary>
 public class WorkflowNode
 {
@@ -29,10 +31,12 @@ public class WorkflowNode
     public NodeStatus Status { get; set; } = NodeStatus.Idle;
     public string? LastError { get; set; }
     public DateTime? LastExecutedAt { get; set; }
+    public bool IsBypassed { get; set; }
+    public Guid? GroupId { get; set; }
 }
 
 /// <summary>
-/// �ki node aras�ndaki ba�lant�
+/// İki node arasındaki bağlantı
 /// </summary>
 public class NodeConnection
 {
@@ -41,6 +45,34 @@ public class NodeConnection
     public Guid TargetNodeId { get; set; }
     public string SourcePort { get; set; } = "output";
     public string TargetPort { get; set; } = "input";
+}
+
+/// <summary>
+/// Node grubu
+/// </summary>
+public class WorkflowGroup
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "Group";
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; } = 400;
+    public double Height { get; set; } = 300;
+    public string Color { get; set; } = "#313244"; // Surface0
+}
+
+/// <summary>
+/// Canvas üzerindeki yapışkan not
+/// </summary>
+public class WorkflowNote
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Content { get; set; } = "Not...";
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; } = 200;
+    public double Height { get; set; } = 150;
+    public string Color { get; set; } = "#f9e2af"; // Yellow
 }
 
 /// <summary>
@@ -56,7 +88,7 @@ public enum NodeStatus
 }
 
 /// <summary>
-/// Node tipi tan�m�
+/// Node tipi tanımı
 /// </summary>
 public class NodeDefinition
 {
@@ -72,7 +104,7 @@ public class NodeDefinition
 }
 
 /// <summary>
-/// Node giri�/��k�� portu
+/// Node giriş/çıkış portu
 /// </summary>
 public class NodePort
 {
@@ -100,4 +132,3 @@ public class SelectOption
     public required string Value { get; set; }
     public required string Label { get; set; }
 }
-
