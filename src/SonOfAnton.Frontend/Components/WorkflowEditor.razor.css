@@ -12,11 +12,55 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    padding-right: 320px; /* LoginDisplay alanı için boşluk */
+    padding-right: 320px; /* LoginDisplay alanı için boşluk - desktop default */
     background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
     border-bottom: 1px solid var(--border-color);
     position: relative;
     z-index: 100;
+}
+
+@media (max-width: 900px) {
+    .toolbar {
+        padding-right: 70px; /* LoginDisplay avatarı için yer tut */
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .toolbar-center {
+        position: static;
+        transform: none;
+        order: 3;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+    
+    .workflow-name-input {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .toolbar-right {
+        margin-left: auto;
+    }
+}
+
+@media (max-width: 600px) {
+    .toolbar {
+        padding: 0.5rem;
+    }
+    
+    .brand-logo span {
+        display: none;
+    }
+
+    .toolbar .btn span {
+        display: none; /* Hide text in buttons, show icons only */
+    }
+    
+    .toolbar .btn {
+        padding: 0.5rem;
+    }
 }
 
 .toolbar-left,
@@ -159,6 +203,18 @@
     background: var(--bg-secondary);
     overflow-y: auto;
     flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .folder-sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 50;
+        box-shadow: 4px 0 16px rgba(0,0,0,0.3);
+    }
 }
 
 .canvas-container {
@@ -321,6 +377,14 @@
     z-index: 50;
     opacity: 0.9;
     transition: opacity 0.2s;
+}
+
+@media (max-width: 600px) {
+    .stats-floating {
+        width: calc(100% - 32px);
+        left: 16px;
+        right: 16px;
+    }
 }
 
 .stats-floating:hover {

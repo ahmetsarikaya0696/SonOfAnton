@@ -89,6 +89,48 @@
     align-items: center;
 }
 
+@media (max-width: 768px) {
+    .table-header { display: none; }
+    
+    .table-row {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        height: auto;
+        padding: 16px;
+        gap: 8px;
+    }
+    
+    .workflow-cell {
+        font-size: 15px;
+        white-space: normal;
+        order: -1; /* Move title to top */
+        margin-bottom: 4px;
+    }
+    
+    .status-cell {
+        font-size: 12px;
+        padding: 4px 8px;
+        background: rgba(0,0,0,0.2);
+        border-radius: 12px;
+        margin-bottom: 8px;
+    }
+    
+    .time-cell::before { content: "Başlangıç: "; opacity: 0.7; }
+    .duration-cell::before { content: "Süre: "; opacity: 0.7; }
+    
+    .action-cell { display: none; }
+    
+    .error-cell {
+        width: 100%;
+        background: rgba(243, 139, 168, 0.1);
+        padding: 8px;
+        border-radius: 6px;
+        margin-top: 4px;
+        white-space: normal;
+    }
+}
+
 .table-header {
     font-size: 11px;
     font-weight: 600;
