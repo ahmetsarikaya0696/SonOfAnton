@@ -14,6 +14,13 @@ public class SonOfAntonDbContext : DbContext
     {
     }
 
+    // ─── Identity & Multi-Tenancy ────────────────────────────────
+    public DbSet<TenantEntity> Tenants => Set<TenantEntity>();
+    public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<TenantRoleEntity> TenantRoles => Set<TenantRoleEntity>();
+    public DbSet<UserTenantRoleEntity> UserTenantRoles => Set<UserTenantRoleEntity>();
+
+    // ─── Business Entities ─────────────────────────────────────
     public DbSet<WorkflowEntity> Workflows => Set<WorkflowEntity>();
     public DbSet<ExecutionEntity> Executions => Set<ExecutionEntity>();
     public DbSet<ExecutionLogEntity> ExecutionLogs => Set<ExecutionLogEntity>();
@@ -23,12 +30,98 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<ExecutionSnapshotEntity> ExecutionSnapshots => Set<ExecutionSnapshotEntity>();
     public DbSet<ChatHistoryEntity> ChatHistory => Set<ChatHistoryEntity>();
 
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         // pgvector extension
         modelBuilder.HasPostgresExtension("vector");
+
+        // ─── Identity & Multi-Tenancy ──────────────────────────────
+
+        // Tenant
+        modelBuilder.Entity<TenantEntity>(entity =>
+        {
+            entity.ToTable("tenants");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasMaxLength(100);
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.OidcAuthority).HasColumnName("oidc_authority").HasMaxLength(500);
+            entity.Property(e => e.OidcClientId).HasColumnName("oidc_client_id").HasMaxLength(255);
+            entity.Property(e => e.OidcClientSecret).HasColumnName("oidc_client_secret").HasMaxLength(500);
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+        });
+
+        // User
+        modelBuilder.Entity<UserEntity>(entity =>
+        {
+            entity.ToTable("users");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ExternalIdentityId).HasColumnName("external_identity_id").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(320).IsRequired();
+            entity.Property(e => e.DisplayName).HasColumnName("display_name").HasMaxLength(255);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.LastLoginAt).HasColumnName("last_login_at");
+
+            entity.HasIndex(e => e.ExternalIdentityId).IsUnique();
+            entity.HasIndex(e => e.Email);
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany(t => t.Users)
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // TenantRole
+        modelBuilder.Entity<TenantRoleEntity>(entity =>
+        {
+            entity.ToTable("tenant_roles");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ExternalRoleName).HasColumnName("external_role_name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.MappedPermissions).HasColumnName("mapped_permissions").HasColumnType("jsonb");
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(500);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => new { e.TenantId, e.ExternalRoleName }).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany(t => t.Roles)
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // UserTenantRole (many-to-many)
+        modelBuilder.Entity<UserTenantRoleEntity>(entity =>
+        {
+            entity.ToTable("user_tenant_roles");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TenantRoleId).HasColumnName("tenant_role_id");
+            entity.Property(e => e.AssignedAt).HasColumnName("assigned_at");
+
+            entity.HasIndex(e => new { e.UserId, e.TenantRoleId }).IsUnique();
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.UserRoles)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.TenantRole)
+                .WithMany(r => r.UserRoles)
+                .HasForeignKey(e => e.TenantRoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Business Entities ─────────────────────────────────────
 
         // Workflow
         modelBuilder.Entity<WorkflowEntity>(entity =>
@@ -153,6 +246,21 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany(f => f.Workflows)
                 .HasForeignKey(e => e.FolderId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Multi-Tenant FK
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Folders
@@ -172,6 +280,15 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany(e => e.ChildFolders)
                 .HasForeignKey(e => e.ParentFolderId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Multi-Tenant FK
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Execution Snapshots

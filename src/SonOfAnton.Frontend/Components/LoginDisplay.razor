@@ -1,0 +1,81 @@
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+<AuthorizeView>
+    <Authorized>
+        <div class="login-display">
+            <span class="login-display__user" title="@context.User.Identity?.Name">
+                @context.User.Identity?.Name
+            </span>
+            <button class="login-display__btn login-display__btn--logout" @onclick="BeginLogout">
+                Çıkış
+            </button>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="login-display">
+            <a class="login-display__btn login-display__btn--login" href="authentication/login">
+                Giriş Yap
+            </a>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private void BeginLogout()
+    {
+        Navigation.NavigateToLogout("authentication/logout");
+    }
+}
+
+<style>
+    .login-display {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .login-display__user {
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 0.85rem;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .login-display__btn {
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .login-display__btn--login {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+    }
+
+    .login-display__btn--login:hover {
+        background: linear-gradient(135deg, #818cf8, #a78bfa);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    }
+
+    .login-display__btn--logout {
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .login-display__btn--logout:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border-color: rgba(239, 68, 68, 0.3);
+    }
+</style>

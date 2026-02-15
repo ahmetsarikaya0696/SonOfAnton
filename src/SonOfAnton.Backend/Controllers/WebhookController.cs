@@ -5,6 +5,8 @@ using SonOfAnton.Backend.Services;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using SonOfAnton.Shared.Core.Identity;
 
 namespace SonOfAnton.Backend.Controllers;
 
@@ -13,6 +15,7 @@ namespace SonOfAnton.Backend.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/webhook")]
+[Authorize(Policy = Permissions.WebhooksManage)]
 public class WebhookController : ControllerBase
 {
     private readonly SonOfAntonDbContext _dbContext;
@@ -34,6 +37,7 @@ public class WebhookController : ControllerBase
     /// URL: POST /api/webhook/{webhookId}
     /// </summary>
     [HttpPost("{webhookId}")]
+    [AllowAnonymous] // Webhook trigger'ı dış sistemler tarafından çağrılır
     public async Task<IActionResult> TriggerWebhook(
         string webhookId,
         [FromBody] JsonElement? payload = null)

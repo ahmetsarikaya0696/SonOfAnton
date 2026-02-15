@@ -8,11 +8,14 @@ using SonOfAnton.Backend.Execution;
 using SonOfAnton.Shared.DTOs;
 using SonOfAnton.Shared.Entities;
 using SonOfAnton.Shared.Enums;
+using Microsoft.AspNetCore.Authorization;
+using SonOfAnton.Shared.Core.Identity;
 
 namespace SonOfAnton.Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = Permissions.WorkflowsRead)]
 public class WorkflowsController : ControllerBase
 {
     private readonly SonOfAntonDbContext _dbContext;
@@ -96,6 +99,7 @@ public class WorkflowsController : ControllerBase
     /// Workflow kaydet (olu�tur veya g�ncelle)
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = Permissions.WorkflowsEdit)]
     public async Task<ActionResult<WorkflowDto>> Save([FromBody] SaveWorkflowRequest request)
     {
         WorkflowEntity workflow;
@@ -152,6 +156,7 @@ public class WorkflowsController : ControllerBase
     /// Workflow sil
     /// </summary>
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = Permissions.WorkflowsEdit)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var workflow = await _dbContext.Workflows.FindAsync(id);
@@ -170,6 +175,7 @@ public class WorkflowsController : ControllerBase
     /// Workflow'u �al��t�r
     /// </summary>
     [HttpPost("{id:guid}/execute")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
     public async Task<ActionResult<ExecutionDto>> Execute(Guid id, [FromBody] StartExecutionRequest? request = null)
     {
         var workflow = await _dbContext.Workflows.FindAsync(id);

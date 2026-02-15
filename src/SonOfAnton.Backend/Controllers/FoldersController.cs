@@ -3,11 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
 using SonOfAnton.Shared.DTOs;
 using SonOfAnton.Shared.Entities;
+using Microsoft.AspNetCore.Authorization;
+using SonOfAnton.Shared.Core.Identity;
 
 namespace SonOfAnton.Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = Permissions.WorkflowsRead)]
 public class FoldersController : ControllerBase
 {
     private readonly SonOfAntonDbContext _dbContext;
@@ -66,6 +69,7 @@ public class FoldersController : ControllerBase
     /// Klasör oluştur
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = Permissions.FoldersManage)]
     public async Task<ActionResult<FolderDto>> Create([FromBody] CreateFolderRequest request)
     {
         var folder = new FolderEntity
@@ -125,6 +129,7 @@ public class FoldersController : ControllerBase
     /// Klasör sil
     /// </summary>
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = Permissions.FoldersManage)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var folder = await _dbContext.Folders.FindAsync(id);

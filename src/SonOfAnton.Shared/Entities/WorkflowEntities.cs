@@ -26,6 +26,12 @@ public class WorkflowEntity
     
     public bool IsActive { get; set; }
 
+    // ─── Multi-Tenant & Ownership ───────────────────────────────
+    /// <summary>Kullanıcının ait olduğu tenant</summary>
+    public string? TenantId { get; set; }
+    /// <summary>Workflow'u oluşturan kullanıcı</summary>
+    public Guid? CreatedByUserId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -42,6 +48,8 @@ public class WorkflowEntity
 
     // Navigation
     public FolderEntity? Folder { get; set; }
+    public TenantEntity? Tenant { get; set; }
+    public UserEntity? CreatedByUser { get; set; }
     public ICollection<ExecutionEntity> Executions { get; set; } = [];
 }
 
@@ -150,12 +158,15 @@ public class FolderEntity
     public string Name { get; set; } = "Yeni Klasör";
     public string? Icon { get; set; }
     public string? Color { get; set; }
+    /// <summary>Klasörün ait olduğu tenant</summary>
+    public string? TenantId { get; set; }
     public int SortOrder { get; set; }
     public Guid? ParentFolderId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public FolderEntity? ParentFolder { get; set; }
+    public TenantEntity? Tenant { get; set; }
     public ICollection<FolderEntity> ChildFolders { get; set; } = [];
     public ICollection<WorkflowEntity> Workflows { get; set; } = [];
 }

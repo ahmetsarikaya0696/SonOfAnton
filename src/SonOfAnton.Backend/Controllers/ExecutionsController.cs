@@ -4,6 +4,8 @@ using SonOfAnton.Backend.Data;
 using SonOfAnton.Backend.Services;
 using SonOfAnton.Shared.DTOs;
 using SonOfAnton.Shared.Enums;
+using Microsoft.AspNetCore.Authorization;
+using SonOfAnton.Shared.Core.Identity;
 
 namespace SonOfAnton.Backend.Controllers;
 
@@ -27,6 +29,7 @@ namespace SonOfAnton.Backend.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
+[Authorize(Policy = Permissions.WorkflowsRead)]
 public class ExecutionsController : ControllerBase
 {
     private readonly SonOfAntonDbContext _dbContext;
@@ -146,6 +149,7 @@ public class ExecutionsController : ControllerBase
     /// Workflow'u hemen çalıştırır (Hangfire job olarak)
     /// </summary>
     [HttpPost("run/{workflowId:guid}")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
     public ActionResult RunWorkflow(Guid workflowId, [FromBody] object? triggerData = null)
     {
         var executionId = _jobService.EnqueueWorkflow(workflowId, triggerData);
@@ -156,6 +160,7 @@ public class ExecutionsController : ControllerBase
     /// Workflow'u zamanlar
     /// </summary>
     [HttpPost("schedule/{workflowId:guid}")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
     public ActionResult ScheduleWorkflow(Guid workflowId, [FromQuery] int delaySeconds, [FromBody] object? triggerData = null)
     {
         var jobId = _jobService.ScheduleWorkflow(workflowId, TimeSpan.FromSeconds(delaySeconds), triggerData);
@@ -166,6 +171,7 @@ public class ExecutionsController : ControllerBase
     /// Recurring workflow ekler
     /// </summary>
     [HttpPost("recurring/{workflowId:guid}")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
     public ActionResult AddRecurring(Guid workflowId, [FromQuery] string cron, [FromQuery] string? jobName = null)
     {
         var result = _jobService.AddRecurringWorkflow(workflowId, cron, jobName);

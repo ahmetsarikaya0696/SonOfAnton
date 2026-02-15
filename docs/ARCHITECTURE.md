@@ -1,361 +1,372 @@
-# ??? SonOfAnton — Mimari Dokümantasyonu
+Replacing block between '**Node DurumlarÄ± (State Machine):**' and '**Ã–nemli:** Her durum geÃ§iÅŸi' Replacing block between '**Veri bir node'dan diÄŸerine nasÄ±l geÃ§er?**' and '- Her node bir' Replacing block between 'Bir workflow Ã§alÄ±ÅŸtÄ±rÄ±ldÄ±ÄŸÄ±nda veri ÅŸu yolu izler:' and '**Veri bir node'dan diÄŸerine nasÄ±l geÃ§er?**' Replacing block between '## 4. BileÅŸen EtkileÅŸim DiyagramÄ±' and '**Ä°letiÅŸim Protokolleri:**' Replacing block between '## 3. KatmanlÄ± Mimari' and '**Katman KurallarÄ±:**' ï»¿#  SonOfAnton â€” Mimari DokÃ¼mantasyonu
 
 > **Bu belge kime hitap ediyor?**  
-> Ekibe yeni katılan bir geliştirici olarak bu dokümanı okuduktan sonra
-> projenin nasıl çalıştığını, hangi parçanın ne iş yaptığını ve kodda
-> nereye bakman gerektiğini anlayabilmelisin.
+> Ekibe yeni katÄ±lan bir geliÅŸtirici olarak bu dokÃ¼manÄ± okuduktan sonra
+> projenin nasÄ±l Ã§alÄ±ÅŸtÄ±ÄŸÄ±nÄ±, hangi parÃ§anÄ±n ne iÅŸ yaptÄ±ÄŸÄ±nÄ± ve kodda
+> nereye bakman gerektiÄŸini anlayabilmelisin.
 
 ---
 
-## ?? İçindekiler
+##  Ä°Ã§indekiler
 
-1. [Projeye Genel Bakış](#1-projeye-genel-bakış)
-2. [Klasör Yapısı](#2-klasör-yapısı)
-3. [Katmanlı Mimari](#3-katmanlı-mimari)
-4. [Bileşen Etkileşim Diyagramı](#4-bileşen-etkileşim-diyagramı)
-5. [Veri Akış Diyagramı](#5-veri-akış-diyagramı)
-6. [Graph Engine (Çekirdek Motor)](#6-graph-engine-çekirdek-motor)
+1. [Projeye Genel BakÄ±ÅŸ](#1-projeye-genel-bakÄ±ÅŸ)
+2. [KlasÃ¶r YapÄ±sÄ±](#2-klasÃ¶r-yapÄ±sÄ±)
+3. [KatmanlÄ± Mimari](#3-katmanlÄ±-mimari)
+4. [BileÅŸen EtkileÅŸim DiyagramÄ±](#4-bileÅŸen-etkileÅŸim-diyagramÄ±)
+5. [Veri AkÄ±ÅŸ DiyagramÄ±](#5-veri-akÄ±ÅŸ-diyagramÄ±)
+6. [Graph Engine (Ã‡ekirdek Motor)](#6-graph-engine-Ã§ekirdek-motor)
 7. [Node Handler Sistemi](#7-node-handler-sistemi)
-8. [Veritabanı Yapısı](#8-veritabanı-yapısı)
-9. [Gerçek Zamanlı İletişim (SSE)](#9-gerçek-zamanlı-iletişim-sse)
-10. [Arka Plan İşleri (Hangfire)](#10-arka-plan-işleri-hangfire)
-11. [AI ve Vector Veritabanı](#11-ai-ve-vector-veritabanı)
-12. [Güvenlik Katmanları](#12-güvenlik-katmanları)
+8. [VeritabanÄ± YapÄ±sÄ±](#8-veritabanÄ±-yapÄ±sÄ±)
+9. [GerÃ§ek ZamanlÄ± Ä°letiÅŸim (SSE)](#9-gerÃ§ek-zamanlÄ±-iletiÅŸim-sse)
+10. [Arka Plan Ä°ÅŸleri (Hangfire)](#10-arka-plan-iÅŸleri-hangfire)
+11. [AI ve Vector VeritabanÄ±](#11-ai-ve-vector-veritabanÄ±)
+12. [GÃ¼venlik KatmanlarÄ±](#12-gÃ¼venlik-katmanlarÄ±)
 13. [Test Stratejisi](#13-test-stratejisi)
-14. [Sık Yapılan Görevler](#14-sık-yapılan-görevler)
+14. [SÄ±k YapÄ±lan GÃ¶revler](#14-sÄ±k-yapÄ±lan-gÃ¶revler)
 
 ---
 
-## 1. Projeye Genel Bakış
+## 1. Projeye Genel BakÄ±ÅŸ
 
-**SonOfAnton**, Node-RED benzeri bir **görsel workflow otomasyon** platformudur.
+**SonOfAnton**, Node-RED benzeri bir **gÃ¶rsel workflow otomasyon** platformudur.
 
 **Ne yapar?**
-- Kullanıcı, tarayıcıda sürükle-bırak ile node'ları birbirine bağlayarak
-  bir iş akışı (workflow) oluşturur
-- Oluşturulan workflow, arka planda çalıştırılır
-- Her adımın sonucu gerçek zamanlı olarak ekranda görüntülenir
+- KullanÄ±cÄ±, tarayÄ±cÄ±da sÃ¼rÃ¼kle-bÄ±rak ile node'larÄ± birbirine baÄŸlayarak
+  bir iÅŸ akÄ±ÅŸÄ± (workflow) oluÅŸturur
+- OluÅŸturulan workflow, arka planda Ã§alÄ±ÅŸtÄ±rÄ±lÄ±r
+- Her adÄ±mÄ±n sonucu gerÃ§ek zamanlÄ± olarak ekranda gÃ¶rÃ¼ntÃ¼lenir
 
-**Teknoloji Yığını:**
+**Teknoloji YÄ±ÄŸÄ±nÄ±:**
 
 | Katman | Teknoloji | Neden? |
 |--------|-----------|--------|
 | Frontend | Blazor WebAssembly | C# ile tek dil, .NET 10 |
-| Backend API | ASP.NET Core | Performanslı REST API |
-| Veritabanı | PostgreSQL + pgvector | JSONB + vektör arama |
-| Arka Plan İşleri | Hangfire | Güvenilir kuyruk sistemi |
+| Backend API | ASP.NET Core | PerformanslÄ± REST API |
+| Kimlik SaÄŸlayÄ±cÄ± | Keycloak (OIDC) | AÃ§Ä±k kaynak, OIDC/OAuth 2.0 uyumlu |
+| VeritabanÄ± | PostgreSQL + pgvector | JSONB + vektÃ¶r arama |
+| Arka Plan Ä°ÅŸleri | Hangfire | GÃ¼venilir kuyruk sistemi |
 | AI | Ollama + ONNX Runtime | Yerel LLM ve embedding |
-| Gerçek Zamanlı | Server-Sent Events (SSE) | Tek yönlü event stream |
+| GerÃ§ek ZamanlÄ± | Server-Sent Events (SSE) | Tek yÃ¶nlÃ¼ event stream |
 
 ---
 
-## 2. Klasör Yapısı
+## 2. KlasÃ¶r YapÄ±sÄ±
 
 ```
 SonOfAnton/
-??? src/
-?   ??? SonOfAnton.Shared/        ? Ortak kodlar (Frontend + Backend paylaşır)
-?   ?   ??? Core/GraphEngine/     ? DAG motoru (INode, Edge, Graph, Channel)
-?   ?   ??? DTOs/                 ? Veri Transfer Objeleri
-?   ?   ??? Entities/             ? Veritabanı entity'leri
-?   ?   ??? Enums/                ? Sabit değerler (ExecutionStatus, LogLevel vb.)
-?   ?   ??? Models/               ? İş modelleri (Workflow, NodeRegistry)
-?   ?   ??? Events/               ? Event tipleri
-?   ?
-?   ??? SonOfAnton.Frontend/      ? Blazor WebAssembly uygulaması
-?   ?   ??? Components/           ? Blazor bileşenleri (Editor, Palette, Log vb.)
-?   ?   ??? Pages/                ? Sayfa bileşenleri
-?   ?   ??? Services/             ? API istemci servisleri
-?   ?   ??? wwwroot/              ? Statik dosyalar (JS, CSS)
-?   ?
-?   ??? SonOfAnton.Backend/       ? ASP.NET Core Web API
-?       ??? Controllers/          ? REST API endpoint'leri
-?       ??? Engine/               ? Workflow çalıştırma motoru
-?       ?   ??? Handlers/         ? Node handler'ları (Strategy Pattern)
-?       ??? Data/                 ? EF Core DbContext
-?       ??? Migrations/           ? Veritabanı migration'ları
-?       ??? Services/             ? İş servisleri
-?       ??? Infrastructure/       ? Altyapı (Embedding, Vector DB, Docker)
-?       ??? Agents/               ? AI Agent servisleri
-?       ??? Orchestrator/         ? Proje orkestrasyon
+|-- src/
+|   |-- SonOfAnton.Shared/        ? Ortak kodlar (Frontend + Backend paylaÅŸÄ±r)
+|   |   |-- Core/GraphEngine/     ? DAG motoru (INode, Edge, Graph, Channel)
+|   |   |-- DTOs/                 ? Veri Transfer Objeleri
+|   |   |-- Entities/             ? VeritabanÄ± entity'leri
+|   |   |-- Enums/                ? Sabit deÄŸerler (ExecutionStatus, LogLevel vb.)
+|   |   |-- Models/               ? Ä°ÅŸ modelleri (Workflow, NodeRegistry)
+|   |   |-- Events/               ? Event tipleri
+|   ?
+|   |-- SonOfAnton.Frontend/      ? Blazor WebAssembly uygulamasÄ±
+|   |   |-- Components/           ? Blazor bileÅŸenleri (Editor, Palette, Log vb.)
+|   |   |   |-- LoginDisplay.razor      ? KullanÄ±cÄ± giriÅŸ/Ã§Ä±kÄ±ÅŸ UI
+|   |   |   |-- RedirectToLogin.razor   ? Yetkisiz kullanÄ±cÄ± yÃ¶nlendirmesi
+|   |   |-- Pages/                ? Sayfa bileÅŸenleri
+|   |   |   |-- Authentication.razor    ? OIDC login/logout/callback handler
+|   |   |-- Services/             ? API istemci servisleri
+|   |   |-- wwwroot/              ? Statik dosyalar (JS, CSS, appsettings.json)
+|   ?
+|   |-- SonOfAnton.Backend/       ? ASP.NET Core Web API
+|       |-- Controllers/          ? REST API endpoint'leri
+|       |-- Engine/               ? Workflow Ã§alÄ±ÅŸtÄ±rma motoru
+|       |   |-- Handlers/         ? Node handler'larÄ± (Strategy Pattern)
+|       |-- Data/                 ? EF Core DbContext
+|       |-- Migrations/           ? VeritabanÄ± migration'larÄ±
+|       |-- Services/             ? Ä°ÅŸ servisleri
+|       |-- Infrastructure/       ? AltyapÄ± (Embedding, Vector DB, Docker)
+|       |-- Agents/               ? AI Agent servisleri
+|       |-- Orchestrator/         ? Proje orkestrasyon
 ?
-??? tests/
-?   ??? SonOfAnton.Tests/         ? xUnit test projesi
-?       ??? Unit/                 ? Birim testleri
-?       ?   ??? GraphEngine/      ? Graph, Edge, NodeBase testleri
-?       ?   ??? Handlers/         ? Handler testleri
-?       ?   ??? Services/         ? Servis testleri
-?       ??? Integration/          ? Entegrasyon testleri
+|-- tests/
+|   |-- SonOfAnton.Tests/         ? xUnit test projesi
+|       |-- Unit/                 ? Birim testleri
+|       |   |-- GraphEngine/      ? Graph, Edge, NodeBase testleri
+|       |   |-- Handlers/         ? Handler testleri
+|       |   |-- Services/         ? Servis testleri
+|       |-- Integration/          ? Entegrasyon testleri
 ?
-??? docs/                         ? Proje dokümantasyonu
-?   ??? ARCHITECTURE.md           ? Bu dosya
-?   ??? API.md                    ? API referansı
-?   ??? DATABASE.md               ? Veritabanı şeması
-?   ??? DEPLOYMENT.md             ? Dağıtım kılavuzu
+|-- docs/                         ? Proje dokÃ¼mantasyonu
+|   |-- ARCHITECTURE.md           ? Bu dosya
+|   |-- API.md                    ? API referansÄ±
+|   |-- DATABASE.md               ? VeritabanÄ± ÅŸemasÄ±
+|   |-- DEPLOYMENT.md             ? DaÄŸÄ±tÄ±m kÄ±lavuzu
 ?
-??? .github/workflows/            ? CI/CD pipeline'ları
-    ??? ci.yml                    ? Build + Test + Coverage
+|-- .github/workflows/            ? CI/CD pipeline'larÄ±
+    |-- ci.yml                    ? Build + Test + Coverage
 ```
 
 ---
 
-## 3. Katmanlı Mimari
+## 3. KatmanlÄ± Mimari
 
 ```
-???????????????????????????????????????????????????
-?                   FRONTEND                       ?
-?              (Blazor WebAssembly)                 ?
-?                                                   ?
-?  ???????????? ????????????? ??????????????????  ?
-?  ?  Workflow ? ?   Node    ? ?   Execution    ?  ?
-?  ?  Editor   ? ?  Palette  ? ?   Monitor      ?  ?
-?  ???????????? ????????????? ??????????????????  ?
-?       ?             ?              ?              ?
-?  ??????????????????????????????????????????????? ?
-?  ?        API Services + SSE Client            ? ?
-?  ??????????????????????????????????????????????? ?
-????????????????????????????????????????????????????
-                      ? HTTP REST + SSE
-                      ?
-???????????????????????????????????????????????????
-?                   BACKEND                        ?
-?              (ASP.NET Core API)                   ?
-?                                                   ?
-?  ??????????????????????????????????????????????  ?
-?  ?              Controllers                    ?  ?
-?  ?  (Workflow, Executions, Nodes, Webhook, Log)?  ?
-?  ??????????????????????????????????????????????  ?
-?                       ?                           ?
-?  ??????????????????????????????????????????????  ?
-?  ?            Engine Layer                     ?  ?
-?  ?  ????????????????  ?????????????????????   ?  ?
-?  ?  ? Workflow     ?  ?  Node Handlers    ?   ?  ?
-?  ?  ? Runner       ????  (Strategy Pattern)?   ?  ?
-?  ?  ? (retry,      ?  ?  ???????????????  ?   ?  ?
-?  ?  ?  timeout,    ?  ?  ? If, Switch  ?  ?   ?  ?
-?  ?  ?  cycle det.) ?  ?  ? Delay, Loop ?  ?   ?  ?
-?  ?  ????????????????  ?  ? HTTP, LLM   ?  ?   ?  ?
-?  ?                    ?  ? Email, DB   ?  ?   ?  ?
-?  ?                    ?  ???????????????  ?   ?  ?
-?  ?                    ?????????????????????   ?  ?
-?  ??????????????????????????????????????????????  ?
-?                       ?                           ?
-?  ???????????? ????????????????? ??????????????? ?
-?  ? Hangfire ? ?  EF Core +    ? ? SSE Event   ? ?
-?  ? (Job Q)  ? ?  PostgreSQL   ? ? Service     ? ?
-?  ???????????? ????????????????? ??????????????? ?
-???????????????????????????????????????????????????
++---------------------------------------------------+
+|                   FRONTEND                        |
+|              (Blazor WebAssembly)                 |
+|                                                   |
+|  +------------+ +-------------+ +---------------+ |
+|  |  Workflow  | |   Node      | |   Execution   | |
+|  |  Editor    | |  Palette    | |   Monitor     | |
+|  +------------+ +-------------+ +---------------+ |
+|       ^             ^              ^              |
+|       |             |              |              |
+|  +----------------------------------------------+ |
+|  |        API Services + SSE Client             | |
+|  +----------------------------------------------+ |
++---------------------------------------------------+
+                      ^ HTTP REST + SSE
+                      |
++---------------------------------------------------+
+|                   BACKEND                         |
+|              (ASP.NET Core API)                   |
+|                                                   |
+|  +----------------------------------------------+ |
+|  |              Controllers                     | |
+|  |  (Workflow, Executions, Nodes, Webhook, Log) | |
+|  +----------------------------------------------+ |
+|                       |                           |
+|                       v                           |
+|  +----------------------------------------------+ |
+|  |            Engine Layer                      | |
+|  |  +----------------+  +---------------------+ | |
+|  |  | Workflow       |  |  Node Handlers      | | |
+|  |  | Runner         |--|  (Strategy Pattern) | | |
+|  |  | (retry,        |  |  +---------------+  | | |
+|  |  |  timeout,      |  |  | If, Switch    |  | | |
+|  |  |  cycle det.)   |  |  | Delay, Loop   |  | | |
+|  |  +----------------+  |  | HTTP, LLM     |  | | |
+|  |                      |  | Email, DB     |  | | |
+|  |                      |  +---------------+  | | |
+|  |                      +---------------------+ | |
+|  +----------------------------------------------+ |
+|                       |                           |
+|                       v                           |
+|  +------------+ +-----------------+ +-----------+ |
+|  | Hangfire   | |  EF Core +      | | SSE Event | |
+|  | (Job Q)    | |  PostgreSQL     | | Service   | |
+|  +------------+ +-----------------+ +-----------+ |
++---------------------------------------------------+
 ```
 
-**Katman Kuralları:**
-- Controller ? Service ? Repository (yukarıdan aşağı çağırır)
-- Hiçbir katman kendinden üstteki katmanı çağırmaz
-- Shared projesinde backend/frontend'e özel kod OLMAZ
+**Katman KurallarÄ±:**
+- Controller -> Service -> Repository (yukarÄ±dan aÅŸaÄŸÄ± Ã§aÄŸÄ±rÄ±r)
+- HiÃ§bir katman kendinden Ã¼stteki katmanÄ± Ã§aÄŸÄ±rmaz
+- Shared projesinde backend/frontend'e Ã¶zel kod OLMAZ
 
 ---
 
-## 4. Bileşen Etkileşim Diyagramı
+## 4. BileÅŸen EtkileÅŸim DiyagramÄ±
 
 ```
-   Kullanıcı
-      ?
-      ?
-???????????????     HTTP/REST     ????????????????
-?   Blazor    ?????????????????????  ASP.NET     ?
-?   WASM      ?                   ?  Core API    ?
-?   Frontend  ?????? SSE ?????????              ?
-???????????????   (tek yönlü)     ????????????????
-                                         ?
-                                         ?
-                                  ????????????????
-                                  ?  Hangfire     ?
-                                  ?  Worker       ?
-                                  ?  (Arka Plan)  ?
-                                  ????????????????
-                                         ?
-                              ???????????????????????
-                              ?          ?          ?
-                        ???????????? ?????????? ??????????
-                        ?PostgreSQL? ? Ollama ? ?  Dış   ?
-                        ?+ pgvector? ? (AI)   ? ? API'ler?
-                        ???????????? ?????????? ??????????
+   KullanÄ±cÄ±
+       |
+       v
++---------------+     HTTP/REST     +----------------+
+|   Blazor      |<----------------->|  ASP.NET       |
+|   WASM        |                   |  Core API      |
+|   Frontend    |<----- SSE --------|                |
++---------------+   (tek yÃ¶nlÃ¼)     +----------------+
+       |                                   |
+       | OIDC                              |
+       v                                   |
++---------------+                   +----------------+
+|  Keycloak     |                   |  Hangfire      |
+|  (Identity)   |                   |  Worker        |
+|  Port 8080    |                   |  (Arka Plan)   |
++---------------+                   +----------------+
+                                           |
+                                +-----------------------+
+                                |          |            |
+                          +------------+ +----------+ +-----------+
+                          | PostgreSQL | | Ollama   | |  DÄ±ÅŸ      |
+                          | + pgvector | | (AI)     | |  API'ler  |
+                          +------------+ +----------+ +-----------+
 ```
 
-**İletişim Protokolleri:**
-- **Frontend ? Backend**: HTTP REST (JSON)
-- **Backend ? Frontend**: SSE (Server-Sent Events, gerçek zamanlı)
-- **Backend ? Hangfire**: .NET method çağrısı (kuyruk üzerinden)
-- **Backend ? PostgreSQL**: EF Core / Npgsql
-- **Backend ? Ollama**: HTTP (Semantic Kernel SDK ile)
+**Ä°letiÅŸim Protokolleri:**
+- **Frontend â†’ Keycloak**: OIDC Authorization Code Flow (PKCE)
+- **Frontend â†’ Backend**: HTTP REST (JSON) + Authorization: Bearer token
+- **Backend â†’ Frontend**: SSE (Server-Sent Events, gerÃ§ek zamanlÄ±)
+- **Backend â†’ Keycloak**: JWT token doÄŸrulama (JWKS endpoint)
+- **Backend â†’ Hangfire**: .NET method Ã§aÄŸrÄ±sÄ± (kuyruk Ã¼zerinden)
+- **Backend â†’ PostgreSQL**: EF Core / Npgsql
+- **Backend â†’ Ollama**: HTTP (Semantic Kernel SDK ile)
 
 ---
 
-## 5. Veri Akış Diyagramı
+## 5. Veri AkÄ±ÅŸ DiyagramÄ±
 
-Bir workflow çalıştırıldığında veri şu yolu izler:
+Bir workflow Ã§alÄ±ÅŸtÄ±rÄ±ldÄ±ÄŸÄ±nda veri ÅŸu yolu izler:
 
 ```
 1. TETIKLEME
-   ??????????????
-   ? Kullanıcı   ???? "Çalıştır" butonuna basar
-   ? veya Webhook???? Dış servis HTTP isteği gönderir
-   ? veya Cron   ???? Zamanlayıcı tetikler
-   ??????????????
-          ?
-          ?
+   +--------------+
+   | KullanÄ±cÄ±    |--> "Ã‡alÄ±ÅŸtÄ±r" butonuna basar
+   | veya Webhook |--> DÄ±ÅŸ servis HTTP isteÄŸi gÃ¶nderir
+   | veya Cron    |--> ZamanlayÄ±cÄ± tetikler
+   +--------------+
+          |
+          v
 2. KUYRUKLAMA
-   ????????????????????????????????????????
-   ?  WorkflowJobService                  ?
-   ?  - Hangfire'a job ekler              ?
-   ?  - ExecutionEntity oluşturur (DB)    ?
-   ?  - SSE kanalı açar                   ?
-   ????????????????????????????????????????
-          ?
-          ?
-3. ÇALIŞTIRMA (Hangfire Worker Thread)
-   ????????????????????????????????????????
-   ?  WorkflowRunner                      ?
-   ?                                      ?
-   ?  graph.GetTriggerNodes() ile başla   ?
-   ?  ???????????????????????????????     ?
-   ?  ?  Her node için:             ?     ?
-   ?  ?  1. Handler'ı bul           ?     ?
-   ?  ?  2. Retry + Timeout uygula  ?     ?
-   ?  ?  3. Execute et              ?     ?
-   ?  ?  4. Çıktıyı sonraki node'a  ?     ?
-   ?  ?     inputData olarak geçir   ?     ?
-   ?  ?  5. SSE event gönder        ?     ?
-   ?  ?  6. Log yaz (DB)            ?     ?
-   ?  ???????????????????????????????     ?
-   ????????????????????????????????????????
-          ?
-          ?
-4. SONUÇ
-   ????????????????????????????????????????
-   ?  - ExecutionEntity güncellenir       ?
-   ?  - SSE "complete" event gönderilir   ?
-   ?  - Frontend UI güncellenir           ?
-   ????????????????????????????????????????
+   +----------------------------------------+
+   |  WorkflowJobService                    |
+   |  - Hangfire'a job ekler                |
+   |  - ExecutionEntity oluÅŸturur (DB)      |
+   |  - SSE kanalÄ± aÃ§ar                     |
+   +----------------------------------------+
+          |
+          v
+3. Ã‡ALIÅTIRMA (Hangfire Worker Thread)
+   +----------------------------------------+
+   |  WorkflowRunner                        |
+   |                                        |
+   |  graph.GetTriggerNodes() ile baÅŸla     |
+   |  +-------------------------------+     |
+   |  |  Her node iÃ§in:               |     |
+   |  |  1. Handler'Ä± bul             |     |
+   |  |  2. Retry + Timeout uygula    |     |
+   |  |  3. Execute et                |     |
+   |  |  4. Ã‡Ä±ktÄ±yÄ± sonraki node'a    |     |
+   |  |     inputData olarak geÃ§ir    |     |
+   |  |  5. SSE event gÃ¶nder          |     |
+   |  |  6. Log yaz (DB)              |     |
+   |  +-------------------------------+     |
+   +----------------------------------------+
+          |
+          v
+4. SONUÃ‡
+   +----------------------------------------+
+   |  - ExecutionEntity gÃ¼ncellenir       |
+   |  - SSE "complete" event gÃ¶nderilir   |
+   |  - Frontend UI gÃ¼ncellenir           |
+   +----------------------------------------+
 ```
 
-**Veri bir node'dan diğerine nasıl geçer?**
+**Veri bir node'dan diÄŸerine nasÄ±l geÃ§er?**
 
 ```
-??????????????    outputData    ??????????????    outputData    ??????????????
-?  Trigger   ? ??????????????? ?  Transform ? ??????????????? ?   Logic    ?
-?  Node      ?  (JSON object)  ?  Node      ?  (JSON object)  ?   Node     ?
-?            ?                 ?            ?                 ?            ?
-? outputPort ?                 ? outputPort ?                 ? outputPort ?
-? = "output" ?                 ? = "output" ?                 ? = "true"   ?
-??????????????                 ??????????????                 ??????????????
+-----------|--    outputData    -----------|--    outputData    --------------
+?  Trigger   ? ------------|-- ?  Transform ? ------------|-- |   Logic    ?
+?  Node      ?  (JSON object)  ?  Node      ?  (JSON object)  |   Node     ?
+|            |                 |            |                 |            ?
+? outputPort |                 ? outputPort |                 ? outputPort ?
+? = "output" |                 ? = "output" |                 ? = "true"   ?
+-----------|--                 -----------|--                 --------------
                                                                      ?
-                                                        ??????????????
-                                                        ?            ?
-                                                   ??????????? ???????????
+                                                        --------------
+                                                        |            ?
+                                                   --------|-- -----------
                                                    ?  Email  ? ?  Debug  ?
                                                    ?  Node   ? ?  Node   ?
-                                                   ??????????? ???????????
+                                                   --------|-- -----------
 ```
 
-- Her node bir `NodeExecutionResult` döner
-- Bu result içinde `OutputData` (sonraki node'a gidecek veri) ve `OutputPort` (hangi çıkışa gideceği) bulunur
-- Logic node'ları (if, switch) farklı port'lara yönlendirebilir ("true"/"false")
+- Her node bir `NodeExecutionResult` dÃ¶ner
+- Bu result iÃ§inde `OutputData` (sonraki node'a gidecek veri) ve `OutputPort` (hangi Ã§Ä±kÄ±ÅŸa gideceÄŸi) bulunur
+- Logic node'larÄ± (if, switch) farklÄ± port'lara yÃ¶nlendirebilir ("true"/"false")
 
 ---
 
-## 6. Graph Engine (Çekirdek Motor)
+## 6. Graph Engine (Ã‡ekirdek Motor)
 
-Graph Engine, projenin kalbidir. Workflow'lar aslında bir **DAG** (Directed Acyclic Graph = Yönlü Döngüsüz Çizge) yapısındadır.
+Graph Engine, projenin kalbidir. Workflow'lar aslÄ±nda bir **DAG** (Directed Acyclic Graph = YÃ¶nlÃ¼ DÃ¶ngÃ¼sÃ¼z Ã‡izge) yapÄ±sÄ±ndadÄ±r.
 
-**Sınıf Hiyerarşisi:**
-
-```
-INode (interface)                    ? Tüm node'ların kontratı
-  ??? NodeBase (abstract class)      ? Ortak implementasyon
-       ??? TestNode (test'lerde)     ? Test amaçlı somut sınıf
-
-Edge                                 ? İki node arasındaki bağlantı
-Channel                              ? Node'lar arası veri taşıyıcı
-Graph                                ? DAG yapısını yöneten ana sınıf
-GraphExecutor                        ? Çalıştırma motoru
-```
-
-**Node Durumları (State Machine):**
+**SÄ±nÄ±f HiyerarÅŸisi:**
 
 ```
-             ????????????
-             ?   IDLE    ? ? Başlangıç durumu
-             ????????????
-                  ? (SetState)
-          ?????????????????
-          ?               ?
-    ????????????    ?????????????
-    ? PENDING  ?    ? CANCELLED ?
-    ????????????    ?????????????
-         ?
-         ?
-    ????????????
-    ? RUNNING  ?
-    ????????????
-         ?
-    ??????????????????????????????
-    ?              ?             ?
-???????????? ???????????? ?????????????
-?COMPLETED ? ?  FAILED  ? ? CANCELLED ?
-???????????? ???????????? ?????????????
+INode (interface)                    -> TÃ¼m node'larÄ±n kontratÄ±
+  |-- NodeBase (abstract class)      -> Ortak implementasyon
+           |-- TestNode (test'lerde)     -> Test amaÃ§lÄ± somut sÄ±nÄ±f
+
+Edge                                 -> Ä°ki node arasÄ±ndaki baÄŸlantÄ±
+Channel                              -> Node'lar arasÄ± veri taÅŸÄ±yÄ±cÄ±
+Graph                                -> DAG yapÄ±sÄ±nÄ± yÃ¶neten ana sÄ±nÄ±f
+GraphExecutor                        -> Ã‡alÄ±ÅŸtÄ±rma motoru
 ```
 
-**Önemli:** Her durum geçişi `ExecutionStateTransitions` sözlüğünde tanımlıdır.
-Geçersiz bir geçiş denenirse `InvalidOperationException` fırlatılır.
+**Node DurumlarÄ± (State Machine):**
+
+```
+             +------------+
+             |   IDLE     |--> BaÅŸlangÄ±Ã§ durumu
+             +------------+
+                  | (SetState)
+                  v
+          +-----------------+
+          |                 |
+    +-----------+    +-------------+
+    | PENDING   |    | CANCELLED   |
+    +-----------+    +-------------+
+         |
+         v
+    +-----------+
+    | RUNNING   |
+    +-----------+
+         |
+    +------------------------------+
+    |              |               |
++------------+ +------------+ +-------------+
+| COMPLETED  | |  FAILED    | | CANCELLED   |
++------------+ +------------+ +-------------+
+```
+
+**Ã–nemli:** Her durum geÃ§iÅŸi `ExecutionStateTransitions` sÃ¶zlÃ¼ÄŸÃ¼nde tanÄ±mlÄ±dÄ±r.
+GeÃ§ersiz bir geÃ§iÅŸ denenirse `InvalidOperationException` fÄ±rlatÄ±lÄ±r.
 
 **Dosyalar:**
-- `Shared/Core/GraphEngine/INode.cs` — Interface + ExecutionState enum
-- `Shared/Core/GraphEngine/NodeBase.cs` — Pin tanımlama + durum yönetimi
-- `Shared/Core/GraphEngine/Edge.cs` — Bağlantı + veri transferi
-- `Shared/Core/GraphEngine/Graph.cs` — DAG analizi (döngü tespiti, topolojik sıralama)
+- `Shared/Core/GraphEngine/INode.cs` â€” Interface + ExecutionState enum
+- `Shared/Core/GraphEngine/NodeBase.cs` â€” Pin tanÄ±mlama + durum yÃ¶netimi
+- `Shared/Core/GraphEngine/Edge.cs` â€” BaÄŸlantÄ± + veri transferi
+- `Shared/Core/GraphEngine/Graph.cs` â€” DAG analizi (dÃ¶ngÃ¼ tespiti, topolojik sÄ±ralama)
 
 ---
 
 ## 7. Node Handler Sistemi
 
-Her node tipi için bir `INodeHandler` implementasyonu vardır (**Strategy Pattern**).
+Her node tipi iÃ§in bir `INodeHandler` implementasyonu vardÄ±r (**Strategy Pattern**).
 
 ```
 INodeHandler (interface)
-??? ManualTriggerHandler      (trigger.manual)
-??? WebhookTriggerHandler     (trigger.webhook)
-??? ScheduleTriggerHandler    (trigger.schedule)
-??? HttpRequestHandler        (http.request)
-??? SetValueHandler           (transform.set)
-??? FilterHandler             (transform.filter)
-??? CodeHandler               (transform.code)
-??? TemplateHandler           (transform.template)
-??? AggregateHandler          (transform.aggregate)
-??? IfHandler                 (logic.if)
-??? SwitchHandler             (logic.switch)
-??? MergeHandler              (logic.merge)
-??? DelayHandler              (logic.delay)
-??? LoopHandler               (logic.loop)
-??? LLMHandler                (ai.llm)
-??? DatabaseHandler           (data.database)
-??? EmailHandler              (comm.email)
-??? SlackHandler              (comm.slack)
-??? GenerateEmbeddingHandler  (vector.embed)
-??? VectorStoreHandler        (vector.store)
-??? VectorSearchHandler       (vector.search)
-??? VectorDeleteHandler       (vector.delete)
-??? ForEachLoopHandler        (subflow.foreach)    [YENi]
-??? WhileLoopHandler          (subflow.while)      [YENi]
-??? ParallelHandler           (subflow.parallel)   [YENi]
-??? BreakHandler              (flow.break)         [YENi]
-??? ContinueHandler           (flow.continue)      [YENi]
-??? DebugHandler              (utility.debug)
-??? EndHandler                (utility.end)
+|-- ManualTriggerHandler      (trigger.manual)
+|-- WebhookTriggerHandler     (trigger.webhook)
+|-- ScheduleTriggerHandler    (trigger.schedule)
+|-- HttpRequestHandler        (http.request)
+|-- SetValueHandler           (transform.set)
+|-- FilterHandler             (transform.filter)
+|-- CodeHandler               (transform.code)
+|-- TemplateHandler           (transform.template)
+|-- AggregateHandler          (transform.aggregate)
+|-- IfHandler                 (logic.if)
+|-- SwitchHandler             (logic.switch)
+|-- MergeHandler              (logic.merge)
+|-- DelayHandler              (logic.delay)
+|-- LoopHandler               (logic.loop)
+|-- LLMHandler                (ai.llm)
+|-- DatabaseHandler           (data.database)
+|-- EmailHandler              (comm.email)
+|-- SlackHandler              (comm.slack)
+|-- GenerateEmbeddingHandler  (vector.embed)
+|-- VectorStoreHandler        (vector.store)
+|-- VectorSearchHandler       (vector.search)
+|-- VectorDeleteHandler       (vector.delete)
+|-- ForEachLoopHandler        (subflow.foreach)    [YENi]
+|-- WhileLoopHandler          (subflow.while)      [YENi]
+|-- ParallelHandler           (subflow.parallel)   [YENi]
+|-- BreakHandler              (flow.break)         [YENi]
+|-- ContinueHandler           (flow.continue)      [YENi]
+|-- DebugHandler              (utility.debug)
+|-- EndHandler                (utility.end)
 ```
 
-**Yeni bir node handler nasıl eklenir?**
+**Yeni bir node handler nasÄ±l eklenir?**
 
-1. `Engine/Handlers/` altında handler sınıfını yaz:
+1. `Engine/Handlers/` altÄ±nda handler sÄ±nÄ±fÄ±nÄ± yaz:
 ```csharp
 public class MyHandler : INodeHandler
 {
@@ -363,29 +374,29 @@ public class MyHandler : INodeHandler
 
     public async Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
     {
-        // İş mantığın burada
+        // Ä°ÅŸ mantÄ±ÄŸÄ±n burada
         var param = context.Node.Parameters.GetValueOrDefault("paramName")?.ToString();
         
-        // Başarılı sonuç
+        // BaÅŸarÄ±lÄ± sonuÃ§
         return NodeExecutionResult.Ok(outputData);
         
         // veya Hata
-        return NodeExecutionResult.Fail("Hata mesajı");
+        return NodeExecutionResult.Fail("Hata mesajÄ±");
     }
 }
 ```
 
-2. `Program.cs`'de DI'a kayıt et:
+2. `Program.cs`'de DI'a kayÄ±t et:
 ```csharp
 builder.Services.AddScoped<INodeHandler, MyHandler>();
 ```
 
-3. `NodeRegistry.cs`'e node tanımını ekle:
+3. `NodeRegistry.cs`'e node tanÄ±mÄ±nÄ± ekle:
 ```csharp
 new NodeDefinition
 {
     Type = "kategori.isim",
-    Name = "Görünen Ad",
+    Name = "GÃ¶rÃ¼nen Ad",
     Category = "Kategori",
     Icon = "icon-name",
     Color = "#renk",
@@ -395,32 +406,32 @@ new NodeDefinition
 }
 ```
 
-4. Test yaz (`tests/Unit/Handlers/` altında)
+4. Test yaz (`tests/Unit/Handlers/` altÄ±nda)
 
 ---
 
-## 8. Veritabanı Yapısı
+## 8. VeritabanÄ± YapÄ±sÄ±
 
-**PostgreSQL** + **pgvector** uzantısı kullanılır.
+**PostgreSQL** + **pgvector** uzantÄ±sÄ± kullanÄ±lÄ±r.
 
 ```
-??????????????????????       ??????????????????????
-?    workflows       ?       ?    webhooks         ?
-??????????????????????       ??????????????????????
-? id (PK, UUID)      ????????? workflow_id (FK)   ?
-? name               ?       ? id (PK, UUID)      ?
-? description        ?       ? webhook_id (UNIQUE)?
-? trigger_type       ?       ? name               ?
-? graph_data (JSONB) ?       ? secret             ?
-? is_active          ?       ? is_active          ?
-? created_at         ?       ? min_interval_secs  ?
-? updated_at         ?       ? trigger_count      ?
-??????????????????????       ? last_triggered_at  ?
-         ? 1:N               ??????????????????????
+-------------------|--       ----------------------
+|    workflows       |       |    webhooks         ?
+-------------------|--       ----------------------
+? id (PK, UUID)      ------|-- workflow_id (FK)   ?
+? name               |       ? id (PK, UUID)      ?
+? description        |       ? webhook_id (UNIQUE)?
+? trigger_type       |       ? name               ?
+? graph_data (JSONB) |       ? secret             ?
+? is_active          |       ? is_active          ?
+? created_at         |       ? min_interval_secs  ?
+? updated_at         |       ? trigger_count      ?
+-------------------|--       ? last_triggered_at  ?
+         ? 1:N               ----------------------
          ?
-??????????????????????
-?    executions      ?
-??????????????????????
+----------------------
+|    executions      ?
+----------------------
 ? id (PK, UUID)      ?
 ? workflow_id (FK)   ?
 ? status             ?
@@ -430,98 +441,98 @@ new NodeDefinition
 ? hangfire_job_id    ?
 ? started_at         ?
 ? completed_at       ?
-??????????????????????
+----------------------
          ? 1:N
          ?
-??????????????????????       ??????????????????????
-?  execution_logs    ?       ?   vector_store     ?
-??????????????????????       ??????????????????????
-? id (PK, UUID)      ?       ? id (PK, UUID)      ?
-? execution_id (FK)  ?       ? collection         ?
-? node_id            ?       ? content            ?
-? level              ?       ? metadata (JSONB)   ?
-? message            ?       ? embedding          ?
-? data (JSONB)       ?       ?   vector(768)      ?
-? timestamp          ?       ? created_at         ?
-??????????????????????       ??????????????????????
+-------------------|--       ----------------------
+?  execution_logs    |       |   vector_store     ?
+-------------------|--       ----------------------
+? id (PK, UUID)      |       ? id (PK, UUID)      ?
+? execution_id (FK)  |       ? collection         ?
+? node_id            |       ? content            ?
+? level              |       ? metadata (JSONB)   ?
+? message            |       ? embedding          ?
+? data (JSONB)       |       |   vector(768)      ?
+? timestamp          |       ? created_at         ?
+-------------------|--       ----------------------
 ```
 
 **Neden JSONB?**
-- `graph_data`: Workflow'un node/edge yapısı. İlişkisel tablo yapmak
-  over-engineering olurdu. Blazor.Diagrams zaten JSON üretir.
-- `memory`: Execution sırasında node'lar arası veri taşır.
+- `graph_data`: Workflow'un node/edge yapÄ±sÄ±. Ä°liÅŸkisel tablo yapmak
+  over-engineering olurdu. Blazor.Diagrams zaten JSON Ã¼retir.
+- `memory`: Execution sÄ±rasÄ±nda node'lar arasÄ± veri taÅŸÄ±r.
 - `data` (execution_logs): Log'a eklenen ek veri.
 
-**İndeksler:**
-- `executions.workflow_id` — Workflow'a ait execution'ları hızlı bul
-- `executions.status` — Durum bazlı filtreleme
-- `execution_logs.execution_id` — Execution'a ait logları hızlı bul
-- `execution_logs.timestamp` — Zamana göre sıralama
-- `vector_store.collection` — Koleksiyon bazlı filtreleme
-- `vector_store.embedding` (IVFFlat) — Vektör benzerlik araması
+**Ä°ndeksler:**
+- `executions.workflow_id` â€” Workflow'a ait execution'larÄ± hÄ±zlÄ± bul
+- `executions.status` â€” Durum bazlÄ± filtreleme
+- `execution_logs.execution_id` â€” Execution'a ait loglarÄ± hÄ±zlÄ± bul
+- `execution_logs.timestamp` â€” Zamana gÃ¶re sÄ±ralama
+- `vector_store.collection` â€” Koleksiyon bazlÄ± filtreleme
+- `vector_store.embedding` (IVFFlat) â€” VektÃ¶r benzerlik aramasÄ±
 
 ---
 
-## 9. Gerçek Zamanlı İletişim (SSE)
+## 9. GerÃ§ek ZamanlÄ± Ä°letiÅŸim (SSE)
 
-**Server-Sent Events (SSE)**, sunucudan istemciye tek yönlü event stream sağlar.
+**Server-Sent Events (SSE)**, sunucudan istemciye tek yÃ¶nlÃ¼ event stream saÄŸlar.
 
 ```
 Frontend                              Backend
-   ?                                     ?
+   |                                     ?
    ?  GET /api/workflow/execution/       ?
-   ?      {executionId}/stream           ?
-   ? ??????????????????????????????????? ?
-   ?                                     ?
-   ?  ??? data: {"type":"node_start"}    ?
-   ?  ??? data: {"type":"node_complete"} ?
-   ?  ??? : heartbeat                    ?  (15 saniyede bir)
-   ?  ??? data: {"type":"log"}           ?
-   ?  ??? data: {"type":"workflow_done"} ?
-   ?                                     ?
-   ?  (Bağlantı kapanır)                 ?
+   |      {executionId}/stream           ?
+   ? --------------------------------|-- ?
+   |                                     ?
+   ?  |-- data: {"type":"node_start"}    ?
+   ?  |-- data: {"type":"node_complete"} ?
+   ?  |-- : heartbeat                    ?  (15 saniyede bir)
+   ?  |-- data: {"type":"log"}           ?
+   ?  |-- data: {"type":"workflow_done"} ?
+   |                                     ?
+   ?  (BaÄŸlantÄ± kapanÄ±r)                 ?
 ```
 
-**Neden SSE, neden WebSocket değil?**
-- SSE, tek yönlü akış için daha basittir
-- HTTP/2 ile multiplexing desteği var
-- Otomatik yeniden bağlanma (tarayıcı destekler)
-- Workflow execution'ı zaten tek yönlü bir akıştır
+**Neden SSE, neden WebSocket deÄŸil?**
+- SSE, tek yÃ¶nlÃ¼ akÄ±ÅŸ iÃ§in daha basittir
+- HTTP/2 ile multiplexing desteÄŸi var
+- Otomatik yeniden baÄŸlanma (tarayÄ±cÄ± destekler)
+- Workflow execution'Ä± zaten tek yÃ¶nlÃ¼ bir akÄ±ÅŸtÄ±r
 
 **Dosyalar:**
-- `Backend/Services/SseEventService.cs` — Olay yönetimi, kanal oluşturma, oturum takibi
-- `Backend/Services/LogStreamService.cs` — Execution log stream (ConcurrentDictionary)
-- `Frontend/Services/SseClientService.cs` — Frontend SSE istemcisi (exponential backoff)
+- `Backend/Services/SseEventService.cs` â€” Olay yÃ¶netimi, kanal oluÅŸturma, oturum takibi
+- `Backend/Services/LogStreamService.cs` â€” Execution log stream (ConcurrentDictionary)
+- `Frontend/Services/SseClientService.cs` â€” Frontend SSE istemcisi (exponential backoff)
 
 ---
 
-## 10. Arka Plan İşleri (Hangfire)
+## 10. Arka Plan Ä°ÅŸleri (Hangfire)
 
-Workflow'lar **hiçbir zaman** HTTP isteği içinde çalıştırılmaz.
-Her zaman Hangfire kuyruğuna eklenir.
+Workflow'lar **hiÃ§bir zaman** HTTP isteÄŸi iÃ§inde Ã§alÄ±ÅŸtÄ±rÄ±lmaz.
+Her zaman Hangfire kuyruÄŸuna eklenir.
 
 **Neden?**
-- HTTP timeout'u (ör: 30 saniye) workflow süresini kısıtlar
-- Sunucu yeniden başlasa bile kuyruktaki işler kaybolmaz
-- Birden fazla worker paralel iş yapabilir
+- HTTP timeout'u (Ã¶r: 30 saniye) workflow sÃ¼resini kÄ±sÄ±tlar
+- Sunucu yeniden baÅŸlasa bile kuyruktaki iÅŸler kaybolmaz
+- Birden fazla worker paralel iÅŸ yapabilir
 
 **Kuyruklar:**
 
-| Kuyruk | Öncelik | Kullanım |
+| Kuyruk | Ã–ncelik | KullanÄ±m |
 |--------|---------|----------|
-| `critical` | En yüksek | Sistem bakım işleri |
-| `workflows` | Normal | Workflow execution'ları |
-| `default` | Düşük | Diğer işler |
+| `critical` | En yÃ¼ksek | Sistem bakÄ±m iÅŸleri |
+| `workflows` | Normal | Workflow execution'larÄ± |
+| `default` | DÃ¼ÅŸÃ¼k | DiÄŸer iÅŸler |
 
 **Zamanlama Tipleri:**
 ```csharp
-// 1. Hemen çalıştır
+// 1. Hemen Ã§alÄ±ÅŸtÄ±r
 _jobService.EnqueueWorkflow(workflowId, triggerData);
 
-// 2. Gecikmeli çalıştır (60 saniye sonra)
+// 2. Gecikmeli Ã§alÄ±ÅŸtÄ±r (60 saniye sonra)
 _jobService.ScheduleWorkflow(workflowId, TimeSpan.FromSeconds(60), triggerData);
 
-// 3. Tekrarlayan (her saat başı)
+// 3. Tekrarlayan (her saat baÅŸÄ±)
 _jobService.AddRecurringWorkflow(workflowId, "0 * * * *", "saatlik-rapor");
 ```
 
@@ -529,64 +540,251 @@ _jobService.AddRecurringWorkflow(workflowId, "0 * * * *", "saatlik-rapor");
 
 ---
 
-## 11. AI ve Vector Veritabanı
+## 11. AI ve Vector VeritabanÄ±
 
 ### Ollama (LLM)
-- Yerel bilgisayarda çalışan AI modeli
-- Semantic Kernel SDK üzerinden kullanılır
-- Model: `qwen2.5-coder:14b` (varsayılan)
+- Yerel bilgisayarda Ã§alÄ±ÅŸan AI modeli
+- Semantic Kernel SDK Ã¼zerinden kullanÄ±lÄ±r
+- Model: `qwen2.5-coder:14b` (varsayÄ±lan)
 
 ### ONNX Runtime (Embedding)
-- Metin ? sayı vektörü dönüştürme
+- Metin ? sayÄ± vektÃ¶rÃ¼ dÃ¶nÃ¼ÅŸtÃ¼rme
 - Model: `nomic-embed-text` (768 boyut)
-- Batch işleme + önbellekleme desteği
+- Batch iÅŸleme + Ã¶nbellekleme desteÄŸi
 
-### pgvector (Vektör Arama)
-- PostgreSQL uzantısı
+### pgvector (VektÃ¶r Arama)
+- PostgreSQL uzantÄ±sÄ±
 - Cosine similarity ile benzer metinleri bulma
-- IVFFlat indeksi ile hızlı arama
+- IVFFlat indeksi ile hÄ±zlÄ± arama
 
-**Kullanım akışı:**
+**KullanÄ±m akÄ±ÅŸÄ±:**
 ```
-Metin ? OnnxTextEmbeddingService ? float[768] vektör
+Metin ? OnnxTextEmbeddingService ? float[768] vektÃ¶r
     ? PgVectorService.StoreAsync()      (kaydet)
     ? PgVectorService.SearchAsync()     (ara)
 ```
 
 ---
 
-## 12. Güvenlik Katmanları
+## 12. GÃ¼venlik KatmanlarÄ±
 
 ```
-İstek
-  ?
-  ?
-??????????????????
-? Rate Limiting  ? ? IP başına dakikada 100 istek
-? (api policy)   ?   Workflow exec: dakikada 10
-??????????????????
-         ?
-??????????????????
-? Security       ? ? X-Content-Type-Options: nosniff
-? Headers        ?   X-Frame-Options: DENY
-?                ?   X-XSS-Protection: 1; mode=block
-??????????????????
-         ?
-??????????????????
-? CORS           ? ? Sadece izin verilen origin'ler
-??????????????????
-         ?
-??????????????????
-? Input          ? ? SQL injection koruması (DatabaseHandler)
-? Validation     ?   Yasak SQL komutları (DROP, ALTER vb.)
-?                ?   Sorgu uzunluk limiti (5000 karakter)
-??????????????????
-         ?
-??????????????????
-? Webhook        ? ? HMAC-SHA256 signature doğrulama
-? Security       ?   Rate limiting (min interval)
-??????????????????
+Ä°stek
+  â”‚
+  â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ TenantMiddleware â”‚ â†’ X-Tenant-ID header veya subdomain'den tenant Ã§Ã¶zÃ¼mler
+                     HttpContext.Items["TenantInfo"] = TenantInfo
+
+         
+
+ Authentication     OIDC (interactive) veya JWT Bearer (API)
+ MultiScheme         - AddOpenIdConnect: Tenant-bazlÄ± dinamik Authority
+â”‚                     - AddJwtBearer("ExternalBearer"): API eriÅŸimi
+                     - AddPolicyScheme("MultiScheme"): Otomatik seÃ§im
+
+         â”‚
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ Claims             PermissionClaimsTransformation (IClaimsTransformation)
+ Transformation      - DB'den kullanÄ±cÄ± rollerini yÃ¼kler
+â”‚                  â”‚   - TenantRole.MappedPermissions â†’ "permission" claim
+â”‚                     - "sonofanton_user_id" + "tenant_id" claim eklenir
+
+         
+
+ Authorization      Policy-Based Authorization
+                     - PermissionPolicyProvider: Her izin iÃ§in dinamik policy
+                     - PermissionAuthorizationHandler: Claim kontrolÃ¼
+                     - System.Admin  tÃ¼m izinlere bypass
+                     Ã–rnek: [Authorize(Policy = "Workflows.Execute")]
+
+         
+
+ Rate Limiting      IP baÅŸÄ±na dakikada 100 istek
+ (api policy)        Workflow exec: dakikada 10
+
+         
+
+ Security           X-Content-Type-Options: nosniff
+ Headers             X-Frame-Options: DENY
+                     X-XSS-Protection: 1; mode=block
+
+         
+
+ CORS               Sadece izin verilen origin'ler
+
+         
+
+ Input              SQL injection korumasÄ± (DatabaseHandler)
+ Validation          Yasak SQL komutlarÄ± (DROP, ALTER vb.)
+                     Sorgu uzunluk limiti (5000 karakter)
+
+         
+
+ Webhook            HMAC-SHA256 signature doÄŸrulama
+ Security            Rate limiting (min interval)
+                     [AllowAnonymous]  dÄ±ÅŸ tetikleyiciler iÃ§in
+
 ```
+
+### 12.1 Keycloak OIDC Entegrasyonu
+
+Proje, kimlik doÄŸrulama saÄŸlayÄ±cÄ±sÄ± olarak **Keycloak** kullanÄ±r. Keycloak Docker container olarak Ã§alÄ±ÅŸÄ±r ve OIDC Authorization Code Flow (PKCE) ile kimlik doÄŸrulama saÄŸlar.
+
+**Keycloak KonfigÃ¼rasyonu:**
+
+| Ayar | DeÄŸer |
+|------|-------|
+| Realm | `sonofanton` |
+| Frontend Client | `sonofanton-frontend` (public, PKCE) |
+| Backend Client | `sonofanton-backend` (confidential) |
+| Admin Console | `http://localhost:8080/admin` |
+| Realm URL | `http://localhost:8080/realms/sonofanton` |
+
+**OIDC AkÄ±ÅŸÄ±:**
+
+```
+  KullanÄ±cÄ± â†’ Blazor WASM â†’ Keycloak Login Page
+                                    â”‚
+                              OIDC Auth Code + PKCE
+                                    â”‚
+                              Access Token (JWT)
+                                    â”‚
+              Blazor WASM â† id_token + access_token
+                    â”‚
+                    â”‚ Authorization: Bearer <access_token>
+                    â–¼
+              ASP.NET Core API â†’ JWT doÄŸrulama (Keycloak JWKS)
+```
+
+### 12.2 Kimlik ve Yetkilendirme Mimarisi
+
+**Dosya HaritasÄ±:**
+
+| Katman | Dosya | Sorumluluk |
+|--------|-------|------------|
+| **Shared/Core/Identity** | IUserContext.cs | Domain-level kullanÄ±cÄ± soyutlamasÄ± |
+| | ITenantResolver.cs | Tenant Ã§Ã¶zÃ¼mleme soyutlamasÄ± |
+| | Permissions.cs | 20 granÃ¼ler izin sabiti |
+| **Shared/Entities** | UserEntity.cs | KullanÄ±cÄ± (ÅŸifresiz, ExternalIdentityId) |
+| | TenantEntity.cs | Kurum bilgisi + OIDC config |
+| | TenantRoleEntity.cs | DÄ±ÅŸ rol â†’ iÃ§ izin eÅŸleÅŸtirmesi |
+| | UserTenantRoleEntity.cs | User-Role many-to-many |
+| **Backend/Infrastructure/Identity** | HttpContextUserContext.cs | IUserContext â†’ HttpContext adapter |
+| | TenantResolver.cs | Subdomain/header tenant Ã§Ã¶zÃ¼mleme |
+| | TenantMiddleware.cs | Auth Ã¶ncesi tenant injection |
+| | DynamicOidcEvents.cs | Tenant-bazlÄ± OIDC parametre override |
+| | PermissionClaimsTransformation.cs | Rol â†’ izin claim dÃ¶nÃ¼ÅŸÃ¼mÃ¼ |
+| | PermissionPolicyProvider.cs | Dinamik policy Ã¼retici |
+| | PermissionAuthorizationHandler.cs | Permission claim kontrolÃ¼ |
+| | PermissionRequirement.cs | IAuthorizationRequirement |
+| | JitUserProvisioningService.cs | Ä°lk giriÅŸ otomatik kullanÄ±cÄ± oluÅŸturma |
+| **Backend/Services** | ScimService.cs | SCIM 2.0 User/Group CRUD |
+| **Backend/Controllers/Scim** | ScimUsersController.cs | SCIM Users REST API |
+| | ScimGroupsController.cs | SCIM Groups REST API |
+| **Frontend/Components** | LoginDisplay.razor | KullanÄ±cÄ± giriÅŸ/Ã§Ä±kÄ±ÅŸ UI bileÅŸeni |
+| | RedirectToLogin.razor | Yetkisiz kullanÄ±cÄ±yÄ± login'e yÃ¶nlendirir |
+| **Frontend/Pages** | Authentication.razor | OIDC login/logout/callback handler |
+
+### 12.3 Frontend OIDC Mimarisi
+
+Blazer WASM tarafÄ±ndaki kimlik doÄŸrulama akÄ±ÅŸÄ±:
+
+```
+Program.cs
+  â””â”€â”€ AddOidcAuthentication()
+        â”œâ”€â”€ Authority: Keycloak realm URL
+        â”œâ”€â”€ ClientId: sonofanton-frontend (public client)
+        â”œâ”€â”€ ResponseType: code (Authorization Code Flow)
+        â”œâ”€â”€ DefaultScopes: openid, profile, email
+        â”œâ”€â”€ RoleClaim: "roles" (Keycloak rol mapping)
+        â””â”€â”€ NameClaim: "preferred_username" (Keycloak kullanÄ±cÄ± adÄ±)
+
+  â””â”€â”€ AddHttpClient("BackendApi")
+        â””â”€â”€ AuthorizationMessageHandler
+              â†’ Her API Ã§aÄŸrÄ±sÄ±na otomatik Bearer token ekler
+              â†’ authorizedUrls: [backendUrl]
+```
+
+**Blazor BileÅŸenleri:**
+- `LoginDisplay.razor` â€” `<AuthorizeView>` ile giriÅŸ yapmÄ±ÅŸ/yapmamÄ±ÅŸ kullanÄ±cÄ±larÄ± gÃ¶sterir
+- `RedirectToLogin.razor` â€” Yetkisiz sayfaya eriÅŸimde `authentication/login`'e yÃ¶nlendirir
+- `Authentication.razor` â€” `<RemoteAuthenticatorView>` ile OIDC callback'leri iÅŸler
+
+**Frontend `wwwroot/appsettings.json`:**
+```json
+{
+  "BackendUrl": "https://localhost:5002",
+  "Oidc": {
+    "Authority": "http://localhost:8080/realms/sonofanton",
+    "ClientId": "sonofanton-frontend",
+    "ResponseType": "code",
+    "DefaultScopes": ["openid", "profile", "email"]
+  }
+}
+```
+
+### 12.4 Ä°zin Matrisi
+
+```
+Permissions.cs sabitleri:
+â”€ Workflow Ä°zinleri â”€
+  Workflows.Read, Workflows.Create, Workflows.Edit,
+  Workflows.Delete, Workflows.Execute
+
+â”€ Execution Ä°zinleri â”€
+  Executions.Read, Executions.Cancel, Executions.Pause
+
+â”€ KullanÄ±cÄ± YÃ¶netimi â”€
+  Users.Read, Users.Manage
+
+â”€ Sistem YÃ¶netimi â”€
+  System.Admin (tÃ¼m izinleri bypass eder), Tenants.Manage
+
+â”€ DiÄŸer â”€
+  Webhooks.Read, Webhooks.Manage
+  Folders.Read, Folders.Manage
+  Agents.Read, Agents.Manage
+  Search.Execute, Chat.Use
+```
+
+### 12.5 Multi-Tenancy
+
+Tenant Ã§Ã¶zÃ¼mleme stratejisi appsettings.json:
+```json
+{
+  "MultiTenancy": {
+    "ResolveBy": "Header",        // "Header" | "Subdomain" | fallback
+    "DefaultTenantId": "default"
+  }
+}
+```
+
+- **Header:** X-Tenant-ID: kurumA
+- **Subdomain:** kurumA.uygulama.com
+- TÃ¼m iÅŸ entity'lerinde (workflows, folders) `tenant_id` FK bulunur
+- Tenant baÅŸÄ±na farklÄ± OIDC Authority/ClientId tanÄ±mlanabilir (Keycloak multi-realm)
+
+### 12.6 JIT User Provisioning
+
+1. KullanÄ±cÄ± Keycloak Ã¼zerinden OIDC ile giriÅŸ yapar
+2. DynamicOidcEvents.OnTokenValidated tetiklenir
+3. JitUserProvisioningService.ProvisionUserAsync() Ã§aÄŸrÄ±lÄ±r
+4. Token'daki sub/oid â†’ DB'de ExternalIdentityId ile aranÄ±r
+5. Yoksa â†’ yeni UserEntity + TenantEntity oluÅŸturulur
+6. Varsa â†’ LastLoginAt, Email, DisplayName gÃ¼ncellenir
+
+### 12.7 SCIM 2.0 Provisioning
+
+Kurumsal kimlik saÄŸlayÄ±cÄ±larÄ± (Keycloak, Entra ID, Okta vb.) iÃ§in:
+
+- POST /scim/v2/Users â†’ KullanÄ±cÄ± oluÅŸtur
+- GET /scim/v2/Users â†’ KullanÄ±cÄ± listesi
+- PATCH /scim/v2/Users/{id} â†’ Deaktivasyon vb.
+- DELETE /scim/v2/Users/{id} â†’ Soft delete
+- POST /scim/v2/Groups â†’ Grup oluÅŸtur
+- GET /scim/v2/Groups â†’ Grup listesi
+- DELETE /scim/v2/Groups/{id} â†’ Grup sil
 
 ---
 
@@ -596,21 +794,21 @@ Metin ? OnnxTextEmbeddingService ? float[768] vektör
 
 ```
          ??
-        ?  ?         UI Testleri (az)
-       ??????        - Blazor component testleri
-      ?      ?
-     ??????????      Entegrasyon Testleri (orta)
-    ?          ?     - Handler zincirleri
-   ??????????????    - Node etkileşimleri
-  ?              ?
- ??????????????????  Birim Testleri (çok)
-?                  ? - Graph, Edge, Node
-??????????????????????- Handler'lar, Servisler
+        ?  |         UI Testleri (az)
+       ???|--        - Blazor component testleri
+      |      ?
+     -------|--      Entegrasyon Testleri (orta)
+    |          |     - Handler zincirleri
+   -----------|--    - Node etkileÅŸimleri
+  |              ?
+ ---------------|--  Birim Testleri (Ã§ok)
+|                  ? - Graph, Edge, Node
+----------------------- Handler'lar, Servisler
 ```
 
-**Test çalıştırma:**
+**Test Ã§alÄ±ÅŸtÄ±rma:**
 ```bash
-# Tüm testler
+# TÃ¼m testler
 dotnet test
 
 # Coverage ile
@@ -620,20 +818,20 @@ dotnet test --collect:"XPlat Code Coverage"
 dotnet test --filter "ClassName=GraphTests"
 ```
 
-**Test dosya konumları:**
-- `tests/Unit/GraphEngine/` — Graph, Edge, NodeBase testleri
-- `tests/Unit/Handlers/` — Her handler grubu için testler
-- `tests/Unit/Services/` — NodeRegistry, CronValidation testleri
-- `tests/Integration/` — Çoklu handler etkileşim testleri
+**Test dosya konumlarÄ±:**
+- `tests/Unit/GraphEngine/` â€” Graph, Edge, NodeBase testleri
+- `tests/Unit/Handlers/` â€” Her handler grubu iÃ§in testler
+- `tests/Unit/Services/` â€” NodeRegistry, CronValidation testleri
+- `tests/Integration/` â€” Ã‡oklu handler etkileÅŸim testleri
 
 ---
 
-## 14. Sık Yapılan Görevler
+## 14. SÄ±k YapÄ±lan GÃ¶revler
 
 ### Yeni bir Node Handler eklemek
-Bkz: [Node Handler Sistemi](#7-node-handler-sistemi) bölümü
+Bkz: [Node Handler Sistemi](#7-node-handler-sistemi) bÃ¶lÃ¼mÃ¼
 
-### Migration oluşturmak
+### Migration oluÅŸturmak
 ```bash
 cd src/SonOfAnton.Backend
 dotnet ef migrations add MigrationAdi
@@ -641,24 +839,24 @@ dotnet ef database update
 ```
 
 ### Yeni bir API endpoint eklemek
-1. İlgili Controller'a method ekle
-2. XML dokümantasyonu yaz (`/// <summary>`)
-3. `[ProducesResponseType]` attribute'ları ekle
+1. Ä°lgili Controller'a method ekle
+2. XML dokÃ¼mantasyonu yaz (`/// <summary>`)
+3. `[ProducesResponseType]` attribute'larÄ± ekle
 4. Test yaz
 
-### Projeyi çalıştırmak
+### Projeyi Ã§alÄ±ÅŸtÄ±rmak
 ```bash
 # Gereksinimler: PostgreSQL, Ollama (opsiyonel)
 # 1. Backend
 cd src/SonOfAnton.Backend
 dotnet run
 
-# 2. Frontend (ayrı terminal)
+# 2. Frontend (ayrÄ± terminal)
 cd src/SonOfAnton.Frontend
 dotnet run
 ```
 
-### Test çalıştırmak
+### Test Ã§alÄ±ÅŸtÄ±rmak
 ```bash
 cd tests/SonOfAnton.Tests
 dotnet test --verbosity normal
@@ -666,9 +864,9 @@ dotnet test --verbosity normal
 
 ---
 
-> **Soruların mı var?** Kodu okurken takıldığın bir yer olursa
-> önce bu dokümanın ilgili bölümüne bak, sonra dosya başlarındaki
-> XML yorumlarını oku. Yine anlamadıysan takım arkadaşlarına sor!
+> **SorularÄ±n mÄ± var?** Kodu okurken takÄ±ldÄ±ÄŸÄ±n bir yer olursa
+> Ã¶nce bu dokÃ¼manÄ±n ilgili bÃ¶lÃ¼mÃ¼ne bak, sonra dosya baÅŸlarÄ±ndaki
+> XML yorumlarÄ±nÄ± oku. Yine anlamadÄ±ysan takÄ±m arkadaÅŸlarÄ±na sor!
 
 ---
 

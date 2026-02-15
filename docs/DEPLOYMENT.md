@@ -1,19 +1,19 @@
-# ?? SonOfAnton — Dağıtım ve Çalıştırma Kılavuzu
+#  SonOfAnton â€” DaÄŸÄ±tÄ±m ve Ã‡alÄ±ÅŸtÄ±rma KÄ±lavuzu
 
 > **Bu belge kime hitap ediyor?**  
-> Projeyi kendi bilgisayarında çalıştırmak isteyen veya
-> sunucuya dağıtmak isteyen herkes.
+> Projeyi kendi bilgisayarÄ±nda Ã§alÄ±ÅŸtÄ±rmak isteyen veya
+> sunucuya daÄŸÄ±tmak isteyen herkes.
 
 ---
 
-## ?? İçindekiler
+##  Ä°Ã§indekiler
 
 1. [Gereksinimler](#1-gereksinimler)
-2. [Yerel Geliştirme Ortamı](#2-yerel-geliştirme-ortamı)
-3. [Docker ile Çalıştırma](#3-docker-ile-çalıştırma)
-4. [Production Dağıtımı](#4-production-dağıtımı)
-5. [Ortam Değişkenleri](#5-ortam-değişkenleri)
-6. [İzleme ve Sağlık Kontrolleri](#6-izleme-ve-sağlık-kontrolleri)
+2. [Yerel GeliÅŸtirme OrtamÄ±](#2-yerel-geliÅŸtirme-ortamÄ±)
+3. [Docker ile Ã‡alÄ±ÅŸtÄ±rma](#3-docker-ile-Ã§alÄ±ÅŸtÄ±rma)
+4. [Production DaÄŸÄ±tÄ±mÄ±](#4-production-daÄŸÄ±tÄ±mÄ±)
+5. [Ortam DeÄŸiÅŸkenleri](#5-ortam-deÄŸiÅŸkenleri)
+6. [Ä°zleme ve SaÄŸlÄ±k Kontrolleri](#6-izleme-ve-saÄŸlÄ±k-kontrolleri)
 7. [Sorun Giderme](#7-sorun-giderme)
 
 ---
@@ -22,36 +22,40 @@
 
 ### Zorunlu
 
-| Bileşen | Minimum Versiyon | Ne İşe Yarar? |
+| BileÅŸen | Minimum Versiyon | Ne Ä°ÅŸe Yarar? |
 |---------|------------------|---------------|
-| .NET SDK | 10.0 | Projeyi derler ve çalıştırır |
-| PostgreSQL | 15+ | Ana veritabanı |
-| pgvector uzantısı | 0.5+ | Vektör arama (AI embedding) |
+| .NET SDK | 10.0 | Projeyi derler ve Ã§alÄ±ÅŸtÄ±rÄ±r |
+| PostgreSQL | 15+ | Ana veritabanÄ± |
+| pgvector uzantÄ±sÄ± | 0.5+ | VektÃ¶r arama (AI embedding) |
+| Docker | 20+ | Keycloak ve PostgreSQL konteyner yÃ¶netimi |
+| Keycloak | 26.1+ | OIDC kimlik doÄŸrulama saÄŸlayÄ±cÄ±sÄ± |
 
-### Opsiyonel (AI özellikleri için)
+### Opsiyonel (AI Ã¶zellikleri iÃ§in)
 
-| Bileşen | Minimum Versiyon | Ne İşe Yarar? |
+| BileÅŸen | Minimum Versiyon | Ne Ä°ÅŸe Yarar? |
 |---------|------------------|---------------|
-| Ollama | 0.1+ | Yerel LLM çalıştırma |
-| ONNX Runtime | 1.23+ | Yerel embedding üretimi |
+| Ollama | 0.1+ | Yerel LLM Ã§alÄ±ÅŸtÄ±rma |
+| ONNX Runtime | 1.23+ | Yerel embedding Ã¼retimi |
 
 ### Portlar
 
 | Port | Servis |
 |------|--------|
 | 5000 | Backend API (HTTP) |
-| 5001 | Backend API (HTTPS) |
-| 5173 | Frontend (geliştirme) |
+| 5001/5002 | Backend API (HTTPS) |
+| 5173 | Frontend (geliÅŸtirme) |
 | 5432 | PostgreSQL |
+| 5050 | pgAdmin (veritabanÄ± yÃ¶netim aracÄ±) |
+| 8080 | Keycloak (kimlik doÄŸrulama) |
 | 11434 | Ollama |
 
 ---
 
-## 2. Yerel Geliştirme Ortamı
+## 2. Yerel GeliÅŸtirme OrtamÄ±
 
-### Adım 1: PostgreSQL Kur
+### AdÄ±m 1: PostgreSQL Kur
 
-**Docker ile (önerilen):**
+**Docker ile (Ã¶nerilen):**
 ```bash
 docker run -d \
   --name sonofanton-db \
@@ -64,10 +68,10 @@ docker run -d \
 
 **Manuel kurulum:**
 ```bash
-# PostgreSQL kur ve pgvector uzantısını ekle
+# PostgreSQL kur ve pgvector uzantÄ±sÄ±nÄ± ekle
 sudo apt install postgresql-16 postgresql-16-pgvector
 
-# Veritabanı ve kullanıcı oluştur
+# VeritabanÄ± ve kullanÄ±cÄ± oluÅŸtur
 sudo -u postgres psql
 CREATE USER sonofanton WITH PASSWORD 'sonofanton_dev_password';
 CREATE DATABASE sonofanton_db OWNER sonofanton;
@@ -75,32 +79,32 @@ CREATE DATABASE sonofanton_db OWNER sonofanton;
 CREATE EXTENSION vector;
 ```
 
-### Adım 2: Projeyi Kur
+### AdÄ±m 2: Projeyi Kur
 
 ```bash
 # Repoyu klonla
 git clone https://github.com/ahmetsarikaya0696/SonOfAnton.git
 cd SonOfAnton
 
-# Bağımlılıkları yükle
+# BaÄŸÄ±mlÄ±lÄ±klarÄ± yÃ¼kle
 dotnet restore
 
-# Veritabanı migration'larını uygula
+# VeritabanÄ± migration'larÄ±nÄ± uygula
 cd src/SonOfAnton.Backend
 dotnet ef database update
 
-# Backend'i başlat
+# Backend'i baÅŸlat
 dotnet run
 ```
 
-### Adım 3: Frontend'i Başlat (ayrı terminal)
+### AdÄ±m 3: Frontend'i BaÅŸlat (ayrÄ± terminal)
 
 ```bash
 cd src/SonOfAnton.Frontend
 dotnet run
 ```
 
-### Adım 4: Ollama Kur (opsiyonel — AI özellikleri için)
+### AdÄ±m 4: Ollama Kur (opsiyonel â€” AI Ã¶zellikleri iÃ§in)
 
 ```bash
 # Ollama kur (macOS/Linux)
@@ -111,31 +115,32 @@ ollama pull qwen2.5-coder:14b
 ollama pull nomic-embed-text
 ```
 
-### Adım 5: Doğrula
+### AdÄ±m 5: DoÄŸrula
 
 ```bash
-# API çalışıyor mu?
+# API Ã§alÄ±ÅŸÄ±yor mu?
 curl https://localhost:5001/health/live
 
-# Veritabanı bağlantısı sağlıklı mı?
+# VeritabanÄ± baÄŸlantÄ±sÄ± saÄŸlÄ±klÄ± mÄ±?
 curl https://localhost:5001/health/ready
 
-# OpenAPI dökümantasyonu
-# Tarayıcıda: https://localhost:5001/openapi/v1.json
+# OpenAPI dÃ¶kÃ¼mantasyonu
+# TarayÄ±cÄ±da: https://localhost:5001/openapi/v1.json
 ```
 
 ---
 
-## 3. Docker ile Çalıştırma
+## 3. Docker ile Ã‡alÄ±ÅŸtÄ±rma
 
 ### docker-compose.yml
 
-```yaml
-version: '3.8'
+Projenin kÃ¶kÃ¼nde bulunan `docker-compose.yml` dosyasÄ± tÃ¼m baÄŸÄ±mlÄ± servisleri yÃ¶netir:
 
+```yaml
 services:
-  db:
+  postgres:
     image: pgvector/pgvector:pg16
+    container_name: sonofanton-postgres
     environment:
       POSTGRES_USER: sonofanton
       POSTGRES_PASSWORD: ${DB_PASSWORD:-sonofanton_dev_password}
@@ -143,119 +148,123 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sonofanton"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U sonofanton -d sonofanton_db"]
+      interval: 10s
       timeout: 5s
       retries: 5
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    # GPU kullanmak için:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
-  backend:
-    build:
-      context: .
-      dockerfile: src/SonOfAnton.Backend/Dockerfile
-    ports:
-      - "5001:5001"
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sonofanton-pgadmin
     environment:
-      - ConnectionStrings__DefaultConnection=Host=db;Database=sonofanton_db;Username=sonofanton;Password=${DB_PASSWORD:-sonofanton_dev_password}
-      - Ollama__Endpoint=http://ollama:11434
-      - ASPNETCORE_ENVIRONMENT=Production
+      PGADMIN_DEFAULT_EMAIL: admin@sonofanton.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
     depends_on:
-      db:
-        condition: service_healthy
+      - postgres
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    container_name: sonofanton-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: "8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
-  pgdata:
-  ollama_data:
+  postgres_data:
 ```
 
+> **Not:** Keycloak `start-dev` modunda Ã§alÄ±ÅŸÄ±r ve `./keycloak` klasÃ¶rÃ¼ndeki
+> realm export dosyasÄ±nÄ± otomatik import eder. Production'da `start` modu kullanÄ±lmalÄ±dÄ±r.
+
 ```bash
-# Çalıştır
+# Ã‡alÄ±ÅŸtÄ±r
 docker compose up -d
 
-# Logları izle
+# LoglarÄ± izle
 docker compose logs -f backend
 ```
 
 ---
 
-## 4. Production Dağıtımı
+## 4. Production DaÄŸÄ±tÄ±mÄ±
 
 ### Kontrol Listesi
 
-- [ ] Veritabanı şifresi değiştirildi (güçlü şifre)
-- [ ] HTTPS sertifikası yapılandırıldı
-- [ ] Rate limiting ayarları gözden geçirildi
-- [ ] CORS origin'leri production URL'lerine güncellendi
-- [ ] Hangfire dashboard'u güvenli hale getirildi
-- [ ] Log seviyesi ayarlandı (Warning veya Error)
-- [ ] Veritabanı yedekleme planı yapıldı
+- [ ] VeritabanÄ± ÅŸifresi deÄŸiÅŸtirildi (gÃ¼Ã§lÃ¼ ÅŸifre)
+- [ ] HTTPS sertifikasÄ± yapÄ±landÄ±rÄ±ldÄ±
+- [ ] Rate limiting ayarlarÄ± gÃ¶zden geÃ§irildi
+- [ ] CORS origin'leri production URL'lerine gÃ¼ncellendi
+- [ ] Hangfire dashboard'u gÃ¼venli hale getirildi
+- [ ] Log seviyesi ayarlandÄ± (Warning veya Error)
+- [ ] VeritabanÄ± yedekleme planÄ± yapÄ±ldÄ±
 - [ ] Health check monitoring kuruldu
 
-### Önerilen Mimari
+### Ã–nerilen Mimari
 
 ```
-                    ???????????????
-                    ?   Nginx /   ?
-                    ?   Reverse   ?
-Kullanıcılar ????????   Proxy     ?
+                    ---------------
+                    |   Nginx /   ?
+                    |   Reverse   ?
+KullanÄ±cÄ±lar -----|--   Proxy     ?
                     ?  (SSL/TLS)  ?
-                    ???????????????
+                    ---------------
                            ?
-                    ???????????????
+                    ---------------
                     ?  Backend    ?
                     ?  (Kestrel)  ?
-                    ???????????????
+                    ---------------
                            ?
-              ???????????????????????????
-              ?            ?            ?
-        ???????????? ???????????? ????????????
+              ---------------------------
+              |            |            ?
+        ---------|-- ---------|-- ------------
         ?PostgreSQL? ? Hangfire ? ?  Ollama  ?
         ?  (Ana)   ? ? (Worker) ? ?  (GPU)   ?
-        ???????????? ???????????? ????????????
+        ---------|-- ---------|-- ------------
 ```
 
 ---
 
-## 5. Ortam Değişkenleri
+## 5. Ortam DeÄŸiÅŸkenleri
 
-| Değişken | Zorunlu | Varsayılan | Açıklama |
+| DeÄŸiÅŸken | Zorunlu | VarsayÄ±lan | AÃ§Ä±klama |
 |----------|---------|-----------|----------|
-| `ConnectionStrings__DefaultConnection` | Evet | localhost | PostgreSQL bağlantı dizgisi |
-| `Ollama__Endpoint` | Hayır | `http://localhost:11434` | Ollama API adresi |
-| `Ollama__Model` | Hayır | `qwen2.5-coder:14b` | LLM model adı |
-| `Ollama__EmbeddingModel` | Hayır | `nomic-embed-text` | Embedding model adı |
-| `ASPNETCORE_ENVIRONMENT` | Hayır | `Production` | Ortam adı |
-| `ASPNETCORE_URLS` | Hayır | `http://+:5000` | Dinlenecek URL'ler |
+| `ConnectionStrings__DefaultConnection` | Evet | localhost | PostgreSQL baÄŸlantÄ± dizgisi |
+| `Ollama__Endpoint` | HayÄ±r | `http://localhost:11434` | Ollama API adresi |
+| `Ollama__Model` | HayÄ±r | `qwen2.5-coder:14b` | LLM model adÄ± |
+| `Ollama__EmbeddingModel` | HayÄ±r | `nomic-embed-text` | Embedding model adÄ± |
+| `ASPNETCORE_ENVIRONMENT` | HayÄ±r | `Production` | Ortam adÄ± |
+| `ASPNETCORE_URLS` | HayÄ±r | `http://+:5000` | Dinlenecek URL'ler |
 
 ---
 
-## 6. İzleme ve Sağlık Kontrolleri
+## 6. Ä°zleme ve SaÄŸlÄ±k Kontrolleri
 
 ### Health Check Endpoint'leri
 
 ```bash
-# Liveness: Uygulama ayakta mı?
-# Kubernetes liveness probe olarak kullanılabilir
+# Liveness: Uygulama ayakta mÄ±?
+# Kubernetes liveness probe olarak kullanÄ±labilir
 curl http://localhost:5000/health/live
 
-# Readiness: Trafiğe hazır mı? (DB + Hangfire kontrol eder)
-# Kubernetes readiness probe olarak kullanılabilir
+# Readiness: TrafiÄŸe hazÄ±r mÄ±? (DB + Hangfire kontrol eder)
+# Kubernetes readiness probe olarak kullanÄ±labilir
 curl http://localhost:5000/health/ready
 ```
 
@@ -266,7 +275,7 @@ curl http://localhost:5000/health/ready
 curl http://localhost:5000/api/metrics
 ```
 
-Dönen JSON yapısı:
+DÃ¶nen JSON yapÄ±sÄ±:
 ```json
 {
   "uptimeSeconds": 3600.5,
@@ -289,7 +298,7 @@ Dönen JSON yapısı:
 }
 ```
 
-### SSE İstatistikleri
+### SSE Ä°statistikleri
 
 ```bash
 curl http://localhost:5000/api/sse/stats
@@ -297,66 +306,66 @@ curl http://localhost:5000/api/sse/stats
 
 ### Hangfire Dashboard
 
-Tarayıcıda: `http://localhost:5000/hangfire`
+TarayÄ±cÄ±da: `http://localhost:5000/hangfire`
 
-> **Not:** Production'da Hangfire dashboard'u kimlik doğrulama ile
-> korunmalıdır.
+> **Not:** Production'da Hangfire dashboard'u kimlik doÄŸrulama ile
+> korunmalÄ±dÄ±r.
 
 ---
 
 ## 7. Sorun Giderme
 
-### "Connection refused" — Veritabanına bağlanamıyor
+### "Connection refused" â€” VeritabanÄ±na baÄŸlanamÄ±yor
 
 ```bash
-# PostgreSQL çalışıyor mu?
+# PostgreSQL Ã§alÄ±ÅŸÄ±yor mu?
 pg_isready -h localhost -p 5432
 
-# Docker ile mi çalıştırıyorsun?
+# Docker ile mi Ã§alÄ±ÅŸtÄ±rÄ±yorsun?
 docker ps | grep postgres
 
-# Connection string doğru mu?
+# Connection string doÄŸru mu?
 echo $ConnectionStrings__DefaultConnection
 ```
 
-### "Ollama is not running" — AI özellikleri çalışmıyor
+### "Ollama is not running" â€” AI Ã¶zellikleri Ã§alÄ±ÅŸmÄ±yor
 
 ```bash
-# Ollama çalışıyor mu?
+# Ollama Ã§alÄ±ÅŸÄ±yor mu?
 curl http://localhost:11434/api/tags
 
-# Çalışmıyorsa başlat
+# Ã‡alÄ±ÅŸmÄ±yorsa baÅŸlat
 ollama serve
 
-# Model yüklü mü?
+# Model yÃ¼klÃ¼ mÃ¼?
 ollama list
 ```
 
-### "Migration pending" — Veritabanı eski
+### "Migration pending" â€” VeritabanÄ± eski
 
 ```bash
 cd src/SonOfAnton.Backend
 dotnet ef database update
 ```
 
-### "Port already in use" — Port çakışması
+### "Port already in use" â€” Port Ã§akÄ±ÅŸmasÄ±
 
 ```bash
-# Hangi işlem portu kullanıyor? (Linux/macOS)
+# Hangi iÅŸlem portu kullanÄ±yor? (Linux/macOS)
 lsof -i :5000
 
 # Windows
 netstat -ano | findstr :5000
 
-# İşlemi sonlandır
+# Ä°ÅŸlemi sonlandÄ±r
 kill -9 <PID>        # Linux/macOS
 taskkill /PID <PID>  # Windows
 ```
 
-### Test'ler başarısız oluyor
+### Test'ler baÅŸarÄ±sÄ±z oluyor
 
 ```bash
-# Tüm testleri verbose çalıştır
+# TÃ¼m testleri verbose Ã§alÄ±ÅŸtÄ±r
 dotnet test tests/SonOfAnton.Tests --verbosity detailed
 
 # Belirli bir test
@@ -368,8 +377,150 @@ dotnet test --collect:"XPlat Code Coverage"
 
 ---
 
-> **Altın Kural:** Production'a dağıtmadan önce:
-> 1. Tüm testlerin geçtiğinden emin ol (`dotnet test`)
+> **AltÄ±n Kural:** Production'a daÄŸÄ±tmadan Ã¶nce:
+> 1. TÃ¼m testlerin geÃ§tiÄŸinden emin ol (`dotnet test`)
 > 2. Health check endpoint'lerini kontrol et
-> 3. Veritabanı migration'larını uygula
-> 4. Ortam değişkenlerini doğrula
+> 3. VeritabanÄ± migration'larÄ±nÄ± uygula
+> 4. Ortam deÄŸiÅŸkenlerini doÄŸrula
+
+
+---
+
+## 8. Keycloak Kimlik DoÄŸrulama KonfigÃ¼rasyonu
+
+### Keycloak Kurulumu
+
+SonOfAnton, varsayÄ±lan kimlik saÄŸlayÄ±cÄ±sÄ± olarak **Keycloak** kullanÄ±r. Docker Compose ile otomatik baÅŸlatÄ±lÄ±r:
+
+```bash
+# TÃ¼m servisleri baÅŸlat (PostgreSQL + pgAdmin + Keycloak)
+docker compose up -d
+
+# Keycloak Admin Console: http://localhost:8080/admin
+# KullanÄ±cÄ±: admin / Åifre: admin
+```
+
+### Keycloak Realm YapÄ±landÄ±rmasÄ±
+
+Realm export dosyasÄ± `./keycloak/` klasÃ¶rÃ¼nde bulunur ve Docker baÅŸlangÄ±cÄ±nda otomatik import edilir.
+
+| Ayar | DeÄŸer |
+|------|-------|
+| **Realm** | `sonofanton` |
+| **Frontend Client** | `sonofanton-frontend` (public, PKCE) |
+| **Backend Client** | `sonofanton-backend` (confidential) |
+| **Redirect URIs** | `https://localhost:5001/*`, `http://localhost:5173/*` |
+| **Web Origins** | `https://localhost:5001`, `http://localhost:5173` |
+
+### Backend appsettings.json â€” Authentication BÃ¶lÃ¼mÃ¼
+
+```json
+{
+  "Authentication": {
+    "DefaultAuthority": "https://login.microsoftonline.com/common/v2.0",
+    "DefaultClientId": "<your-client-id>",
+    "DefaultClientSecret": "<your-client-secret>",
+    "AllowExternalBearer": true
+  },
+  "MultiTenancy": {
+    "ResolveBy": "Header",
+    "DefaultTenantId": "default"
+  }
+}
+```
+
+### Backend appsettings.Development.json â€” Keycloak Override
+
+```json
+{
+  "Authentication": {
+    "DefaultAuthority": "http://localhost:8080/realms/sonofanton",
+    "DefaultClientId": "sonofanton-backend",
+    "DefaultClientSecret": "backend-dev-secret"
+  }
+}
+```
+
+### Frontend wwwroot/appsettings.json â€” OIDC YapÄ±landÄ±rmasÄ±
+
+```json
+{
+  "BackendUrl": "https://localhost:5002",
+  "Oidc": {
+    "Authority": "http://localhost:8080/realms/sonofanton",
+    "ClientId": "sonofanton-frontend",
+    "ResponseType": "code",
+    "DefaultScopes": ["openid", "profile", "email"]
+  }
+}
+```
+
+### Ortam DeÄŸiÅŸkenleri
+
+```bash
+# Backend OIDC (Keycloak)
+Authentication__DefaultAuthority=http://localhost:8080/realms/sonofanton
+Authentication__DefaultClientId=sonofanton-backend
+Authentication__DefaultClientSecret=backend-dev-secret
+
+# Multi-Tenancy
+MultiTenancy__ResolveBy=Header
+MultiTenancy__DefaultTenantId=default
+```
+
+### Multi-Tenant Keycloak Kurulumu
+
+Her tenant iÃ§in ayrÄ± OIDC konfigÃ¼rasyonu desteklenir. Tenant bilgileri `tenants` tablosunda saklanÄ±r:
+
+```sql
+INSERT INTO tenants (id, name, oidc_authority, oidc_client_id, oidc_client_secret, is_active, created_at)
+VALUES (
+  'kurumA',
+  'Kurum A',
+  'http://localhost:8080/realms/kurumA',
+  'kurumA-client-id',
+  'kurumA-client-secret',
+  true,
+  NOW()
+);
+```
+
+> **Not:** Multi-realm kullanÄ±mda Keycloak'ta her kurum iÃ§in ayrÄ± realm oluÅŸturulabilir.
+
+### SCIM Provisioning Kurulumu
+
+Keycloak veya diÄŸer kimlik saÄŸlayÄ±cÄ±nÄ±zda SCIM provisioning yapÄ±landÄ±rÄ±n:
+
+| Ayar | DeÄŸer |
+|------|-------|
+| **SCIM Base URL** | `https://your-domain.com/scim/v2` |
+| **Authentication** | Bearer Token |
+| **Users endpoint** | `/scim/v2/Users` |
+| **Groups endpoint** | `/scim/v2/Groups` |
+
+### Yerel GeliÅŸtirme Ä°Ã§in Keycloak KullanÄ±cÄ± OluÅŸturma
+
+1. `http://localhost:8080/admin` adresine gidin (admin/admin)
+2. `sonofanton` realm'ini seÃ§in
+3. Users â†’ Add user ile yeni kullanÄ±cÄ± ekleyin
+4. Credentials sekmesinden ÅŸifre belirleyin
+5. Frontend'den `http://localhost:5173` adresine gidip "GiriÅŸ Yap" butonuna tÄ±klayÄ±n
+
+> **Not:** OIDC saÄŸlayÄ±cÄ± yapÄ±landÄ±rÄ±lmadÄ±ÄŸÄ±nda uygulama baÅŸlar ama auth gerektiren endpoint'ler `401` dÃ¶ner.
+> GeliÅŸtirme sÄ±rasÄ±nda auth'u devre dÄ±ÅŸÄ± bÄ±rakmak iÃ§in controller'lardaki `[Authorize]` attribute'larÄ±nÄ± yorum satÄ±rÄ±na alabilirsiniz.
+
+### VeritabanÄ± Migration (Kimlik TablolarÄ±)
+
+```bash
+cd src/SonOfAnton.Backend
+dotnet ef migrations add AddIdentityEntities
+dotnet ef database update
+```
+
+Bu migration aÅŸaÄŸÄ±daki tablolarÄ± oluÅŸturur:
+- `tenants` â†’ Kurum bilgileri
+- `users` â†’ KullanÄ±cÄ±lar
+- `tenant_roles` â†’ Rol-izin eÅŸleÅŸtirmesi
+- `user_tenant_roles` â†’ KullanÄ±cÄ±-rol iliÅŸkisi
+- `workflows.tenant_id`, `workflows.created_by_user_id` â†’ Multi-tenant FK'ler
+- `folders.tenant_id` â†’ Multi-tenant FK

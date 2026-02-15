@@ -20,6 +20,13 @@ using SonOfAnton.Backend.Services.Snapshots;
 using SonOfAnton.Shared.Core.GraphEngine;
 using SonOfAnton.Shared.Serialization;
 using SonOfAnton.Shared.VirtualFileSystem;
+using SonOfAnton.Shared.Core.Identity;
+using SonOfAnton.Backend.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 
@@ -133,12 +140,95 @@ builder.Services.AddCors(options =>
                 "https://localhost:5001", 
                 "http://localhost:5000",
                 "https://localhost:7001",
-                "http://localhost:5173")
+                "http://localhost:5173",
+                "http://localhost:8080")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
+
+// ─── Identity & Authentication ─────────────────────────────────
+
+// HttpContext accessor (IUserContext dependency)
+builder.Services.AddHttpContextAccessor();
+
+// IUserContext — Domain katmanın identity soyutlaması
+builder.Services.AddScoped<IUserContext, HttpContextUserContext>();
+
+// Tenant çözümleme
+builder.Services.AddScoped<ITenantResolver, TenantResolver>();
+
+// JIT User Provisioning
+builder.Services.AddScoped<JitUserProvisioningService>();
+
+// Dynamic OIDC Events
+builder.Services.AddScoped<DynamicOidcEvents>();
+
+// IClaimsTransformation — rol → izin dönüşümü
+builder.Services.AddScoped<IClaimsTransformation, PermissionClaimsTransformation>();
+
+// SCIM Service
+builder.Services.AddScoped<ScimService>();
+
+// Authentication: OIDC + JwtBearer (Escape Hatch) + Policy scheme seçici
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = "MultiScheme";
+    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+})
+.AddOpenIdConnect(options =>
+{
+    var authConfig = builder.Configuration.GetSection("Authentication");
+    options.Authority = authConfig["DefaultAuthority"] ?? "https://login.microsoftonline.com/common/v2.0";
+    options.ClientId = authConfig["DefaultClientId"] ?? "not-configured";
+    options.ClientSecret = authConfig["DefaultClientSecret"];
+    options.ResponseType = "code";
+    options.SaveTokens = true;
+    options.GetClaimsFromUserInfoEndpoint = true;
+    options.Scope.Add("openid");
+    options.Scope.Add("profile");
+    options.Scope.Add("email");
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+
+    // Dinamik tenant OIDC events
+    options.EventsType = typeof(DynamicOidcEvents);
+})
+.AddJwtBearer("ExternalBearer", options =>
+{
+    // Kaçış kapağı: Sadece JWT kabul eden dış kurumlar için
+    var authConfig = builder.Configuration.GetSection("Authentication");
+    options.Authority = authConfig["DefaultAuthority"] ?? "https://login.microsoftonline.com/common/v2.0";
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = false, // Keycloak 'aud' claim'i farklı format — dev'de devre dışı
+        ValidateLifetime = true,
+        NameClaimType = "preferred_username",
+        RoleClaimType = "roles"
+    };
+})
+.AddPolicyScheme("MultiScheme", "Multi-Auth Scheme Selector", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        // Authorization header'ında Bearer token varsa → ExternalBearer
+        var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
+        if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ExternalBearer";
+        }
+
+        // Aksi halde → OIDC (interactive login)
+        return OpenIdConnectDefaults.AuthenticationScheme;
+    };
+});
+
+// Authorization: Permission-based policy provider
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddAuthorization();
 
 // EF Core + PostgreSQL + pgvector
 builder.Services.AddDbContext<SonOfAntonDbContext>(options =>
@@ -345,6 +435,13 @@ app.Use(async (context, next) =>
 app.UseCors("BlazorWasm");
 app.UseHttpsRedirection();
 app.UseRateLimiter();
+
+// Multi-tenant çözümleme (Authentication'dan ÖNCE)
+app.UseTenantResolution();
+
+// Authentication & Authorization
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Health Check Endpoints
 app.MapHealthChecks("/health/live", new HealthCheckOptions

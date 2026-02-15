@@ -12,6 +12,7 @@ public static class DockerHelper
     private const string DbUser = "sonofanton";
     private const string DbPassword = "sonofanton_dev_password";
     private const string DbName = "sonofanton_db";
+    private const string KeycloakContainerName = "sonofanton-keycloak";
 
     /// <summary>
     /// Docker Compose ile servisleri baslatir ve PostgreSQL hazir olana kadar bekler
@@ -69,6 +70,57 @@ public static class DockerHelper
 
         // Kullanici, veritabani ve extension erisimini dogrula/olustur
         await EnsureDatabaseAccessAsync(logger);
+    }
+
+    /// <summary>
+    /// Docker Compose ile Keycloak servisini baslatir ve hazir olana kadar bekler
+    /// </summary>
+    public static async Task EnsureKeycloakRunningAsync(ILogger logger)
+    {
+        // Docker'in calisip calismadigini kontrol et
+        if (!await IsDockerRunningAsync())
+        {
+            logger.LogWarning("Docker calismiyor. Lutfen Docker Desktop'i baslatin.");
+            throw new InvalidOperationException("Docker calismiyor. Lutfen Docker Desktop'i baslatin ve uygulamayi yeniden calistirin.");
+        }
+
+        logger.LogInformation("Keycloak icin Docker durumu kontrol ediliyor...");
+
+        // Container'in durumunu kontrol et
+        var isKeycloakRunning = await IsContainerRunningAsync(KeycloakContainerName);
+        
+        if (isKeycloakRunning)
+        {
+            logger.LogInformation("Keycloak container zaten calisiyor.");
+            await WaitForKeycloakReadyAsync(logger, TimeSpan.FromSeconds(30));
+        }
+        else
+        {
+            logger.LogInformation("Keycloak servisi baslatiliyor...");
+            
+            // docker-compose.yml dosyasinin yolunu bul
+            var composePath = FindDockerComposeFile(logger);
+            if (composePath == null)
+            {
+                throw new FileNotFoundException("docker-compose.yml dosyasi bulunamadi.");
+            }
+
+            // Docker Compose up calistir
+            var result = await RunCommandAsync("docker", $"compose -f \"{composePath}\" up -d keycloak", TimeSpan.FromMinutes(3));
+            
+            if (result.ExitCode == 0)
+            {
+                logger.LogInformation("Keycloak servisi baslatildi.");
+                
+                // Keycloak'in hazir olmasini bekle (Java baslangici biraz surebilir)
+                await WaitForKeycloakReadyAsync(logger, TimeSpan.FromSeconds(60));
+            }
+            else
+            {
+                logger.LogError("Keycloak servisi baslatilamadi: {Error}", result.Error);
+                throw new InvalidOperationException($"Keycloak servisi baslatilamadi: {result.Error}");
+            }
+        }
     }
 
     private static async Task<bool> IsDockerRunningAsync()
@@ -298,6 +350,36 @@ public static class DockerHelper
         }
         
         throw new TimeoutException($"PostgreSQL {timeout.TotalSeconds} saniye icinde hazir olmadi. Lutfen Docker loglarini kontrol edin.");
+    }
+
+    private static async Task WaitForKeycloakReadyAsync(ILogger logger, TimeSpan timeout)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        logger.LogInformation("Keycloak'in hazir olmasi bekleniyor (max {Seconds} saniye)...", timeout.TotalSeconds);
+        
+        using var httpClient = new HttpClient();
+        
+        while (stopwatch.Elapsed < timeout)
+        {
+            try
+            {
+                // Keycloak health endpoint kontrolu
+                var response = await httpClient.GetAsync("http://localhost:8080/health/ready");
+                if (response.IsSuccessStatusCode)
+                {
+                    logger.LogInformation("Keycloak hazir! (Bekleme suresi: {Elapsed:F1} saniye)", stopwatch.Elapsed.TotalSeconds);
+                    return;
+                }
+            }
+            catch
+            {
+                // Henuz baglanti saglanamadi, devam et
+            }
+            
+            await Task.Delay(2000);
+        }
+        
+        throw new TimeoutException($"Keycloak {timeout.TotalSeconds} saniye icinde hazir olmadi. Lutfen Docker loglarini ({KeycloakContainerName}) kontrol edin.");
     }
 
     private static async Task<CommandResult> RunCommandAsync(string command, string arguments, TimeSpan timeout)

@@ -1,53 +1,53 @@
-# ??? SonOfAnton — Veritabanı ve Konfigürasyon Kılavuzu
+#  SonOfAnton â€” VeritabanÄ± ve KonfigÃ¼rasyon KÄ±lavuzu
 
 > **Bu belge kime hitap ediyor?**  
-> Veritabanı şemasını değiştirmek, migration oluşturmak veya
-> konfigürasyon ayarlarını anlamak isteyen herkes.
+> VeritabanÄ± ÅŸemasÄ±nÄ± deÄŸiÅŸtirmek, migration oluÅŸturmak veya
+> konfigÃ¼rasyon ayarlarÄ±nÄ± anlamak isteyen herkes.
 
 ---
 
-## ?? İçindekiler
+##  Ä°Ã§indekiler
 
 1. [Migration Nedir?](#1-migration-nedir)
-2. [Migration İş Akışı](#2-migration-iş-akışı)
-3. [Adım Adım Migration Oluşturma](#3-adım-adım-migration-oluşturma)
+2. [Migration Ä°ÅŸ AkÄ±ÅŸÄ±](#2-migration-iÅŸ-akÄ±ÅŸÄ±)
+3. [AdÄ±m AdÄ±m Migration OluÅŸturma](#3-adÄ±m-adÄ±m-migration-oluÅŸturma)
 4. [Migration Geri Alma](#4-migration-geri-alma)
-5. [Konfigürasyon Yapısı](#5-konfigürasyon-yapısı)
-6. [Ortam Değişkenleri](#6-ortam-değişkenleri)
-7. [Konfigürasyon Versiyonlama](#7-konfigürasyon-versiyonlama)
-8. [Sık Karşılaşılan Sorunlar](#8-sık-karşılaşılan-sorunlar)
+5. [KonfigÃ¼rasyon YapÄ±sÄ±](#5-konfigÃ¼rasyon-yapÄ±sÄ±)
+6. [Ortam DeÄŸiÅŸkenleri](#6-ortam-deÄŸiÅŸkenleri)
+7. [KonfigÃ¼rasyon Versiyonlama](#7-konfigÃ¼rasyon-versiyonlama)
+8. [SÄ±k KarÅŸÄ±laÅŸÄ±lan Sorunlar](#8-sÄ±k-karÅŸÄ±laÅŸÄ±lan-sorunlar)
 
 ---
 
 ## 1. Migration Nedir?
 
-**Migration**, veritabanı şemasını kod üzerinden yönetmenin yoludur.
+**Migration**, veritabanÄ± ÅŸemasÄ±nÄ± kod Ã¼zerinden yÃ¶netmenin yoludur.
 
 Normal hayatta:
-- SQL dosyasını elle yazarsın
-- Sunucuya bağlanıp çalıştırırsın
-- Hangi SQL'in hangi sunucuda çalıştığını takip edemezsin
+- SQL dosyasÄ±nÄ± elle yazarsÄ±n
+- Sunucuya baÄŸlanÄ±p Ã§alÄ±ÅŸtÄ±rÄ±rsÄ±n
+- Hangi SQL'in hangi sunucuda Ã§alÄ±ÅŸtÄ±ÄŸÄ±nÄ± takip edemezsin
 
 Migration ile:
-- C# kodu yazarsın (veya otomatik üretilir)
-- `dotnet ef database update` çalıştırırsın
-- EF Core hangi migration'ların uygulandığını otomatik takip eder
+- C# kodu yazarsÄ±n (veya otomatik Ã¼retilir)
+- `dotnet ef database update` Ã§alÄ±ÅŸtÄ±rÄ±rsÄ±n
+- EF Core hangi migration'larÄ±n uygulandÄ±ÄŸÄ±nÄ± otomatik takip eder
 
 **Mevcut Migration'lar:**
 
 ```
 migrations/
-??? 20260124055211_InitialCreate.cs          ? İlk tablo oluşturma
-??? 20260124095427_UpdateVectorDimension768.cs ? Vector boyutunu 768'e güncelleme
-??? SonOfAntonDbContextModelSnapshot.cs       ? Güncel şema snapshot'ı
+|-- 20260124055211_InitialCreate.cs          ? Ä°lk tablo oluÅŸturma
+|-- 20260124095427_UpdateVectorDimension768.cs ? Vector boyutunu 768'e gÃ¼ncelleme
+|-- SonOfAntonDbContextModelSnapshot.cs       ? GÃ¼ncel ÅŸema snapshot'Ä±
 ```
 
 ---
 
-## 2. Migration İş Akışı
+## 2. Migration Ä°ÅŸ AkÄ±ÅŸÄ±
 
 ```
-1. Entity Sınıfını Değiştir
+1. Entity SÄ±nÄ±fÄ±nÄ± DeÄŸiÅŸtir
    (Entities/WorkflowEntities.cs veya yeni entity)
         ?
         ?
@@ -55,29 +55,29 @@ migrations/
    (Data/PsyAIDbContext.cs ? DbSet + OnModelCreating)
         ?
         ?
-3. Migration Oluştur
+3. Migration OluÅŸtur
    dotnet ef migrations add MigrationAdi
         ?
         ?
-4. Oluşan Kodu İncele
-   (Migrations/ klasörüne bak, Up/Down metodlarını kontrol et)
+4. OluÅŸan Kodu Ä°ncele
+   (Migrations/ klasÃ¶rÃ¼ne bak, Up/Down metodlarÄ±nÄ± kontrol et)
         ?
         ?
-5. Veritabanını Güncelle
+5. VeritabanÄ±nÄ± GÃ¼ncelle
    dotnet ef database update
         ?
         ?
 6. Test Et
-   (Uygulama çalışıyor mu? Yeni alan doğru kaydediliyor mu?)
+   (Uygulama Ã§alÄ±ÅŸÄ±yor mu? Yeni alan doÄŸru kaydediliyor mu?)
 ```
 
 ---
 
-## 3. Adım Adım Migration Oluşturma
+## 3. AdÄ±m AdÄ±m Migration OluÅŸturma
 
-### Senaryo: "Workflow'a `Version` alanı eklemek istiyorum"
+### Senaryo: "Workflow'a `Version` alanÄ± eklemek istiyorum"
 
-**Adım 1:** Entity sınıfını güncelle
+**AdÄ±m 1:** Entity sÄ±nÄ±fÄ±nÄ± gÃ¼ncelle
 
 ```csharp
 // Shared/Entities/WorkflowEntities.cs
@@ -86,13 +86,13 @@ public class WorkflowEntity
     // ... mevcut alanlar ...
     
     /// <summary>
-    /// Workflow şema versiyonu (breaking change takibi için)
+    /// Workflow ÅŸema versiyonu (breaking change takibi iÃ§in)
     /// </summary>
     public int Version { get; set; } = 1;  // ? Yeni alan
 }
 ```
 
-**Adım 2:** DbContext'te mapping ekle (gerekiyorsa)
+**AdÄ±m 2:** DbContext'te mapping ekle (gerekiyorsa)
 
 ```csharp
 // Backend/Data/PsyAIDbContext.cs ? OnModelCreating
@@ -105,23 +105,23 @@ modelBuilder.Entity<WorkflowEntity>(entity =>
 });
 ```
 
-**Adım 3:** Terminal'de migration oluştur
+**AdÄ±m 3:** Terminal'de migration oluÅŸtur
 
 ```bash
-# Backend proje klasörüne git
+# Backend proje klasÃ¶rÃ¼ne git
 cd src/SonOfAnton.Backend
 
-# Migration oluştur (isim anlamlı olmalı!)
+# Migration oluÅŸtur (isim anlamlÄ± olmalÄ±!)
 dotnet ef migrations add AddWorkflowVersion
 
-# ? İyi isimler:    AddWorkflowVersion, CreateWebhookTable, UpdateVectorDimension
-# ? Kötü isimler:   Migration1, Fix, Update, Deneme
+# ? Ä°yi isimler:    AddWorkflowVersion, CreateWebhookTable, UpdateVectorDimension
+# ? KÃ¶tÃ¼ isimler:   Migration1, Fix, Update, Deneme
 ```
 
-**Adım 4:** Oluşan dosyayı kontrol et
+**AdÄ±m 4:** OluÅŸan dosyayÄ± kontrol et
 
 ```csharp
-// Otomatik oluşan Up() metodu şöyle olmalı:
+// Otomatik oluÅŸan Up() metodu ÅŸÃ¶yle olmalÄ±:
 protected override void Up(MigrationBuilder migrationBuilder)
 {
     migrationBuilder.AddColumn<int>(
@@ -132,7 +132,7 @@ protected override void Up(MigrationBuilder migrationBuilder)
         defaultValue: 1);
 }
 
-// Down() metodu geri almayı sağlar:
+// Down() metodu geri almayÄ± saÄŸlar:
 protected override void Down(MigrationBuilder migrationBuilder)
 {
     migrationBuilder.DropColumn(
@@ -141,13 +141,13 @@ protected override void Down(MigrationBuilder migrationBuilder)
 }
 ```
 
-**Adım 5:** Veritabanını güncelle
+**AdÄ±m 5:** VeritabanÄ±nÄ± gÃ¼ncelle
 
 ```bash
-# Geliştirme ortamı
+# GeliÅŸtirme ortamÄ±
 dotnet ef database update
 
-# Belirli bir migration'a güncelle
+# Belirli bir migration'a gÃ¼ncelle
 dotnet ef database update AddWorkflowVersion
 ```
 
@@ -155,26 +155,26 @@ dotnet ef database update AddWorkflowVersion
 
 ## 4. Migration Geri Alma
 
-**Son migration'ı geri al:**
+**Son migration'Ä± geri al:**
 ```bash
 dotnet ef database update PreviousMigrationName
 ```
 
-**Migration dosyasını sil (henüz uygulanmamışsa):**
+**Migration dosyasÄ±nÄ± sil (henÃ¼z uygulanmamÄ±ÅŸsa):**
 ```bash
 dotnet ef migrations remove
 ```
 
-**?? DİKKAT:** Production'da uygulanan migration ASLA silinmez!
-Bunun yerine yeni bir migration ile değişikliği geri alırsın.
+**?? DÄ°KKAT:** Production'da uygulanan migration ASLA silinmez!
+Bunun yerine yeni bir migration ile deÄŸiÅŸikliÄŸi geri alÄ±rsÄ±n.
 
 ---
 
-## 5. Konfigürasyon Yapısı
+## 5. KonfigÃ¼rasyon YapÄ±sÄ±
 
-Uygulama ayarları `appsettings.json` ve ortam değişkenlerinden okunur.
+Uygulama ayarlarÄ± `appsettings.json` ve ortam deÄŸiÅŸkenlerinden okunur.
 
-### appsettings.json Yapısı
+### appsettings.json YapÄ±sÄ±
 
 ```json
 {
@@ -186,6 +186,16 @@ Uygulama ayarları `appsettings.json` ve ortam değişkenlerinden okunur.
     "Model": "qwen2.5-coder:14b",
     "EmbeddingModel": "nomic-embed-text"
   },
+  "Authentication": {
+    "DefaultAuthority": "https://login.microsoftonline.com/common/v2.0",
+    "DefaultClientId": "<your-client-id>",
+    "DefaultClientSecret": "<your-client-secret>",
+    "AllowExternalBearer": true
+  },
+  "MultiTenancy": {
+    "ResolveBy": "Header",
+    "DefaultTenantId": "default"
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",
@@ -196,35 +206,66 @@ Uygulama ayarları `appsettings.json` ve ortam değişkenlerinden okunur.
 }
 ```
 
-### Hangi ayar ne işe yarar?
+**Development ortamÄ± override'larÄ± (appsettings.Development.json):**
 
-| Ayar | Varsayılan | Açıklama |
+```json
+{
+  "Authentication": {
+    "DefaultAuthority": "http://localhost:8080/realms/sonofanton",
+    "DefaultClientId": "sonofanton-backend",
+    "DefaultClientSecret": "backend-dev-secret"
+  }
+}
+```
+
+**Frontend OIDC yapÄ±landÄ±rmasÄ± (wwwroot/appsettings.json):**
+
+```json
+{
+  "BackendUrl": "https://localhost:5002",
+  "Oidc": {
+    "Authority": "http://localhost:8080/realms/sonofanton",
+    "ClientId": "sonofanton-frontend",
+    "ResponseType": "code",
+    "DefaultScopes": ["openid", "profile", "email"]
+  }
+}
+```
+
+### Hangi ayar ne iÅŸe yarar?
+
+| Ayar | VarsayÄ±lan | AÃ§Ä±klama |
 |------|-----------|----------|
-| `ConnectionStrings:DefaultConnection` | localhost | PostgreSQL bağlantı dizgisi |
+| `ConnectionStrings:DefaultConnection` | localhost | PostgreSQL baÄŸlantÄ± dizgisi |
 | `Ollama:Endpoint` | `http://localhost:11434` | Ollama API adresi |
-| `Ollama:Model` | `qwen2.5-coder:14b` | LLM model adı |
-| `Ollama:EmbeddingModel` | `nomic-embed-text` | Embedding model adı |
+| `Ollama:Model` | `qwen2.5-coder:14b` | LLM model adÄ± |
+| `Ollama:EmbeddingModel` | `nomic-embed-text` | Embedding model adÄ± |
+| `Authentication:DefaultAuthority` | MS login URL | OIDC Authority (Keycloak realm URL) |
+| `Authentication:DefaultClientId` | - | OIDC Client ID |
+| `Authentication:DefaultClientSecret` | - | OIDC Client Secret |
+| `MultiTenancy:ResolveBy` | `Header` | Tenant Ã§Ã¶zÃ¼mleme stratejisi |
+| `MultiTenancy:DefaultTenantId` | `default` | VarsayÄ±lan tenant ID |
 
-### Ortam bazlı override
+### Ortam bazlÄ± override
 
 ```
-appsettings.json                ? Tüm ortamlar için temel
-appsettings.Development.json    ? Sadece geliştirme ortamı
-appsettings.Production.json     ? Sadece production ortamı
+appsettings.json                ? TÃ¼m ortamlar iÃ§in temel
+appsettings.Development.json    ? Sadece geliÅŸtirme ortamÄ±
+appsettings.Production.json     ? Sadece production ortamÄ±
 ```
 
-**Öncelik sırası (sonraki öncekini ezer):**
+**Ã–ncelik sÄ±rasÄ± (sonraki Ã¶ncekini ezer):**
 1. `appsettings.json`
 2. `appsettings.{Environment}.json`
-3. Ortam değişkenleri
-4. Komut satırı argümanları
+3. Ortam deÄŸiÅŸkenleri
+4. Komut satÄ±rÄ± argÃ¼manlarÄ±
 
 ---
 
-## 6. Ortam Değişkenleri
+## 6. Ortam DeÄŸiÅŸkenleri
 
-Ortam değişkenleri ile appsettings.json'daki her ayarı override edebilirsin.
-`__` (çift alt çizgi) ile iç içe yapıları belirtirsin.
+Ortam deÄŸiÅŸkenleri ile appsettings.json'daki her ayarÄ± override edebilirsin.
+`__` (Ã§ift alt Ã§izgi) ile iÃ§ iÃ§e yapÄ±larÄ± belirtirsin.
 
 ```bash
 # Linux/macOS
@@ -239,27 +280,27 @@ $env:Ollama__Endpoint = "http://gpu-server:11434"
 docker run -e ConnectionStrings__DefaultConnection="Host=db;..." myapp
 ```
 
-**?? Gizli bilgileri (şifre, API key vb.) ASLA appsettings.json'a yazma!**
-Ortam değişkeni veya User Secrets kullan:
+**?? Gizli bilgileri (ÅŸifre, API key vb.) ASLA appsettings.json'a yazma!**
+Ortam deÄŸiÅŸkeni veya User Secrets kullan:
 
 ```bash
-# Development ortamında User Secrets kullan
+# Development ortamÄ±nda User Secrets kullan
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=..."
 ```
 
 ---
 
-## 7. Konfigürasyon Versiyonlama
+## 7. KonfigÃ¼rasyon Versiyonlama
 
-Konfigürasyon değişikliklerini takip etmek için aşağıdaki kuralları uygula:
+KonfigÃ¼rasyon deÄŸiÅŸikliklerini takip etmek iÃ§in aÅŸaÄŸÄ±daki kurallarÄ± uygula:
 
 ### Kurallar
 
-1. **appsettings.json değişiklikleri commit'e dahil olmalı**
-   - Yeni bir ayar eklediğinde varsayılan değerle birlikte ekle
-   - PR açıklamasında "Yeni konfigürasyon: X eklendi" yaz
+1. **appsettings.json deÄŸiÅŸiklikleri commit'e dahil olmalÄ±**
+   - Yeni bir ayar eklediÄŸinde varsayÄ±lan deÄŸerle birlikte ekle
+   - PR aÃ§Ä±klamasÄ±nda "Yeni konfigÃ¼rasyon: X eklendi" yaz
 
-2. **Breaking change'lerde versiyon numarasını artır**
+2. **Breaking change'lerde versiyon numarasÄ±nÄ± artÄ±r**
    ```json
    {
      "AppVersion": "2.0.0",
@@ -267,58 +308,58 @@ Konfigürasyon değişikliklerini takip etmek için aşağıdaki kuralları uygula:
    }
    ```
 
-3. **Eski ayarları hemen silme, deprecated işaretle**
+3. **Eski ayarlarÄ± hemen silme, deprecated iÅŸaretle**
    ```json
    {
-     "OldSetting_DEPRECATED": "Bunu kullanma, NewSetting'e geç",
-     "NewSetting": "aktif değer"
+     "OldSetting_DEPRECATED": "Bunu kullanma, NewSetting'e geÃ§",
+     "NewSetting": "aktif deÄŸer"
    }
    ```
 
-4. **Her ortam için örnek konfigürasyon dosyası tut**
+4. **Her ortam iÃ§in Ã¶rnek konfigÃ¼rasyon dosyasÄ± tut**
    ```
-   appsettings.Example.json     ? Git'te (şifresiz)
-   appsettings.Production.json  ? .gitignore'da (şifreli)
+   appsettings.Example.json     ? Git'te (ÅŸifresiz)
+   appsettings.Production.json  ? .gitignore'da (ÅŸifreli)
    ```
 
 ---
 
-## 8. Sık Karşılaşılan Sorunlar
+## 8. SÄ±k KarÅŸÄ±laÅŸÄ±lan Sorunlar
 
-### "Migration oluşturulamıyor"
+### "Migration oluÅŸturulamÄ±yor"
 
 ```bash
-# EF Core tools yüklü mü?
+# EF Core tools yÃ¼klÃ¼ mÃ¼?
 dotnet tool install --global dotnet-ef
 
-# Doğru klasörde misin?
+# DoÄŸru klasÃ¶rde misin?
 cd src/SonOfAnton.Backend
 
-# Design-time package var mı? (csproj'da kontrol et)
-# Microsoft.EntityFrameworkCore.Design olmalı
+# Design-time package var mÄ±? (csproj'da kontrol et)
+# Microsoft.EntityFrameworkCore.Design olmalÄ±
 ```
 
-### "Pending migration var ama update başarısız"
+### "Pending migration var ama update baÅŸarÄ±sÄ±z"
 
 ```bash
 # Hangi migration'lar bekliyor?
 dotnet ef migrations list
 
-# Veritabanı bağlantısını kontrol et
-# PostgreSQL çalışıyor mu?
+# VeritabanÄ± baÄŸlantÄ±sÄ±nÄ± kontrol et
+# PostgreSQL Ã§alÄ±ÅŸÄ±yor mu?
 docker ps  # veya pg_isready
 ```
 
-### "Connection string bulunamıyor"
+### "Connection string bulunamÄ±yor"
 
-Program.cs'deki varsayılan değeri kontrol et:
+Program.cs'deki varsayÄ±lan deÄŸeri kontrol et:
 ```csharp
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
     ?? "Host=localhost;Database=sonofanton_db;Username=sonofanton;Password=sonofanton_dev_password";
 ```
 
-Varsayılan değer varsa appsettings.json olmadan da çalışır.
-Ama production'da mutlaka ortam değişkeni kullan!
+VarsayÄ±lan deÄŸer varsa appsettings.json olmadan da Ã§alÄ±ÅŸÄ±r.
+Ama production'da mutlaka ortam deÄŸiÅŸkeni kullan!
 
 ---
 
@@ -387,7 +428,96 @@ Workflow chat gecmisi.
 
 ---
 
-> **Altın Kural:** Migration oluşturduktan sonra mutlaka Up() ve Down()
-> metodlarını gözden geçir. Otomatik üretilen kod bazen gereksiz veya
-> yanlış olabilir. `Down()` metodunun çalıştığından emin ol — bir gün
+> **AltÄ±n Kural:** Migration oluÅŸturduktan sonra mutlaka Up() ve Down()
+> metodlarÄ±nÄ± gÃ¶zden geÃ§ir. Otomatik Ã¼retilen kod bazen gereksiz veya
+> yanlÄ±ÅŸ olabilir. `Down()` metodunun Ã§alÄ±ÅŸtÄ±ÄŸÄ±ndan emin ol â€” bir gÃ¼n
 > geri almak zorunda kalabilirsin!
+
+
+## 10. Kimlik ve Multi-Tenancy TablolarÄ± (v3)
+
+AÅŸaÄŸÄ±daki tablolar kimlik, yetkilendirme ve Ã§ok kiracÄ±lÄ±k (multi-tenancy) altyapÄ±sÄ± iÃ§in eklenmiÅŸtir.
+
+### tenants
+
+Kurum (tenant) bilgilerini ve opsiyonel OIDC konfigÃ¼rasyonunu tutar.
+
+| Kolon | Tip | AÃ§Ä±klama |
+|-------|-----|----------|
+| id | VARCHAR(100) (PK) | Tenant ID ("kurumA", "default") |
+| name | VARCHAR(255) | Kurum adÄ± |
+| oidc_authority | VARCHAR(500) | Tenant-Ã¶zel OIDC Authority URL |
+| oidc_client_id | VARCHAR(255) | OIDC Client ID |
+| oidc_client_secret | VARCHAR(500) | OIDC Client Secret (ÅŸifreli) |
+| is_active | BOOLEAN | Aktif mi |
+| created_at | TIMESTAMP | OluÅŸturulma tarihi |
+
+### users
+
+Uygulama kullanÄ±cÄ±larÄ±  ÅŸifre tutmaz, dÄ±ÅŸ kimlik saÄŸlayÄ±cÄ±sÄ±na baÄŸlÄ±dÄ±r.
+
+| Kolon | Tip | AÃ§Ä±klama |
+|-------|-----|----------|
+| id | UUID (PK) | KullanÄ±cÄ± ID |
+| external_identity_id | VARCHAR(255) | OIDC sub/oid claim deÄŸeri |
+| email | VARCHAR(255) | E-posta |
+| display_name | VARCHAR(255) | GÃ¶rÃ¼nen ad |
+| tenant_id | VARCHAR(100) (FK) | Ait olduÄŸu tenant |
+| is_active | BOOLEAN | Aktif mi |
+| created_at | TIMESTAMP | OluÅŸturulma tarihi |
+| last_login_at | TIMESTAMP | Son giriÅŸ tarihi |
+
+**Ä°ndeksler:** external_identity_id (UNIQUE), email, tenant_id
+
+### tenant_roles
+
+Kuruma Ã¶zel roller  dÄ±ÅŸ kimlik saÄŸlayÄ±cÄ±sÄ±ndaki rolleri iÃ§ izinlere eÅŸleÅŸtirir.
+
+| Kolon | Tip | AÃ§Ä±klama |
+|-------|-----|----------|
+| id | UUID (PK) | Rol ID |
+| tenant_id | VARCHAR(100) (FK) | Ait olduÄŸu tenant |
+| external_role_name | VARCHAR(255) | DÄ±ÅŸ sistemdeki rol adÄ± ("Manager", "Viewer") |
+| mapped_permissions | TEXT[] | Ä°Ã§ izin dizisi (["Workflows.Read", "Workflows.Execute"]) |
+| created_at | TIMESTAMP | OluÅŸturulma tarihi |
+
+**Ä°ndeksler:** tenant_id + external_role_name (UNIQUE)
+
+### user_tenant_roles
+
+KullanÄ±cÄ±-Rol iliÅŸkisi (many-to-many join tablosu).
+
+| Kolon | Tip | AÃ§Ä±klama |
+|-------|-----|----------|
+| id | UUID (PK) | KayÄ±t ID |
+| user_id | UUID (FK) | KullanÄ±cÄ± |
+| tenant_role_id | UUID (FK) | Tenant rolÃ¼ |
+
+**Ä°ndeksler:** user_id + tenant_role_id (UNIQUE)
+
+### workflows ve folders tablolarÄ±na eklenen multi-tenant kolonlar
+
+| Tablo | Kolon | Tip | AÃ§Ä±klama |
+|-------|-------|-----|----------|
+| workflows | tenant_id | VARCHAR(100) (FK, nullable) | Workflow'un ait olduÄŸu tenant |
+| workflows | created_by_user_id | UUID (FK, nullable) | OluÅŸturan kullanÄ±cÄ± |
+| folders | tenant_id | VARCHAR(100) (FK, nullable) | KlasÃ¶rÃ¼n ait olduÄŸu tenant |
+
+### ER DiyagramÄ± (Kimlik)
+
+```
+tenants 1* users
+tenants 1* tenant_roles
+users   ** tenant_roles  (via user_tenant_roles)
+tenants 1* workflows     (tenant_id FK)
+tenants 1* folders       (tenant_id FK)
+users   1* workflows     (created_by_user_id FK)
+```
+
+### Migration Komutu
+
+```bash
+cd src/SonOfAnton.Backend
+dotnet ef migrations add AddIdentityEntities
+dotnet ef database update
+```

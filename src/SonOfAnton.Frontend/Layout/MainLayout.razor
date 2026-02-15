@@ -2,6 +2,9 @@
 @inject IJSRuntime JS
 
 <div class="app-container" @onkeydown="HandleKeyDown" tabindex="0">
+    <div class="login-display-wrapper">
+        <LoginDisplay />
+    </div>
     @Body
 </div>
 
@@ -26,5 +29,13 @@
         height: 100vh;
         overflow: hidden;
         outline: none;
+        position: relative;
+    }
+
+    .login-display-wrapper {
+        position: fixed;
+        top: 0.75rem;
+        right: 1rem;
+        z-index: 9999;
     }
 </style>

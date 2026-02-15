@@ -1,12 +1,12 @@
-# ?? SonOfAnton — API Referansı
+#  SonOfAnton â€” API ReferansÄ±
 
 > **Bu belge kime hitap ediyor?**  
-> Frontend geliştiren, API test eden veya dış entegrasyon yapan herkes.
-> Her endpoint'i örnekleriyle birlikte bulabilirsin.
+> Frontend geliÅŸtiren, API test eden veya dÄ±ÅŸ entegrasyon yapan herkes.
+> Her endpoint'i Ã¶rnekleriyle birlikte bulabilirsin.
 
 ---
 
-## ?? İçindekiler
+##  Ä°Ã§indekiler
 
 1. [Genel Bilgiler](#genel-bilgiler)
 2. [Workflow API](#workflow-api)
@@ -15,50 +15,50 @@
 5. [Webhook API](#webhook-api)
 6. [Log Stream API (SSE)](#log-stream-api-sse)
 7. [Health Check API](#health-check-api)
-8. [Hata Kodları](#hata-kodları)
+8. [Hata KodlarÄ±](#hata-kodlarÄ±)
 
 ---
 
 ## Genel Bilgiler
 
-| Özellik | Değer |
+| Ã–zellik | DeÄŸer |
 |---------|-------|
 | Base URL | `https://localhost:5001/api` |
 | Format | JSON (`application/json`) |
-| Rate Limit | 100 istek/dakika (IP başına) |
+| Rate Limit | 100 istek/dakika (IP baÅŸÄ±na) |
 | OpenAPI | `GET /openapi/v1.json` (Development modunda) |
 
-**Ortak HTTP Durum Kodları:**
+**Ortak HTTP Durum KodlarÄ±:**
 
-| Kod | Anlamı | Ne zaman döner? |
+| Kod | AnlamÄ± | Ne zaman dÃ¶ner? |
 |-----|--------|-----------------|
-| 200 | OK | İşlem başarılı |
-| 201 | Created | Yeni kaynak oluşturuldu |
-| 204 | No Content | Silme başarılı |
-| 400 | Bad Request | Geçersiz istek verisi |
-| 404 | Not Found | Kaynak bulunamadı |
-| 429 | Too Many Requests | Rate limit aşıldı |
-| 500 | Server Error | Sunucu hatası |
+| 200 | OK | Ä°ÅŸlem baÅŸarÄ±lÄ± |
+| 201 | Created | Yeni kaynak oluÅŸturuldu |
+| 204 | No Content | Silme baÅŸarÄ±lÄ± |
+| 400 | Bad Request | GeÃ§ersiz istek verisi |
+| 404 | Not Found | Kaynak bulunamadÄ± |
+| 429 | Too Many Requests | Rate limit aÅŸÄ±ldÄ± |
+| 500 | Server Error | Sunucu hatasÄ± |
 
 ---
 
 ## Workflow API
 
-Workflow'lar, node'lar ve bağlantılardan oluşan iş akışı şablonlarıdır.
+Workflow'lar, node'lar ve baÄŸlantÄ±lardan oluÅŸan iÅŸ akÄ±ÅŸÄ± ÅŸablonlarÄ±dÄ±r.
 
-### Tüm Workflow'ları Listele
+### TÃ¼m Workflow'larÄ± Listele
 
 ```http
 GET /api/workflow
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 [
   {
     "id": "a1b2c3d4-...",
-    "name": "Müşteri Hoşgeldin Akışı",
-    "description": "Yeni müşteriye hoşgeldin e-postası gönderir",
+    "name": "MÃ¼ÅŸteri HoÅŸgeldin AkÄ±ÅŸÄ±",
+    "description": "Yeni mÃ¼ÅŸteriye hoÅŸgeldin e-postasÄ± gÃ¶nderir",
     "isActive": true,
     "nodes": [...],
     "connections": [...],
@@ -74,51 +74,51 @@ GET /api/workflow
 GET /api/workflow/{id}
 ```
 
-| Parametre | Tip | Zorunlu | Açıklama |
+| Parametre | Tip | Zorunlu | AÃ§Ä±klama |
 |-----------|-----|---------|----------|
 | `id` | GUID | Evet | Workflow ID'si |
 
-**Yanıt:** `200 OK` veya `404 Not Found`
+**YanÄ±t:** `200 OK` veya `404 Not Found`
 
-### Workflow Oluştur
+### Workflow OluÅŸtur
 
 ```http
 POST /api/workflow
 Content-Type: application/json
 
 {
-  "name": "Yeni İş Akışı",
-  "description": "Açıklama",
+  "name": "Yeni Ä°ÅŸ AkÄ±ÅŸÄ±",
+  "description": "AÃ§Ä±klama",
   "nodes": [],
   "connections": []
 }
 ```
 
-**Yanıt:** `201 Created`
+**YanÄ±t:** `201 Created`
 ```json
 {
   "id": "yeni-guid-...",
-  "name": "Yeni İş Akışı",
+  "name": "Yeni Ä°ÅŸ AkÄ±ÅŸÄ±",
   "createdAt": "2025-01-24T10:00:00Z",
   "updatedAt": "2025-01-24T10:00:00Z"
 }
 ```
 
-### Workflow Güncelle
+### Workflow GÃ¼ncelle
 
 ```http
 PUT /api/workflow/{id}
 Content-Type: application/json
 
 {
-  "name": "Güncellenmiş Ad",
-  "description": "Güncellenmiş açıklama",
+  "name": "GÃ¼ncellenmiÅŸ Ad",
+  "description": "GÃ¼ncellenmiÅŸ aÃ§Ä±klama",
   "nodes": [...],
   "connections": [...]
 }
 ```
 
-**Yanıt:** `200 OK` veya `404 Not Found`
+**YanÄ±t:** `200 OK` veya `404 Not Found`
 
 ### Workflow Sil
 
@@ -126,9 +126,9 @@ Content-Type: application/json
 DELETE /api/workflow/{id}
 ```
 
-**Yanıt:** `204 No Content` veya `404 Not Found`
+**YanÄ±t:** `204 No Content` veya `404 Not Found`
 
-### Workflow Çalıştır
+### Workflow Ã‡alÄ±ÅŸtÄ±r
 
 ```http
 POST /api/workflow/{id}/execute
@@ -140,7 +140,7 @@ Content-Type: application/json
 }
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "message": "Workflow execution started",
@@ -149,41 +149,41 @@ Content-Type: application/json
 }
 ```
 
-> **Not:** triggerData opsiyoneldir. Body boş gönderilebilir.
+> **Not:** triggerData opsiyoneldir. Body boÅŸ gÃ¶nderilebilir.
 
-### Workflow Aktifleştir / Devre Dışı Bırak
+### Workflow AktifleÅŸtir / Devre DÄ±ÅŸÄ± BÄ±rak
 
 ```http
 POST /api/workflow/{id}/activate
 POST /api/workflow/{id}/deactivate
 ```
 
-**Yanıt:** `200 OK` — Güncellenmiş workflow döner.
+**YanÄ±t:** `200 OK` â€” GÃ¼ncellenmiÅŸ workflow dÃ¶ner.
 
 ---
 
 ## Execution API
 
-Execution, bir workflow'un tek seferlik çalıştırılmasıdır.
+Execution, bir workflow'un tek seferlik Ã§alÄ±ÅŸtÄ±rÄ±lmasÄ±dÄ±r.
 
-### Execution'ları Listele
+### Execution'larÄ± Listele
 
 ```http
 GET /api/executions
 GET /api/executions?workflowId={workflowId}
 ```
 
-| Parametre | Tip | Zorunlu | Açıklama |
+| Parametre | Tip | Zorunlu | AÃ§Ä±klama |
 |-----------|-----|---------|----------|
-| `workflowId` | GUID | Hayır | Belirli workflow'a ait execution'lar |
+| `workflowId` | GUID | HayÄ±r | Belirli workflow'a ait execution'lar |
 
-**Yanıt:** `200 OK` — Son 100 execution (tarih sırasıyla)
+**YanÄ±t:** `200 OK` â€” Son 100 execution (tarih sÄ±rasÄ±yla)
 ```json
 [
   {
     "id": "exec-guid-...",
     "workflowId": "wf-guid-...",
-    "workflowName": "Müşteri Akışı",
+    "workflowName": "MÃ¼ÅŸteri AkÄ±ÅŸÄ±",
     "status": "Completed",
     "startedAt": "2025-01-24T10:00:00Z",
     "completedAt": "2025-01-24T10:00:05Z"
@@ -191,56 +191,56 @@ GET /api/executions?workflowId={workflowId}
 ]
 ```
 
-**Durum Değerleri:** `Queued`, `Running`, `Completed`, `Failed`, `Cancelled`
+**Durum DeÄŸerleri:** `Queued`, `Running`, `Completed`, `Failed`, `Cancelled`
 
-### Execution Detayı
+### Execution DetayÄ±
 
 ```http
 GET /api/executions/{id}
 ```
 
-### Execution Logları
+### Execution LoglarÄ±
 
 ```http
 GET /api/executions/{id}/logs
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 [
   {
     "executionId": "exec-guid-...",
     "nodeId": "node-guid-...",
     "level": "Info",
-    "message": "Koşul değerlendiriliyor: status == active",
+    "message": "KoÅŸul deÄŸerlendiriliyor: status == active",
     "timestamp": "2025-01-24T10:00:01Z"
   }
 ]
 ```
 
-### Execution İptal Et
+### Execution Ä°ptal Et
 
 ```http
 POST /api/executions/{id}/cancel
 ```
 
-**Yanıt:** `200 OK` veya `400 Bad Request` (zaten tamamlanmışsa)
+**YanÄ±t:** `200 OK` veya `400 Bad Request` (zaten tamamlanmÄ±ÅŸsa)
 
-### Workflow'u Hemen Çalıştır
+### Workflow'u Hemen Ã‡alÄ±ÅŸtÄ±r
 
 ```http
 POST /api/executions/run/{workflowId}
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "executionId": "exec-guid-...",
-  "message": "Workflow kuyruğa eklendi"
+  "message": "Workflow kuyruÄŸa eklendi"
 }
 ```
 
-### Gecikmeli Çalıştır
+### Gecikmeli Ã‡alÄ±ÅŸtÄ±r
 
 ```http
 POST /api/executions/schedule/{workflowId}?delaySeconds=60
@@ -252,27 +252,27 @@ POST /api/executions/schedule/{workflowId}?delaySeconds=60
 POST /api/executions/recurring/{workflowId}?cron=0 * * * *&jobName=saatlik-rapor
 ```
 
-| Parametre | Tip | Zorunlu | Açıklama |
+| Parametre | Tip | Zorunlu | AÃ§Ä±klama |
 |-----------|-----|---------|----------|
-| `cron` | string | Evet | Cron ifadesi (5 parça: dakika saat gün ay haftaGünü) |
-| `jobName` | string | Hayır | İş adı (varsayılan: workflow-{workflowId}) |
+| `cron` | string | Evet | Cron ifadesi (5 parÃ§a: dakika saat gÃ¼n ay haftaGÃ¼nÃ¼) |
+| `jobName` | string | HayÄ±r | Ä°ÅŸ adÄ± (varsayÄ±lan: workflow-{workflowId}) |
 
-**Cron Örnekleri:**
+**Cron Ã–rnekleri:**
 
-| İfade | Anlamı |
+| Ä°fade | AnlamÄ± |
 |-------|--------|
 | `* * * * *` | Her dakika |
-| `0 * * * *` | Her saat başı |
-| `0 9 * * 1-5` | Hafta içi her gün saat 09:00 |
-| `0 0 1 * *` | Her ayın 1'i gece yarısı |
+| `0 * * * *` | Her saat baÅŸÄ± |
+| `0 9 * * 1-5` | Hafta iÃ§i her gÃ¼n saat 09:00 |
+| `0 0 1 * *` | Her ayÄ±n 1'i gece yarÄ±sÄ± |
 
-### Tekrarlayan Workflow Kaldır
+### Tekrarlayan Workflow KaldÄ±r
 
 ```http
 DELETE /api/executions/recurring/{jobName}
 ```
 
-### Cron İfadesi Doğrula
+### Cron Ä°fadesi DoÄŸrula
 
 ```http
 POST /api/executions/validate-cron
@@ -283,11 +283,11 @@ Content-Type: application/json
 }
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "isValid": true,
-  "description": "Hafta içi her gün 09:00'da"
+  "description": "Hafta iÃ§i her gÃ¼n 09:00'da"
 }
 ```
 
@@ -301,23 +301,23 @@ GET /api/executions/job/{jobId}
 
 ## Node API
 
-Node'lar, workflow'ların yapı taşlarıdır.
+Node'lar, workflow'larÄ±n yapÄ± taÅŸlarÄ±dÄ±r.
 
-### Tüm Node Tiplerini Listele
+### TÃ¼m Node Tiplerini Listele
 
 ```http
 GET /api/nodes
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 [
   {
     "type": "logic.if",
-    "name": "Koşul (IF)",
+    "name": "KoÅŸul (IF)",
     "icon": "git-branch",
     "category": "Mantik",
-    "description": "Koşula göre akışı dallandır",
+    "description": "KoÅŸula gÃ¶re akÄ±ÅŸÄ± dallandÄ±r",
     "color": "#f9e2af",
     "inputs": [{"name": "input", "type": "any"}],
     "outputs": [
@@ -327,7 +327,7 @@ GET /api/nodes
     "parameters": [
       {
         "name": "condition",
-        "displayName": "Koşul",
+        "displayName": "KoÅŸul",
         "type": "string",
         "required": true,
         "placeholder": "status == active"
@@ -337,21 +337,21 @@ GET /api/nodes
 ]
 ```
 
-### Tek Node Tipi Detayı
+### Tek Node Tipi DetayÄ±
 
 ```http
 GET /api/nodes/{type}
 ```
 
-| Parametre | Tip | Zorunlu | Açıklama |
+| Parametre | Tip | Zorunlu | AÃ§Ä±klama |
 |-----------|-----|---------|----------|
-| `type` | string | Evet | Node tipi (ör: `logic.if`, `transform.set`) |
+| `type` | string | Evet | Node tipi (Ã¶r: `logic.if`, `transform.set`) |
 
 ---
 
 ## Webhook API
 
-Dış servislerden workflow tetiklemek için kullanılır.
+DÄ±ÅŸ servislerden workflow tetiklemek iÃ§in kullanÄ±lÄ±r.
 
 ### Webhook ile Tetikle
 
@@ -366,7 +366,7 @@ X-Webhook-Signature: sha256=abc123...  (opsiyonel)
 }
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "message": "Workflow triggered",
@@ -374,16 +374,16 @@ X-Webhook-Signature: sha256=abc123...  (opsiyonel)
 }
 ```
 
-**Hata Durumları:**
-- `404` — Webhook bulunamadı veya aktif değil
-- `401` — Signature geçersiz (secret tanımlıysa)
-- `429` — Rate limit (min interval süresi dolmamış)
+**Hata DurumlarÄ±:**
+- `404` â€” Webhook bulunamadÄ± veya aktif deÄŸil
+- `401` â€” Signature geÃ§ersiz (secret tanÄ±mlÄ±ysa)
+- `429` â€” Rate limit (min interval sÃ¼resi dolmamÄ±ÅŸ)
 
 ---
 
 ## Log Stream API (SSE)
 
-Gerçek zamanlı log takibi için Server-Sent Events kullanılır.
+GerÃ§ek zamanlÄ± log takibi iÃ§in Server-Sent Events kullanÄ±lÄ±r.
 
 ### Execution Event Stream
 
@@ -392,12 +392,12 @@ GET /api/workflow/execution/{executionId}/stream
 GET /api/workflow/execution/{executionId}/stream?topics=node,log
 ```
 
-| Parametre | Tip | Zorunlu | Açıklama |
+| Parametre | Tip | Zorunlu | AÃ§Ä±klama |
 |-----------|-----|---------|----------|
 | `executionId` | GUID | Evet | Execution ID'si |
-| `topics` | string | Hayır | Virgülle ayrılmış topic filtresi |
+| `topics` | string | HayÄ±r | VirgÃ¼lle ayrÄ±lmÄ±ÅŸ topic filtresi |
 
-**Yanıt:** `200 OK` (text/event-stream)
+**YanÄ±t:** `200 OK` (text/event-stream)
 ```
 : connected session=abc123
 
@@ -410,7 +410,7 @@ data: {"type":"node_completed","nodeId":"...","output":{}}
 data: {"type":"workflow_completed"}
 ```
 
-**JavaScript ile kullanım:**
+**JavaScript ile kullanÄ±m:**
 ```javascript
 const source = new EventSource('/api/workflow/execution/' + executionId + '/stream');
 
@@ -420,7 +420,7 @@ source.onmessage = (event) => {
 };
 
 source.onerror = () => {
-    console.log('Bağlantı kesildi, yeniden deneniyor...');
+    console.log('BaÄŸlantÄ± kesildi, yeniden deneniyor...');
 };
 ```
 
@@ -430,15 +430,15 @@ source.onerror = () => {
 GET /api/logs/{executionId}
 ```
 
-**Yanıt:** `200 OK` (text/event-stream)
+**YanÄ±t:** `200 OK` (text/event-stream)
 
-### SSE İstatistikleri
+### SSE Ä°statistikleri
 
 ```http
 GET /api/sse/stats
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "activeChannels": 3,
@@ -451,15 +451,15 @@ GET /api/sse/stats
 
 ## Health Check API
 
-Uygulamanın sağlık durumunu kontrol eder.
+UygulamanÄ±n saÄŸlÄ±k durumunu kontrol eder.
 
-### Canlılık Kontrolü (Liveness)
+### CanlÄ±lÄ±k KontrolÃ¼ (Liveness)
 
 ```http
 GET /health/live
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "status": "alive",
@@ -467,15 +467,15 @@ GET /health/live
 }
 ```
 
-> Uygulama ayakta mı? (Veritabanı bağlantısını kontrol ETMEZ)
+> Uygulama ayakta mÄ±? (VeritabanÄ± baÄŸlantÄ±sÄ±nÄ± kontrol ETMEZ)
 
-### Hazırlık Kontrolü (Readiness)
+### HazÄ±rlÄ±k KontrolÃ¼ (Readiness)
 
 ```http
 GET /health/ready
 ```
 
-**Yanıt:** `200 OK`
+**YanÄ±t:** `200 OK`
 ```json
 {
   "status": "Healthy",
@@ -489,7 +489,7 @@ GET /health/ready
     {
       "name": "hangfire",
       "status": "Healthy",
-      "description": "Hangfire bağlı",
+      "description": "Hangfire baÄŸlÄ±",
       "duration": 0.3
     }
   ],
@@ -497,29 +497,29 @@ GET /health/ready
 }
 ```
 
-> Uygulama trafiğe hazır mı? (PostgreSQL + Hangfire kontrol eder)
+> Uygulama trafiÄŸe hazÄ±r mÄ±? (PostgreSQL + Hangfire kontrol eder)
 
 ---
 
-## Hata Kodları
+## Hata KodlarÄ±
 
-Tüm hata yanıtları aşağıdaki formattadır:
+TÃ¼m hata yanÄ±tlarÄ± aÅŸaÄŸÄ±daki formattadÄ±r:
 
 ```json
 {
-  "error": "Hata açıklaması",
+  "error": "Hata aÃ§Ä±klamasÄ±",
   "requestId": "abc123-trace-id"
 }
 ```
 
-| Hata Mesajı | Endpoint | Çözüm |
+| Hata MesajÄ± | Endpoint | Ã‡Ã¶zÃ¼m |
 |-------------|----------|-------|
-| "Workflow not found" | Workflow API | ID'nin doğru olduğunu kontrol et |
+| "Workflow not found" | Workflow API | ID'nin doÄŸru olduÄŸunu kontrol et |
 | "Bu execution iptal edilemez" | Cancel | Sadece Running/Queued durumundakiler iptal edilebilir |
 | "Webhook not found or inactive" | Webhook | webhookId ve aktiflik durumunu kontrol et |
-| "Invalid signature" | Webhook | X-Webhook-Signature header'ını kontrol et |
+| "Invalid signature" | Webhook | X-Webhook-Signature header'Ä±nÄ± kontrol et |
 | "Too many requests" | Rate limited | Bekle ve tekrar dene |
-| "Sunucu hatası oluştu" | Herhangi | requestId ile log'ları incele |
+| "Sunucu hatasÄ± oluÅŸtu" | Herhangi | requestId ile log'larÄ± incele |
 
 ---
 
@@ -846,3 +846,169 @@ GET /api/a2a/tasks
 > **OpenAPI JSON:** Development modunda `GET /openapi/v1.json` adresinden
 > otomatik uretilen OpenAPI spesifikasyonuna erisebilirsin.
 > Bu JSON'u Postman'a import edip tum endpoint'leri test edebilirsin.
+
+
+---
+
+## Authentication & Authorization
+
+TÃ¼m API endpoint'leri (webhook trigger hariÃ§) kimlik doÄŸrulama gerektirir.
+Kimlik saÄŸlayÄ±cÄ± olarak **Keycloak** (OIDC) kullanÄ±lÄ±r.
+
+### Kimlik DoÄŸrulama YÃ¶ntemleri
+
+**1. OIDC (Interactive Login â€” Keycloak)**
+
+Blazor WASM Ã¼zerinden Keycloak login sayfasÄ±na yÃ¶nlendirme. Authorization Code Flow (PKCE) ile token alÄ±nÄ±r.
+
+**2. JWT Bearer Token (API EriÅŸimi)**
+
+```
+Authorization: Bearer <jwt_token>
+```
+
+### Tenant Bilgisi
+
+Her istekte tenant bilgisi gÃ¶nderilmelidir:
+
+```
+X-Tenant-ID: kurumA
+```
+
+Subdomain modunda: `kurumA.uygulama.com`
+
+### Ä°zin Gereksinimleri
+
+| Endpoint | Gereken Ä°zin |
+|----------|-------------|
+| `GET /api/workflows` | `Workflows.Read` |
+| `POST /api/workflows` | `Workflows.Edit` |
+| `DELETE /api/workflows/{id}` | `Workflows.Edit` |
+| `POST /api/workflows/{id}/execute` | `Workflows.Execute` |
+| `GET /api/executions` | `Workflows.Read` |
+| `POST /api/executions/run/{id}` | `Workflows.Execute` |
+| `POST /api/executions/schedule/{id}` | `Workflows.Execute` |
+| `POST /api/executions/recurring/{id}` | `Workflows.Execute` |
+| `GET /api/folders` | `Workflows.Read` |
+| `POST /api/folders` | `Folders.Manage` |
+| `DELETE /api/folders/{id}` | `Folders.Manage` |
+| `POST /api/webhook/create` | `Webhooks.Manage` |
+| `POST /api/webhook/{webhookId}` | (AllowAnonymous) |
+| `/scim/v2/Users` | `Users.Manage` |
+| `/scim/v2/Groups` | `Users.Manage` |
+
+> `System.Admin` izni tÃ¼m endpoint'lere eriÅŸim saÄŸlar.
+
+### Hata YanÄ±tlarÄ±
+
+| Durum Kodu | AÃ§Ä±klama |
+|-----------|----------|
+| `401 Unauthorized` | GeÃ§ersiz veya eksik kimlik bilgileri |
+| `403 Forbidden` | Kimlik doÄŸrulandÄ± ama yetki yetersiz |
+
+---
+
+## SCIM 2.0 API
+
+SCIM 2.0 (RFC 7643/7644) uyumlu kullanÄ±cÄ± ve grup yÃ¶netim endpoint'leri.
+Keycloak veya diÄŸer kurumsal kimlik saÄŸlayÄ±cÄ±larÄ± (Entra ID, Okta) otomatik senkronizasyon iÃ§in bu API'yi kullanÄ±r.
+
+> **Content-Type:** `application/scim+json`
+> **Yetki:** `Users.Manage` izni gerektirir
+
+### KullanÄ±cÄ±larÄ± Listele
+
+```http
+GET /scim/v2/Users?startIndex=1&count=100
+
+X-Tenant-ID: kurumA
+Authorization: Bearer <token>
+```
+
+**YanÄ±t:** `200 OK`
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+  "totalResults": 42,
+  "startIndex": 1,
+  "itemsPerPage": 42,
+  "Resources": [
+    {
+      "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "userName": "ahmet@kurum.com",
+      "displayName": "Ahmet YÄ±lmaz",
+      "active": true,
+      "emails": [{"value": "ahmet@kurum.com", "type": "work", "primary": true}]
+    }
+  ]
+}
+```
+
+### KullanÄ±cÄ± OluÅŸtur
+
+```http
+POST /scim/v2/Users
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+  "userName": "yeni@kurum.com",
+  "displayName": "Yeni KullanÄ±cÄ±",
+  "emails": [{"value": "yeni@kurum.com", "type": "work", "primary": true}],
+  "active": true
+}
+```
+
+**YanÄ±t:** `201 Created`
+
+### KullanÄ±cÄ± GÃ¼ncelle (PATCH)
+
+```http
+PATCH /scim/v2/Users/{id}
+
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {"op": "replace", "path": "active", "value": false}
+  ]
+}
+```
+
+**YanÄ±t:** `204 No Content`
+
+### KullanÄ±cÄ± Sil
+
+```http
+DELETE /scim/v2/Users/{id}
+```
+
+**YanÄ±t:** `204 No Content` (soft delete  kullanÄ±cÄ± deaktive edilir)
+
+### GruplarÄ± Listele
+
+```http
+GET /scim/v2/Groups?startIndex=1&count=100
+```
+
+**YanÄ±t:** `200 OK`
+
+### Grup OluÅŸtur
+
+```http
+POST /scim/v2/Groups
+
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+  "displayName": "Workflow YÃ¶neticileri"
+}
+```
+
+**YanÄ±t:** `201 Created`
+
+### Grup Sil
+
+```http
+DELETE /scim/v2/Groups/{id}
+```
+
+**YanÄ±t:** `204 No Content` (hard delete)

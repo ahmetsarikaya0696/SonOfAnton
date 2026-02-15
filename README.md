@@ -4,94 +4,45 @@
 
 ---
 
-## Bu Proje Nedir?
+## 🚀 Bu Proje Nedir?
 
-**SonOfAnton**, bilgisayarinizda calisan akilli bir otomasyon fabrikasidir.
+**SonOfAnton**, bilgisayarinizda calisan akilli bir otomasyon fabrikasidir. Dijital bir **Lego seti** gibi dusunebilirsiniz:
 
-Bunu dijital bir **Lego seti** gibi dusunebilirsiniz:
 - **Parcalar (Node'lar):** Her bir parca farkli bir is yapar - "PDF oku", "Ozet cikar", "Email gonder", "Vektor aramasi yap"...
 - **Baglantilar (Kablolar):** Parcalari birbirine baglayarak verinin nereden nereye akacagini belirlersiniz.
 - **Is Akisi (Workflow):** Parcalari birlestirip "Calistir" tusuna bastiginizda, kurdugunuz sistem otomatik olarak calisir.
 
-### Neler Yapabilirsiniz?
+### 🌟 Neler Yapabilirsiniz?
 - Uzun belgeleri otomatik ozetleyen sistemler kurabilirsiniz.
 - Belgeler icinde **semantik arama** yapabilirsiniz (kelime eslesmesi degil, anlam eslesmesi!).
 - Her sabah 08:00'de calisip size gundem ozeti gecen botlar yapabilirsiniz.
 - Web sitenizden gelen formlari otomatik analiz edip siniflandirabilirsiniz.
 - **AI Asistan** ile dogal dilde konusarak workflow olusturabilirsiniz.
 - **ForEach / While / Parallel** donguleri ile karmasik akislar kurabilirsiniz.
-- Workflow'larinizi **klasorlerle** organize edebilirsiniz.
-- Calisan bir execution'in **snapshot**'ini alip daha sonra geri yukleyebilirsiniz.
-
-**En guzel yani:** Bunlarin hepsini **kod yazmadan**, kutucuklari surukleyip birakarak yaparsiniz! AI modelleri tamamen **kendi bilgisayarinizda** calisir, verileriniz disari cikmaz.
 
 ---
 
-## Teknoloji Yigini
+## 🛠 Teknoloji Yigini
 
 | Katman | Teknoloji | Aciklama |
 |--------|-----------|----------|
 | **Backend** | .NET 10, ASP.NET Core | RESTful API |
-| **Frontend** | Blazor WebAssembly | Tarayici tabanli SPA |
+| **Frontend** | Blazor WebAssembly | Tarayici tabanli SPA  |
+| **Kimlik Yonetimi** | Keycloak | OIDC/OAuth2 Authentication & Authorization |
 | **Diagram** | Z.Blazor.Diagrams | Gorsel node editoru |
 | **Veritabani** | PostgreSQL + pgvector | JSONB + vektor arama + HNSW indeks |
+| **DB Yonetimi** | pgAdmin 4 | Veritabani yonetim arayuzu |
 | **Arka Plan** | Hangfire | Job scheduling, cron, kuyruk yonetimi |
 | **AI** | Ollama + Semantic Kernel | Yerel LLM ve chat completion |
 | **Embedding** | ONNX Runtime | Yerel embedding (all-MiniLM-L6-v2) |
-| **YAML** | YamlDotNet | Workflow import/export |
-| **Gercek Zamanli** | Server-Sent Events (SSE) | Execution takibi ve loglama |
 
 ---
 
-## Temel Ozellikler
-
-### Gorsel Workflow Editoru
-- Surukle-birak node ekleme, baglanti olusturma
-- 30+ node tipi (Tetikleyici, HTTP, Donusum, Mantik, AI, Vector DB, Donguler, Iletisim)
-- Dinamik parametre paneli, `{{variable}}` template destegi
-- Keyboard shortcut'lar (Ctrl+K - Global Search)
-
-### AI Asistan ve Chat
-- Dogal dilde workflow olusturma ve duzenleme
-- AI'dan gelen graph onerisini tek tikla uygulama
-- YAML preview ile workflow import/export
-
-### Subflow ve Donguler
-- **ForEach Loop:** Koleksiyon uzerinde dongu
-- **While Loop:** Kosul saglandigi surece tekrar
-- **Parallel:** Dallari eszamanli calistirma (WaitAll / WaitAny / FireAndForget)
-- **Break / Continue:** Dongu kontrol node'lari
-
-### Execution Engine
-- Hangfire tabanli arka plan calistirma
-- Node bazinda **retry** ve **timeout** mekanizmasi
-- **Pause / Resume:** Calisan execution'i duraklatma ve devam ettirme
-- **Snapshot:** Execution durumunu kaydetme ve geri yukleme
-- Cevrimsel bagimlilik tespiti
-
-### Vektor Veritabani ve RAG
-- pgvector + IVFFlat / HNSW indeksleme
-- ONNX ile yerel embedding (768 boyut)
-- Cosine / Euclidean / Inner Product benzerlik metrikleri
-
-### Organizasyon ve Istatistik
-- **Klasor sistemi:** Hiyerarsik workflow organizasyonu
-- **Dashboard:** Toplam workflow, execution, basari orani
-- **Workflow Stats:** Gunluk calistirma grafigi, ortalama sure
-- **Global Search:** Full-text + hybrid (vektor) arama
-
-### A2A Protocol
-- Agent-to-Agent iletisim altyapisi
-- Agent Registry ile agent kesfi
-- Task-based asenkron iletisim
-
----
-
-## Kurulum ve Calistirma
+## ⚡ Kurulum ve Calistirma
 
 ### Gereksinimler
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download) (veya guncel surum)
 - [Ollama](https://ollama.ai/) (AI ozellikleri icin)
 
 ### Adim 1: Projeyi Indirin
@@ -100,75 +51,107 @@ git clone https://github.com/ahmetsarikaya0696/SonOfAnton.git
 cd SonOfAnton
 ```
 
-### Adim 2: Backend'i Calistirin
+### Adim 2: Altyapiyi Ayaga Kaldirin (Docker)
+Veritabani, Yonetim Paneli ve Kimlik Servisi'ni baslatin:
+```bash
+docker-compose up -d
+```
+Bu komut asagidaki servisleri baslatir:
+- **PostgreSQL**: `localhost:5432`
+- **pgAdmin**: `localhost:5050`
+- **Keycloak**: `localhost:8080`
+
+### Adim 3: Backend'i Calistirin
 ```bash
 cd src/SonOfAnton.Backend
 dotnet run
 ```
-> Backend ilk calistirmada Docker uzerinden PostgreSQL + pgvector container'ini otomatik ayaga kaldirir, veritabani tablolarini olusturur ve ONNX modellerini indirir.
+Backend `https://localhost:5002` ve `http://localhost:5003` portlarinda calisacaktir. Ilk calistirmada veritabani semasini otomatik olusturur ve gerekli ONNX modellerini indirir.
 
-### Adim 3: Frontend'i Calistirin
+### Adim 4: Frontend'i Calistirin
+Yeni bir terminalde:
 ```bash
 cd src/SonOfAnton.Frontend
 dotnet run
 ```
-> Tarayicida `https://localhost:5001` adresinden erisebilirsiniz.
+Tarayicinizda `https://localhost:5001` adresine gidin.
 
 ---
 
-## Proje Yapisi
+## 🔐 Varsayilan Kimlik Bilgileri
+
+Gelistirme ortami icin tanimli varsayilan kullanici ve sifreler:
+
+| Servis | URL | Kullanici Adi | Sifre |
+|--------|-----|---------------|-------|
+| **Keycloak** | `http://localhost:8080` | `admin` | `admin` |
+| **pgAdmin** | `http://localhost:5050` | `admin@sonofanton.local` | `admin` |
+| **PostgreSQL** | `localhost:5432` | `sonofanton` | `sonofanton_dev_password` |
+
+> **Not:** Keycloak ilk baslatildiginda `realm-export.json` dosyasindan gerekli ayarlari otomatik yukler (realm, client, users).
+
+---
+
+## 📂 Proje Yapisi
 
 ```
 SonOfAnton/
 +-- src/
 |   +-- SonOfAnton.Backend/          # API, AI Motoru, Veritabani
-|   |   +-- Controllers/             # REST endpoint'leri (12 controller)
-|   |   +-- Engine/                  # Workflow calistirma motoru
-|   |   |   +-- Handlers/            # Node handler'lari (25+ handler)
-|   |   |   +-- Expressions/         # template engine
-|   |   +-- Services/                # Is servisleri
-|   |   |   +-- Search/              # Full-text + Hybrid arama
-|   |   |   +-- Snapshots/           # Execution snapshot
-|   |   +-- Execution/               # PauseToken, WorkflowExecutor
-|   |   +-- A2A/                     # Agent-to-Agent protocol
-|   |   +-- Agents/                  # AI Agent servisleri
-|   |   +-- Orchestrator/            # Proje orkestrasyon
-|   |   +-- Infrastructure/          # Embedding, VectorDB, Docker
-|   |   +-- Data/                    # EF Core DbContext
-|   |
-|   +-- SonOfAnton.Frontend/         # Blazor WebAssembly
-|   |   +-- Components/              # 20+ UI bileseni
-|   |   +-- Pages/                   # Dashboard, Executions, ExecutionDetail
-|   |   +-- Services/                # API, Diagram, SSE, Chat, YAML
-|   |   +-- wwwroot/                 # CSS, JS
-|   |
-|   +-- SonOfAnton.Shared/           # Ortak kod
-|       +-- DTOs/                    # Veri transfer objeleri
-|       +-- Entities/                # Veritabani entity'leri (7 entity)
-|       +-- Enums/                   # ExecutionStatus, SubflowType vb.
-|       +-- Models/                  # NodeRegistry, WorkflowTemplates
-|       +-- Serialization/           # YAML serializer
-|       +-- Core/GraphEngine/        # DAG motoru
+|   +-- SonOfAnton.Frontend/         # Blazor WebAssembly Arayuzu
+|   +-- SonOfAnton.Shared/           # Ortak DTO, Model ve Tipler
 |
-+-- docs/                            # Dokumantasyon
-    +-- API.md                       # API referansi
-    +-- ARCHITECTURE.md              # Mimari
-    +-- DATABASE.md                  # Veritabani semasi
-    +-- DEPLOYMENT.md                # Dagitim kilavuzu
++-- docs/                            # Detayli Dokumantasyon
+|   +-- API.md                       # API Endpoint Referansi
+|   +-- ARCHITECTURE.md              # Mimari Tasarim ve Prensipler
+|   +-- DATABASE.md                  # Veritabani Semasi ve Vektor Yapisi
+|   +-- DEPLOYMENT.md                # Dagitim ve Container Kilavuzu
+|
++-- init-scripts/                    # Docker ilk kurulum scriptleri (SQL)
++-- keycloak/                        # Keycloak Realm export dosyalari
++-- docker-compose.yml               # Container orkestrasyon dosyasi
 ```
 
 ---
 
-## Katkida Bulunma
+## ✨ Temel Ozellikler
 
-1. Bu repository'i Fork edin.
-2. Yeni bir Branch olusturun (`git checkout -b feature/HarikaOzellik`).
-3. Degisikliklerinizi Commit edin (`git commit -m 'Harika ozellik eklendi'`).
-4. Branch'inizi Push edin (`git push origin feature/HarikaOzellik`).
-5. Bir Pull Request acin.
+### 🎨 Gorsel Workflow Editoru
+- Surukle-birak node ekleme, baglanti olusturma
+- 30+ node tipi (Tetikleyici, HTTP, Donusum, Mantik, AI, Vector DB...)
+- Dinamik parametre paneli ve `{{variable}}` destegi
+
+### 🤖 AI Asistan ve Chat
+- Dogal dilde workflow olusturma
+- AI onerilerini tek tikla uygulama
+
+### 🔄 Gelismis Akis Kontrolu
+- **Donguler:** ForEach, While
+- **Paralel Calisma:** WaitAll, WaitAny, FireAndForget
+- **Yonetim:** Break, Continue
+
+### 🛡️ Guvenlik ve Kimlik
+- Keycloak entegrasyonu ile merkezi kimlik yonetimi (SSO)
+- Rol tabanli erisim kontrolu (RBAC)
+- Guvenli API iletisimi
+
+### 📊 Veri ve Analiz
+- **Vektor DB:** pgvector ile semantik arama
+- **Dashboard:** Workflow istatistikleri ve execution takibi
+- **Server-Sent Events (SSE):** Gercek zamanli log izleme
 
 ---
 
-## Lisans
+## 🤝 Katkida Bulunma
+
+1. Fork edin.
+2. Branch olusturun (`git checkout -b feature/YeniOzellik`).
+3. Commit edin (`git commit -m 'Yeni ozellik eklendi'`).
+4. Push edin (`git push origin feature/YeniOzellik`).
+5. Pull Request acin.
+
+---
+
+## 📄 Lisans
 
 Bu proje [MIT Lisansi](LICENSE) ile lisanslanmistir.
