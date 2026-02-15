@@ -59,7 +59,7 @@ public class DiagramStateService
     {
         _currentWorkflow = new WorkflowDto
         {
-            Name = "Yeni �� Ak���",
+            Name = "Yeni İş Akışı",
             Graph = new WorkflowGraphDto()
         };
         
@@ -79,7 +79,7 @@ public class DiagramStateService
         if (workflow.Graph == null)
             return;
 
-        // Node'lar� ekle
+        // Node'ları ekle
         var nodeMap = new Dictionary<Guid, WorkflowNodeModel>();
         foreach (var nodeDto in workflow.Graph.Nodes)
         {
@@ -88,7 +88,7 @@ public class DiagramStateService
             nodeMap[nodeDto.Id] = node;
         }
 
-        // Ba�lant�lar� ekle
+        // Bağlantıları ekle
         foreach (var conn in workflow.Graph.Connections)
         {
             if (nodeMap.TryGetValue(conn.SourceNodeId, out var sourceNode) &&
@@ -110,7 +110,7 @@ public class DiagramStateService
     }
 
     /// <summary>
-    /// �ablondan yeni workflow olu�turur
+    /// Şablondan yeni workflow oluşturur
     /// </summary>
     public void LoadFromTemplate(SonOfAnton.Shared.Models.WorkflowTemplate template)
     {
@@ -128,11 +128,11 @@ public class DiagramStateService
         if (template.Graph == null)
             return;
 
-        // Node'lar� ekle
+        // Node'ları ekle
         var nodeMap = new Dictionary<Guid, WorkflowNodeModel>();
         foreach (var nodeDto in template.Graph.Nodes)
         {
-            // Yeni ID ata (�ablon ID'lerini kullanma)
+            // Yeni ID ata (Şablon ID'lerini kullanma)
             var newNodeDto = new WorkflowNodeDto
             {
                 Id = Guid.NewGuid(),
@@ -147,10 +147,10 @@ public class DiagramStateService
             
             var node = new WorkflowNodeModel(newNodeDto, new Point(newNodeDto.X, newNodeDto.Y));
             Diagram.Nodes.Add(node);
-            nodeMap[nodeDto.Id] = node; // Eski ID ile map'le (ba�lant�lar i�in)
+            nodeMap[nodeDto.Id] = node; // Eski ID ile map'le (bağlantılar için)
         }
 
-        // Ba�lant�lar� ekle
+        // Bağlantıları ekle
         foreach (var conn in template.Graph.Connections)
         {
             if (nodeMap.TryGetValue(conn.SourceNodeId, out var sourceNode) &&
@@ -200,7 +200,7 @@ public class DiagramStateService
 
         foreach (var link in Diagram.Links.OfType<LinkModel>())
         {
-            // Link'in source ve target port'lar�ndan node'lar� al
+            // Link'in source ve target port'larından node'ları al
             var sourcePort = link.Source as SinglePortAnchor;
             var targetPort = link.Target as SinglePortAnchor;
             

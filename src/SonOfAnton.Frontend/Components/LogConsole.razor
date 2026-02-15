@@ -9,22 +9,22 @@
 
 <div class="log-console @(_isOpen ? "open" : "")">
     <div class="console-header" @onclick="ToggleConsole">
-        <span class="icon">??</span>
+        <span class="icon">🖥️</span>
         <span class="title">Konsol</span>
         @if (_logs.Count > 0)
         {
             <span class="log-count">@_logs.Count</span>
         }
-        <span class="toggle-icon">@(_isOpen ? "?" : "?")</span>
+        <span class="toggle-icon">@(_isOpen ? "▾" : "▴")</span>
     </div>
 
     @if (_isOpen)
     {
         <div class="console-toolbar">
-            <button class="toolbar-btn" @onclick="ClearLogs">??? Temizle</button>
+            <button class="toolbar-btn" @onclick="ClearLogs">🗑️ Temizle</button>
             <label class="auto-scroll">
                 <input type="checkbox" @bind="_autoScroll" />
-                Otomatik kayd�r
+                Otomatik kaydır
             </label>
         </div>
 
@@ -32,7 +32,7 @@
             @if (_logs.Count == 0)
             {
                 <div class="empty-state">
-                    <span>Hen�z log yok. Bir workflow �al��t�r�n.</span>
+                    <span>Henüz log yok. Bir workflow çalıştırın.</span>
                 </div>
             }
             else
@@ -82,17 +82,17 @@
     {
         Console.WriteLine($"[LogConsole] StartStreaming called: {executionId}");
         
-        // �nceki ba�lant�y� kapat
+        // Önceki bağlantıyı kapat
         if (_currentConnectionId != null)
         {
             await JS.InvokeVoidAsync("sseHelper.disconnect", _currentConnectionId);
         }
         
-        // Yeni execution i�in loglar� temizle
+        // Yeni execution için logları temizle
         _logs.Clear();
         StateHasChanged();
 
-        // Yeni ba�lant� ba�lat
+        // Yeni bağlantı başlat
         _currentConnectionId = Guid.NewGuid().ToString();
         _dotNetRef = DotNetObjectReference.Create(this);
         
@@ -148,11 +148,11 @@
 
     private string GetLevelIcon(LogLevel level) => level switch
     {
-        LogLevel.Debug => "??",
-        LogLevel.Info => "??",
-        LogLevel.Warning => "??",
-        LogLevel.Error => "?",
-        _ => "??"
+        LogLevel.Debug => "🔍",
+        LogLevel.Info => "ℹ️",
+        LogLevel.Warning => "⚠️",
+        LogLevel.Error => "❌",
+        _ => "📝"
     };
 
     public async ValueTask DisposeAsync()

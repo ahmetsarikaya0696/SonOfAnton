@@ -4,7 +4,7 @@ using SonOfAnton.Shared.DTOs;
 namespace SonOfAnton.Frontend.Services;
 
 /// <summary>
-/// Backend API ile ileti�im servisi
+/// Backend API ile iletişim servisi
 /// </summary>
 public class WorkflowApiService
 {
