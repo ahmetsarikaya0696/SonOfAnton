@@ -97,5 +97,159 @@ public class WorkflowApiService
     }
 
     #endregion
+
+    #region Folders
+
+    public async Task<List<FolderDto>> GetFoldersAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<FolderDto>>("api/folders") ?? [];
+    }
+
+    public async Task<List<FolderTreeDto>> GetFolderTreeAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<FolderTreeDto>>("api/folders/tree") ?? [];
+    }
+
+    public async Task<FolderDto?> CreateFolderAsync(CreateFolderRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/folders", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FolderDto>();
+    }
+
+    public async Task DeleteFolderAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"api/folders/{id}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task MoveWorkflowToFolderAsync(Guid workflowId, Guid? folderId)
+    {
+        var response = await _httpClient.PatchAsJsonAsync(
+            $"api/workflows/{workflowId}/move",
+            new MoveWorkflowRequest { FolderId = folderId });
+        response.EnsureSuccessStatusCode();
+    }
+
+    #endregion
+
+    #region Statistics
+
+    public async Task<DashboardStatsDto?> GetDashboardStatsAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<DashboardStatsDto>("api/workflows/stats");
+    }
+
+    public async Task<WorkflowStatsDto?> GetWorkflowStatsAsync(Guid workflowId, int days = 30)
+    {
+        return await _httpClient.GetFromJsonAsync<WorkflowStatsDto>(
+            $"api/workflows/{workflowId}/stats?days={days}");
+    }
+
+    #endregion
+
+    #region Pause / Resume / Snapshots
+
+    public async Task PauseExecutionAsync(Guid executionId)
+    {
+        var response = await _httpClient.PostAsync($"api/workflows/execution/{executionId}/pause", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task ResumeExecutionAsync(Guid executionId)
+    {
+        var response = await _httpClient.PostAsync($"api/workflows/execution/{executionId}/resume", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<SnapshotDto?> TakeSnapshotAsync(Guid executionId, string? label = null)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            $"api/workflows/execution/{executionId}/snapshot",
+            new CreateSnapshotRequest { Label = label });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SnapshotDto>();
+    }
+
+    public async Task<List<SnapshotDto>> GetSnapshotsAsync(Guid executionId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<SnapshotDto>>(
+            $"api/workflows/execution/{executionId}/snapshots") ?? [];
+    }
+
+    public async Task<ExecutionDto?> RestoreFromSnapshotAsync(Guid executionId, Guid snapshotId)
+    {
+        var response = await _httpClient.PostAsync(
+            $"api/workflows/execution/{executionId}/snapshot/{snapshotId}/restore", null);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ExecutionDto>();
+    }
+
+    #endregion
+
+    #region Chat & YAML
+
+    public async Task<WorkflowChatResponse?> SendChatMessageAsync(WorkflowChatRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/workflow/chat", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WorkflowChatResponse>();
+    }
+
+    public async Task<PlanArtifactDto?> ExportYamlAsync(WorkflowGraphDto graph)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/workflow/chat/export-yaml", graph);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlanArtifactDto>();
+    }
+
+    public async Task<YamlValidationResult?> ImportYamlAsync(string yamlContent)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/workflow/chat/import-yaml",
+            new YamlImportRequest { YamlContent = yamlContent });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<YamlValidationResult>();
+    }
+
+    public async Task<List<PlanArtifactDto>> GetArtifactsAsync(Guid workflowId, string? type = null)
+    {
+        var url = $"api/workflows/{workflowId}/artifacts";
+        if (type != null) url += $"?type={type}";
+        return await _httpClient.GetFromJsonAsync<List<PlanArtifactDto>>(url) ?? [];
+    }
+
+    #endregion
+
+    #region Search
+
+    public async Task<SearchResultDto<object>?> SearchAsync(string query, string? type = null, int page = 1)
+    {
+        var url = $"api/search?q={Uri.EscapeDataString(query)}&page={page}";
+        if (type != null) url += $"&type={type}";
+        return await _httpClient.GetFromJsonAsync<SearchResultDto<object>>(url);
+    }
+
+    #endregion
+
+    #region A2A
+
+    public async Task<List<AgentCardDto>> GetAgentCardsAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<AgentCardDto>>("api/a2a/agents") ?? [];
+    }
+
+    public async Task<A2ATaskDto?> SendA2ATaskAsync(A2ATaskRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/a2a/tasks/send", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<A2ATaskDto>();
+    }
+
+    public async Task<A2ATaskDto?> GetA2ATaskAsync(Guid taskId)
+    {
+        return await _httpClient.GetFromJsonAsync<A2ATaskDto>($"api/a2a/tasks/{taskId}");
+    }
+
+    #endregion
 }
 

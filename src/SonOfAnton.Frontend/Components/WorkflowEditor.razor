@@ -4,11 +4,15 @@
 @inject DiagramStateService DiagramState
 @inject WorkflowApiService ApiService
 @inject SseClientService SseClient
+@inject ChatDiagramBridge ChatBridge
 @implements IAsyncDisposable
 
-<div class="workflow-editor">
+<div class="workflow-editor" @onkeydown="HandleGlobalKeyDown" tabindex="-1">
     <div class="toolbar">
         <div class="toolbar-left">
+            <button class="btn btn-ghost" @onclick="() => _isFolderTreeOpen = !_isFolderTreeOpen" title="Klasörler">
+                <Icon Name="folder" Size="14" />
+            </button>
             <button class="btn btn-primary" @onclick="NewWorkflow">
                 <Icon Name="plus" Size="14" /> Yeni
             </button>
@@ -37,16 +41,35 @@
         </div>
         
         <div class="toolbar-right">
+            <button class="btn btn-ghost" @onclick="() => _isSearchOpen = true" title="Ara (Ctrl+K)">
+                <Icon Name="search" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => _isChatOpen = !_isChatOpen" title="AI Asistan">
+                <Icon Name="message-circle" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => _isYamlOpen = !_isYamlOpen" title="YAML">
+                <Icon Name="file-text" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => _isVariablesOpen = !_isVariablesOpen" title="Değişkenler">
+                <Icon Name="variable" Size="14" />
+            </button>
+            <span class="toolbar-divider"></span>
             @if (_isExecuting)
             {
+                <button class="btn btn-warning" @onclick="PauseResumeExecution">
+                    <Icon Name="@(_isPaused ? "play" : "pause")" Size="14" /> @(_isPaused ? "Devam" : "Duraklat")
+                </button>
+                <button class="btn btn-ghost" @onclick="() => _isSnapshotOpen = !_isSnapshotOpen" title="Snapshot'lar">
+                    <Icon Name="camera" Size="14" />
+                </button>
                 <button class="btn btn-danger" @onclick="StopExecution">
                     <Icon Name="square" Size="14" /> Durdur
                 </button>
             }
             else
             {
-                <button class="btn btn-warning" 
-                        @onclick="ExecuteWorkflow" 
+                <button class="btn btn-warning"
+                        @onclick="ExecuteWorkflow"
                         disabled="@(DiagramState.CurrentWorkflow?.Id == Guid.Empty)">
                     <Icon Name="play" Size="14" /> Çalıştır
                 </button>
@@ -54,10 +77,23 @@
             <button class="btn btn-info" @onclick="ToggleMonitor">
                 <Icon Name="activity" Size="14" /> Monitor
             </button>
+            <a class="btn btn-ghost" href="/executions" title="Execution Geçmişi">
+                <Icon Name="list" Size="14" />
+            </a>
+            <a class="btn btn-ghost" href="/dashboard" title="Dashboard">
+                <Icon Name="bar-chart-2" Size="14" />
+            </a>
         </div>
     </div>
 
     <div class="editor-container">
+        @if (_isFolderTreeOpen)
+        {
+            <div class="folder-sidebar">
+                <FolderTree OnFolderSelected="HandleFolderSelected" />
+            </div>
+        }
+
         <NodePalette OnNodeDrop="HandleNodeDrop" />
         
         <div class="canvas-container" 
@@ -94,6 +130,25 @@
                 OnClose="CloseTemplates" 
                 OnTemplateSelected="LoadTemplate" />
 
+<GlobalSearch IsOpen="_isSearchOpen" OnClose="() => _isSearchOpen = false" />
+
+<WorkflowChatPanel IsOpen="_isChatOpen" IsOpenChanged="v => _isChatOpen = v"
+                   WorkflowId="DiagramState.CurrentWorkflow?.Id" />
+
+<YamlPreviewPanel IsOpen="_isYamlOpen" IsOpenChanged="v => _isYamlOpen = v" />
+
+<VariablesPanel IsOpen="_isVariablesOpen" IsOpenChanged="v => _isVariablesOpen = v" />
+
+<SnapshotPanel IsOpen="_isSnapshotOpen" IsOpenChanged="v => _isSnapshotOpen = v"
+               ExecutionId="_currentExecutionId ?? Guid.Empty" />
+
+@if (DiagramState.CurrentWorkflow?.Id != null && DiagramState.CurrentWorkflow.Id != Guid.Empty)
+{
+    <div class="stats-floating">
+        <WorkflowStatsCard WorkflowId="DiagramState.CurrentWorkflow.Id" />
+    </div>
+}
+
 @code {
     private bool _isSaving;
     private bool _isExecuting;
@@ -103,6 +158,15 @@
     private bool _showConnectionHint = true;
     private string _workflowName = "Yeni İş Akışı";
     private ExecutionMonitor? _executionMonitor;
+
+    // New panel states
+    private bool _isSearchOpen;
+    private bool _isChatOpen;
+    private bool _isYamlOpen;
+    private bool _isVariablesOpen;
+    private bool _isSnapshotOpen;
+    private bool _isPaused;
+    private bool _isFolderTreeOpen;
 
     protected override void OnInitialized()
     {
@@ -130,6 +194,20 @@
         _workflowName = "Yeni İş Akışı";
         _currentExecutionId = null;
         _isExecuting = false;
+    }
+
+    private void HandleFolderSelected(Guid? folderId)
+    {
+        Console.WriteLine($"Folder selected: {folderId}");
+    }
+
+    private void HandleGlobalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "k")
+        {
+            _isSearchOpen = !_isSearchOpen;
+            StateHasChanged();
+        }
     }
 
     private async Task SaveWorkflow()
@@ -316,6 +394,29 @@
         DiagramState.LoadFromTemplate(template);
         _workflowName = template.Name;
         _isTemplatesPanelOpen = false;
+    }
+
+    private async Task PauseResumeExecution()
+    {
+        if (!_currentExecutionId.HasValue) return;
+
+        try
+        {
+            if (_isPaused)
+            {
+                await ApiService.ResumeExecutionAsync(_currentExecutionId.Value);
+                _isPaused = false;
+            }
+            else
+            {
+                await ApiService.PauseExecutionAsync(_currentExecutionId.Value);
+                _isPaused = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Pause/Resume hatası: {ex.Message}");
+        }
     }
 
     public async ValueTask DisposeAsync()

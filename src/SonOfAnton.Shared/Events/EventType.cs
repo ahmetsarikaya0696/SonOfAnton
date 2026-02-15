@@ -23,7 +23,16 @@ public enum EventType
     /// <summary>Hata olu�tu</summary>
     Error,
     
-    /// <summary>T�m i�lemler tamamland�</summary>
-    Finish
+    /// <summary>Tum islemler tamamlandi</summary>
+    Finish,
+
+    /// <summary>Workflow duzenleme diff'i</summary>
+    WorkflowDiff,
+
+    /// <summary>Chat mesaji</summary>
+    ChatMessage,
+
+    /// <summary>Snapshot alindi</summary>
+    Snapshot
 }
 

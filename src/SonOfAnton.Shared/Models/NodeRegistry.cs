@@ -518,6 +518,107 @@ public static class NodeRegistry
             [
                 new NodeParameter { Name = "collection", DisplayName = "Koleksiyon", Type = "string", DefaultValue = "default", Required = true }
             ]
+        },
+
+        // Subflow / Döngü
+        new NodeDefinition
+        {
+            Type = "subflow.foreach",
+            Name = "ForEach Döngü",
+            Icon = "repeat",
+            Category = "Döngüler",
+            Description = "Koleksiyon üzerinde döngü",
+            Color = "#f5c2e7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "collection", DisplayName = "Koleksiyon", Type = "string", Placeholder = "{{items}}" },
+                new NodeParameter { Name = "maxIterations", DisplayName = "Max İterasyon", Type = "number", DefaultValue = 1000 }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "subflow.while",
+            Name = "While Döngü",
+            Icon = "refresh-cw",
+            Category = "Döngüler",
+            Description = "Koşul sağlandığı sürece tekrar et",
+            Color = "#f5c2e7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "condition", DisplayName = "Koşul", Type = "string", Placeholder = "{{counter}} < 10", Required = true },
+                new NodeParameter { Name = "maxIterations", DisplayName = "Max İterasyon", Type = "number", DefaultValue = 1000 }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "subflow.parallel",
+            Name = "Paralel Çalıştır",
+            Icon = "columns",
+            Category = "Döngüler",
+            Description = "Dalları eşzamanlı çalıştır",
+            Color = "#f5c2e7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter
+                {
+                    Name = "maxConcurrency",
+                    DisplayName = "Maks Eşzamanlılık",
+                    Type = "number",
+                    DefaultValue = 4
+                },
+                new NodeParameter
+                {
+                    Name = "joinStrategy",
+                    DisplayName = "Birleştirme",
+                    Type = "select",
+                    DefaultValue = "WaitAll",
+                    Options =
+                    [
+                        new SelectOption { Value = "WaitAll", Label = "Tümünü Bekle" },
+                        new SelectOption { Value = "WaitAny", Label = "İlkini Bekle" },
+                        new SelectOption { Value = "FireAndForget", Label = "Ateşle Unut" }
+                    ]
+                },
+                new NodeParameter
+                {
+                    Name = "errorPolicy",
+                    DisplayName = "Hata Politikası",
+                    Type = "select",
+                    DefaultValue = "FailFast",
+                    Options =
+                    [
+                        new SelectOption { Value = "FailFast", Label = "Hızlı Başarısızlık" },
+                        new SelectOption { Value = "ContinueOnError", Label = "Hatada Devam" },
+                        new SelectOption { Value = "CollectErrors", Label = "Hataları Topla" }
+                    ]
+                }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "flow.break",
+            Name = "Döngüyü Kır",
+            Icon = "x-circle",
+            Category = "Döngüler",
+            Description = "Döngüden erken çıkış",
+            Color = "#f38ba8",
+            Inputs = [new NodePort { Name = "input", Type = "any" }]
+        },
+        new NodeDefinition
+        {
+            Type = "flow.continue",
+            Name = "Sonraki İterasyon",
+            Icon = "skip-forward",
+            Category = "Döngüler",
+            Description = "Sonraki iterasyona atla",
+            Color = "#fab387",
+            Inputs = [new NodePort { Name = "input", Type = "any" }]
         }
     ];
 

@@ -1,0 +1,62 @@
+<div class="folder-node @(SelectedFolderId == Folder.Id ? "selected" : "")"
+     style="padding-left: @(_depth * 16 + 8)px"
+     @ondragover:preventDefault="true"
+     @ondrop="HandleDrop">
+    
+    <div class="folder-row" @onclick="() => OnSelect.InvokeAsync(Folder.Id)">
+        @if (Folder.Children.Count > 0)
+        {
+            <button class="expand-btn" @onclick:stopPropagation="true" @onclick="ToggleExpand">
+                <Icon Name="@(_isExpanded ? "chevron-down" : "chevron-right")" Size="12" />
+            </button>
+        }
+        else
+        {
+            <span class="expand-placeholder"></span>
+        }
+
+        <Icon Name="@(Folder.Icon ?? "folder")" Size="14" />
+        <span class="folder-name" style="@(!string.IsNullOrEmpty(Folder.Color) ? $"color: {Folder.Color}" : "")">
+            @Folder.Name
+        </span>
+        <span class="folder-count">@Folder.Workflows.Count</span>
+
+        <button class="delete-btn" @onclick:stopPropagation="true" @onclick="() => OnDelete.InvokeAsync(Folder.Id)" title="Sil">
+            <Icon Name="trash-2" Size="12" />
+        </button>
+    </div>
+
+    @if (_isExpanded && Folder.Children.Count > 0)
+    {
+        @foreach (var child in Folder.Children)
+        {
+            <FolderTreeNode Folder="child"
+                            SelectedFolderId="SelectedFolderId"
+                            OnSelect="OnSelect"
+                            OnDelete="OnDelete"
+                            OnWorkflowDrop="OnWorkflowDrop"
+                            Depth="_depth + 1" />
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public required FolderTreeDto Folder { get; set; }
+    [Parameter] public Guid? SelectedFolderId { get; set; }
+    [Parameter] public EventCallback<Guid?> OnSelect { get; set; }
+    [Parameter] public EventCallback<Guid> OnDelete { get; set; }
+    [Parameter] public EventCallback<(Guid WorkflowId, Guid? FolderId)> OnWorkflowDrop { get; set; }
+    [Parameter] public int Depth { get; set; }
+
+    private bool _isExpanded = true;
+    private int _depth => Depth;
+
+    private void ToggleExpand() => _isExpanded = !_isExpanded;
+
+    private async Task HandleDrop()
+    {
+        // Drag & drop ile workflow taşıma placeholder
+        // JS interop ile dragData alınması gerekir
+        await Task.CompletedTask;
+    }
+}

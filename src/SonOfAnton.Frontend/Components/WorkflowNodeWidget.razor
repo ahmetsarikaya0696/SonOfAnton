@@ -2,21 +2,25 @@
 @using Blazor.Diagrams.Core.Models
 @using SonOfAnton.Frontend.Services
 
-<div class="workflow-node @(Node.Selected ? "selected" : "")" 
+<div class="workflow-node @(Node.Selected ? "selected" : "") @GetExecutionClass() @GetSubflowClass()" 
      style="--node-color: @GetNodeColor()">
-    
+
     @* Input Port (Left) *@
     @foreach (var port in Node.Ports.Where(p => p.Alignment == PortAlignment.Left))
     {
         <PortRenderer @key="port.Id" Port="port" Class="port port-left" />
     }
-    
+
     <div class="node-content">
         <div class="node-header">
             <span class="node-icon"><Icon Name="@GetIconName()" Size="16" Color="#1e1e2e" /></span>
             <span class="node-name">@Node.NodeData.Name</span>
+            @if (IsSubflowNode)
+            {
+                <span class="subflow-badge">@GetSubflowLabel()</span>
+            }
         </div>
-        
+
         <div class="node-body">
             @if (Node.NodeData.Parameters.Count > 0)
             {
@@ -30,9 +34,30 @@
                     }
                 </div>
             }
+
+            @if (IsSubflowNode && Node.NodeData.ChildGraph != null)
+            {
+                <div class="child-graph-info">
+                    <Icon Name="layers" Size="12" />
+                    <span>@Node.NodeData.ChildGraph.Nodes.Count node</span>
+                </div>
+            }
         </div>
+
+        @if (Node.IsExecuting)
+        {
+            <div class="execution-indicator">
+                <span class="exec-spinner"></span>
+            </div>
+        }
+        else if (Node.IsCompleted)
+        {
+            <div class="execution-indicator @(Node.IsSuccess ? "success" : "failure")">
+                <Icon Name="@(Node.IsSuccess ? "check" : "x")" Size="12" />
+            </div>
+        }
     </div>
-    
+
     @* Output Port (Right) *@
     @foreach (var port in Node.Ports.Where(p => p.Alignment == PortAlignment.Right))
     {
@@ -44,12 +69,30 @@
     [Parameter]
     public WorkflowNodeModel Node { get; set; } = null!;
 
+    private bool IsSubflowNode => Node.NodeData.Type.StartsWith("subflow.");
+
+    private string GetExecutionClass()
+    {
+        if (Node.IsExecuting) return "executing";
+        if (Node.IsCompleted) return Node.IsSuccess ? "completed-success" : "completed-failure";
+        return "";
+    }
+
+    private string GetSubflowClass() => IsSubflowNode ? "subflow-node" : "";
+
+    private string GetSubflowLabel() => Node.NodeData.SubflowType?.ToString() switch
+    {
+        "ForEach" => "ForEach",
+        "While" => "While",
+        "Parallel" => "Parallel",
+        _ => Node.NodeData.Type.Replace("subflow.", "")
+    };
+
     private string GetNodeColor()
     {
-        // �nce NodeData'dan color al, yoksa type'a g�re belirle
         if (!string.IsNullOrEmpty(Node.NodeData.Color))
             return Node.NodeData.Color;
-            
+
         return Node.NodeData.Type switch
         {
             var t when t.StartsWith("trigger") => "#a6e3a1",
@@ -57,18 +100,21 @@
             var t when t.StartsWith("transform") => "#f9e2af",
             var t when t.StartsWith("logic") => "#cba6f7",
             var t when t.StartsWith("ai") => "#74c7ec",
+            var t when t.StartsWith("vector") => "#94e2d5",
+            var t when t.StartsWith("db") => "#fab387",
             var t when t.StartsWith("data") => "#fab387",
             var t when t.StartsWith("comm") => "#eba0ac",
+            var t when t.StartsWith("subflow") => "#f5c2e7",
+            var t when t.StartsWith("util") => "#6c7086",
             _ => "#89b4fa"
         };
     }
 
     private string GetIconName()
     {
-        // �nce NodeData'dan icon al, yoksa type'a g�re belirle
         if (!string.IsNullOrEmpty(Node.NodeData.Icon))
             return Node.NodeData.Icon;
-            
+
         return Node.NodeData.Type switch
         {
             "trigger.manual" => "play",
@@ -78,18 +124,27 @@
             "transform.set" => "edit",
             "transform.code" => "code",
             "transform.filter" => "filter",
+            "transform.template" => "file-text",
+            "transform.aggregate" => "bar-chart-2",
             "logic.if" => "git-branch",
             "logic.switch" => "git-merge",
             "logic.merge" => "git-pull-request",
             "ai.llm" => "cpu",
             "ai.openai" => "cpu",
             "ai.embed" => "layers",
-            "ai.search" => "search",
-            "data.database" => "database",
+            "vector.store" => "database",
+            "vector.search" => "search",
+            "db.query" => "database",
             "comm.email" => "mail",
             "comm.slack" => "message-square",
-            "debug" => "terminal",
-            "end" => "check-circle",
+            "subflow.foreach" => "repeat",
+            "subflow.while" => "refresh-cw",
+            "subflow.parallel" => "columns",
+            "flow.break" => "x-circle",
+            "flow.continue" => "skip-forward",
+            "util.delay" => "clock",
+            "util.debug" => "terminal",
+            "util.end" => "check-circle",
             _ => "box"
         };
     }

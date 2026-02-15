@@ -1,0 +1,136 @@
+@page "/dashboard"
+@inject WorkflowApiService ApiService
+
+<div class="dashboard">
+    <header class="dashboard-header">
+        <h2><Icon Name="bar-chart-2" Size="20" /> Dashboard</h2>
+        <a href="/" class="back-link">
+            <Icon Name="arrow-left" Size="14" /> Editöre Dön
+        </a>
+    </header>
+
+    @if (_stats != null)
+    {
+        <div class="overview-cards">
+            <div class="overview-card">
+                <div class="card-icon blue"><Icon Name="git-branch" Size="20" /></div>
+                <div class="card-body">
+                    <span class="card-value">@_stats.TotalWorkflows</span>
+                    <span class="card-label">Toplam Workflow</span>
+                </div>
+            </div>
+            <div class="overview-card">
+                <div class="card-icon green"><Icon Name="check-circle" Size="20" /></div>
+                <div class="card-body">
+                    <span class="card-value">@_stats.ActiveWorkflows</span>
+                    <span class="card-label">Aktif Workflow</span>
+                </div>
+            </div>
+            <div class="overview-card">
+                <div class="card-icon purple"><Icon Name="play-circle" Size="20" /></div>
+                <div class="card-body">
+                    <span class="card-value">@_stats.TotalExecutions</span>
+                    <span class="card-label">Toplam Çalıştırma</span>
+                </div>
+            </div>
+            <div class="overview-card">
+                <div class="card-icon orange"><Icon Name="activity" Size="20" /></div>
+                <div class="card-body">
+                    <span class="card-value">@_stats.TodayExecutions</span>
+                    <span class="card-label">Bugün</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="success-rate-section">
+            <h3>Genel Başarı Oranı</h3>
+            <div class="large-progress">
+                <div class="progress-fill" style="width: @_stats.OverallSuccessRate%"></div>
+            </div>
+            <span class="rate-label">@_stats.OverallSuccessRate.ToString("F1")%</span>
+        </div>
+
+        @if (_stats.TopWorkflows.Count > 0)
+        {
+            <div class="top-workflows-section">
+                <h3>En Çok Çalıştırılan Workflow'lar</h3>
+                <div class="workflow-table">
+                    <div class="table-header">
+                        <span>Workflow</span>
+                        <span>Çalıştırma</span>
+                        <span>Başarı</span>
+                        <span>Ort. Süre</span>
+                        <span>Son Çalışma</span>
+                    </div>
+                    @foreach (var wf in _stats.TopWorkflows)
+                    {
+                        <div class="table-row">
+                            <span class="wf-name">@wf.WorkflowName</span>
+                            <span class="wf-runs">@wf.TotalRuns</span>
+                            <span class="wf-success">
+                                <span class="mini-bar">
+                                    <span class="mini-fill" style="width: @wf.SuccessRate%"></span>
+                                </span>
+                                @wf.SuccessRate.ToString("F0")%
+                            </span>
+                            <span class="wf-duration">@FormatDuration(wf.AvgDurationMs)</span>
+                            <span class="wf-last">@FormatRelative(wf.LastRunAt)</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+    else if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Dashboard yükleniyor...</span>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <Icon Name="bar-chart-2" Size="48" />
+            <p>Henüz veri yok. Workflow çalıştırın!</p>
+        </div>
+    }
+</div>
+
+@code {
+    private DashboardStatsDto? _stats;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _stats = await ApiService.GetDashboardStatsAsync();
+        }
+        catch
+        {
+            _stats = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000) return $"{ms:F0}ms";
+        if (ms < 60000) return $"{ms / 1000:F1}s";
+        return $"{ms / 60000:F1}m";
+    }
+
+    private static string FormatRelative(DateTime? utc)
+    {
+        if (!utc.HasValue) return "-";
+        var diff = DateTime.UtcNow - utc.Value;
+        if (diff.TotalMinutes < 1) return "az önce";
+        if (diff.TotalHours < 1) return $"{diff.TotalMinutes:F0} dk";
+        if (diff.TotalDays < 1) return $"{diff.TotalHours:F0} sa";
+        return $"{diff.TotalDays:F0} gün";
+    }
+}

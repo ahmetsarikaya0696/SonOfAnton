@@ -1,8 +1,30 @@
 @inherits LayoutComponentBase
+@inject IJSRuntime JS
 
-<div class="app-container">
+<div class="app-container" @onkeydown="HandleKeyDown" tabindex="0">
     @Body
 </div>
 
 @code {
+    [CascadingParameter]
+    private Task<bool>? SearchOpenState { get; set; }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Ctrl+K → Global search (WorkflowEditor handles it via event)
+        if (e.CtrlKey && e.Key == "k")
+        {
+            // Prevent default browser behavior
+            await JS.InvokeVoidAsync("eval", "");
+        }
+    }
 }
+
+<style>
+    .app-container {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        outline: none;
+    }
+</style>

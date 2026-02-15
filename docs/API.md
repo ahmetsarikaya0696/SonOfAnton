@@ -523,6 +523,326 @@ Tüm hata yanýtlarý aþaðýdaki formattadýr:
 
 ---
 
+---
+
+## Folder API
+
+Workflow'lari hiyerarsik klasorlerle organize etmek icin kullanilir.
+
+### Tum Klasorleri Listele
+
+```http
+GET /api/folders
+```
+
+**Yanit:** `200 OK` - Duz klasor listesi
+
+### Klasor Agaci
+
+```http
+GET /api/folders/tree
+```
+
+**Yanit:** `200 OK` - Hiyerarsik agac yapisi (children icice)
+
+### Klasor Olustur
+
+```http
+POST /api/folders
+Content-Type: application/json
+
+{
+  "name": "Pazarlama Akislari",
+  "icon": "briefcase",
+  "color": "#89b4fa",
+  "parentFolderId": null
+}
+```
+
+### Klasor Guncelle
+
+```http
+PUT /api/folders/{id}
+```
+
+### Klasor Sil
+
+```http
+DELETE /api/folders/{id}
+```
+
+### Klasordeki Workflow'lar
+
+```http
+GET /api/folders/{id}/workflows
+```
+
+### Workflow'u Klasore Tasi
+
+```http
+PATCH /api/workflows/{id}/move
+Content-Type: application/json
+
+{
+  "folderId": "folder-guid-..."
+}
+```
+
+---
+
+## Workflow Chat API
+
+AI asistan ile dogal dilde workflow olusturma ve duzenleme.
+
+### Chat Mesaji Gonder
+
+```http
+POST /api/workflow/chat
+Content-Type: application/json
+
+{
+  "message": "Bir webhook ile tetiklenen, gelen veriyi LLM'e gonderip sonucu email atan workflow olustur",
+  "history": [],
+  "currentGraph": null
+}
+```
+
+**Yanit:** `200 OK`
+```json
+{
+  "message": "Iste onerdigim workflow...",
+  "suggestedGraph": { "nodes": [...], "connections": [...] },
+  "yamlPreview": "workflow:\n  name: ..."
+}
+```
+
+### YAML Import
+
+```http
+POST /api/workflow/chat/import-yaml
+Content-Type: application/json
+
+{
+  "yamlContent": "workflow:\n  name: Test..."
+}
+```
+
+**Yanit:** `200 OK`
+```json
+{
+  "isValid": true,
+  "errors": [],
+  "parsedGraph": { "nodes": [...], "connections": [...] }
+}
+```
+
+### YAML Export
+
+```http
+POST /api/workflow/chat/export-yaml
+Content-Type: application/json
+
+{ "nodes": [...], "connections": [...] }
+```
+
+**Yanit:** `200 OK`
+```json
+{
+  "type": "Yaml",
+  "content": "workflow:\n  ...",
+  "fileName": "workflow.yaml"
+}
+```
+
+---
+
+## Search API
+
+Global arama - workflow, log ve daha fazlasinda metin arar.
+
+### Arama
+
+```http
+GET /api/search?q=email&type=workflow,log&page=1&pageSize=20
+```
+
+| Parametre | Tip | Zorunlu | Aciklama |
+|-----------|-----|---------|----------|
+| `q` | string | Evet | Arama sorgusu |
+| `type` | string | Hayir | Virgullu tip filtresi (workflow, log) |
+| `page` | int | Hayir | Sayfa numarasi (varsayilan: 1) |
+| `pageSize` | int | Hayir | Sayfa boyutu (maks: 100) |
+
+**Yanit:** `200 OK`
+```json
+{
+  "items": [...],
+  "totalCount": 42,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+---
+
+## Pause / Resume / Snapshot API
+
+Calisan execution'lari kontrol etme ve snapshot alma.
+
+### Execution Duraklat
+
+```http
+POST /api/workflows/execution/{executionId}/pause
+```
+
+### Execution Devam Ettir
+
+```http
+POST /api/workflows/execution/{executionId}/resume
+```
+
+### Snapshot Al
+
+```http
+POST /api/workflows/execution/{executionId}/snapshot
+Content-Type: application/json
+
+{
+  "label": "Checkpoint 1"
+}
+```
+
+**Yanit:** `200 OK`
+```json
+{
+  "id": "snap-guid-...",
+  "executionId": "exec-guid-...",
+  "label": "Checkpoint 1",
+  "isAutomatic": false,
+  "createdAt": "2025-01-24T10:00:00Z"
+}
+```
+
+### Snapshot'lari Listele
+
+```http
+GET /api/workflows/execution/{executionId}/snapshots
+```
+
+### Snapshot'tan Geri Yukle
+
+```http
+POST /api/workflows/execution/{executionId}/snapshot/{snapshotId}/restore
+```
+
+---
+
+## Stats API
+
+Workflow calistirma istatistikleri.
+
+### Dashboard Istatistikleri
+
+```http
+GET /api/workflows/stats
+```
+
+**Yanit:** `200 OK`
+```json
+{
+  "totalWorkflows": 15,
+  "totalExecutions": 342,
+  "successRate": 94.7,
+  "avgDurationMs": 1250.5,
+  "activeWorkflows": 8,
+  "todayExecutions": 12
+}
+```
+
+### Tek Workflow Istatistigi
+
+```http
+GET /api/workflows/{id}/stats?days=30
+```
+
+**Yanit:** `200 OK`
+```json
+{
+  "workflowId": "wf-guid-...",
+  "runCount": 42,
+  "successCount": 40,
+  "failureCount": 2,
+  "avgDurationMs": 850.3,
+  "dailyStats": [
+    { "date": "2025-01-24", "runs": 5, "successes": 5, "failures": 0 }
+  ]
+}
+```
+
+---
+
+## A2A Protocol API
+
+Agent-to-Agent iletisim altyapisi.
+
+### Agent'lari Listele
+
+```http
+GET /api/a2a/agents
+```
+
+**Yanit:** `200 OK`
+```json
+[
+  {
+    "id": "analyst",
+    "name": "Analyst Agent",
+    "description": "Proje analizi yapar",
+    "capabilities": ["analysis", "planning"],
+    "status": "Available"
+  }
+]
+```
+
+### Agent Detayi
+
+```http
+GET /api/a2a/agents/{agentId}
+```
+
+### Task Gonder
+
+```http
+POST /api/a2a/tasks/send
+Content-Type: application/json
+
+{
+  "agentId": "analyst",
+  "message": "Bu projeyi analiz et",
+  "metadata": {}
+}
+```
+
+### Task Durumu
+
+```http
+GET /api/a2a/tasks/{taskId}
+```
+
+### Task Iptal
+
+```http
+POST /api/a2a/tasks/{taskId}/cancel
+```
+
+### Tum Task'lar
+
+```http
+GET /api/a2a/tasks
+```
+
+---
+
 > **OpenAPI JSON:** Development modunda `GET /openapi/v1.json` adresinden
-> otomatik üretilen OpenAPI spesifikasyonuna eriþebilirsin.
-> Bu JSON'ý Postman'a import edip tüm endpoint'leri test edebilirsin.
+> otomatik uretilen OpenAPI spesifikasyonuna erisebilirsin.
+> Bu JSON'u Postman'a import edip tum endpoint'leri test edebilirsin.

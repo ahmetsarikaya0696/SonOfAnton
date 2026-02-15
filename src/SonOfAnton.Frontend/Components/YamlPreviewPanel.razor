@@ -1,0 +1,172 @@
+@inject DiagramStateService DiagramState
+@inject YamlSyncService YamlSync
+@inject WorkflowApiService ApiService
+@inject IJSRuntime JS
+
+<div class="yaml-panel @(IsOpen ? "open" : "")">
+    <div class="panel-header">
+        <h4><Icon Name="file-text" Size="14" /> YAML</h4>
+        <div class="header-actions">
+            <button class="action-btn" @onclick="CopyToClipboard" title="Kopyala">
+                <Icon Name="copy" Size="14" />
+            </button>
+            <button class="action-btn" @onclick="ImportFromYaml" title="YAML'dan İçe Aktar">
+                <Icon Name="upload" Size="14" />
+            </button>
+            <button class="close-btn" @onclick="() => IsOpenChanged.InvokeAsync(false)">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+    </div>
+
+    <div class="mode-tabs">
+        <button class="tab @(_mode == "preview" ? "active" : "")" @onclick='() => _mode = "preview"'>
+            Önizleme
+        </button>
+        <button class="tab @(_mode == "edit" ? "active" : "")" @onclick='() => _mode = "edit"'>
+            Düzenle
+        </button>
+    </div>
+
+    @if (_mode == "preview")
+    {
+        <pre class="yaml-content">@_yamlContent</pre>
+    }
+    else
+    {
+        <textarea class="yaml-editor"
+                  @bind="_editableYaml"
+                  @bind:event="oninput"
+                  @bind:after="OnYamlEdited"
+                  spellcheck="false"></textarea>
+    }
+
+    @if (_validationErrors.Count > 0)
+    {
+        <div class="validation-errors">
+            @foreach (var error in _validationErrors)
+            {
+                <div class="error-item">
+                    <Icon Name="alert-circle" Size="12" />
+                    @error
+                </div>
+            }
+        </div>
+    }
+
+    <div class="panel-footer">
+        <span class="node-count">
+            @(_nodeCount) node, @(_connectionCount) bağlantı
+        </span>
+        @if (_copied)
+        {
+            <span class="copied-badge">Kopyalandı!</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    private string _yamlContent = string.Empty;
+    private string _editableYaml = string.Empty;
+    private string _mode = "preview";
+    private List<string> _validationErrors = [];
+    private int _nodeCount;
+    private int _connectionCount;
+    private bool _copied;
+
+    protected override void OnInitialized()
+    {
+        DiagramState.OnStateChanged += RefreshYaml;
+        YamlSync.OnValidationErrors += errors =>
+        {
+            _validationErrors = errors;
+            InvokeAsync(StateHasChanged);
+        };
+        YamlSync.OnGraphChanged += graph =>
+        {
+            var workflow = new WorkflowDto
+            {
+                Id = DiagramState.CurrentWorkflow?.Id ?? Guid.Empty,
+                Name = DiagramState.CurrentWorkflow?.Name ?? "Workflow",
+                Graph = graph
+            };
+            DiagramState.LoadWorkflow(workflow);
+        };
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            RefreshYaml();
+        }
+    }
+
+    private void RefreshYaml()
+    {
+        var graph = DiagramState.GetCurrentGraph();
+        _nodeCount = graph.Nodes.Count;
+        _connectionCount = graph.Connections.Count;
+        _yamlContent = YamlSync.SerializeGraph(graph);
+        _editableYaml = _yamlContent;
+        _validationErrors = [];
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnYamlEdited()
+    {
+        YamlSync.UpdateFromYaml(_editableYaml);
+    }
+
+    private async Task CopyToClipboard()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("clipboardHelper.copy", _yamlContent);
+        }
+        catch { /* Fallback - clipboard API not available */ }
+
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copied = false;
+        StateHasChanged();
+    }
+
+    private async Task ImportFromYaml()
+    {
+        if (string.IsNullOrWhiteSpace(_editableYaml)) return;
+
+        try
+        {
+            var result = await ApiService.ImportYamlAsync(_editableYaml);
+            if (result?.IsValid == true && result.ParsedGraph != null)
+            {
+                var workflow = new WorkflowDto
+                {
+                    Id = DiagramState.CurrentWorkflow?.Id ?? Guid.Empty,
+                    Name = DiagramState.CurrentWorkflow?.Name ?? "Imported Workflow",
+                    Graph = result.ParsedGraph
+                };
+                DiagramState.LoadWorkflow(workflow);
+                _validationErrors = [];
+            }
+            else
+            {
+                _validationErrors = result?.Errors ?? ["YAML geçerli değil"];
+            }
+        }
+        catch (Exception ex)
+        {
+            _validationErrors = [$"İçe aktarma hatası: {ex.Message}"];
+        }
+    }
+
+    public void Dispose()
+    {
+        DiagramState.OnStateChanged -= RefreshYaml;
+    }
+}

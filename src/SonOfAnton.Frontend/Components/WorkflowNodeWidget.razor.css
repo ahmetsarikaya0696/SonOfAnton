@@ -112,3 +112,92 @@
     margin-left: -8px;
     z-index: 5;
 }
+
+/* Subflow node styling */
+.workflow-node.subflow-node .node-content {
+    border-style: dashed;
+    border-width: 2px;
+}
+
+.subflow-badge {
+    font-size: 0.5625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: auto;
+}
+
+.child-graph-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-top: 4px;
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.625rem;
+    color: #6c7086;
+}
+
+/* Execution state indicators */
+.execution-indicator {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    background: #313244;
+    border: 2px solid var(--node-color, #89b4fa);
+}
+
+.execution-indicator.success {
+    background: #a6e3a1;
+    border-color: #a6e3a1;
+    color: #1e1e2e;
+}
+
+.execution-indicator.failure {
+    background: #f38ba8;
+    border-color: #f38ba8;
+    color: #1e1e2e;
+}
+
+.exec-spinner {
+    width: 10px;
+    height: 10px;
+    border: 2px solid rgba(137, 180, 250, 0.3);
+    border-top-color: #89b4fa;
+    border-radius: 50%;
+    animation: nodeSpin 0.8s linear infinite;
+}
+
+@keyframes nodeSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Executing state */
+.workflow-node.executing .node-content {
+    animation: nodeGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes nodeGlow {
+    0%, 100% { box-shadow: 0 0 5px rgba(137, 180, 250, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(137, 180, 250, 0.6); }
+}
+
+/* Completed success */
+.workflow-node.completed-success .node-content {
+    border-color: #a6e3a1;
+}
+
+/* Completed failure */
+.workflow-node.completed-failure .node-content {
+    border-color: #f38ba8;
+}

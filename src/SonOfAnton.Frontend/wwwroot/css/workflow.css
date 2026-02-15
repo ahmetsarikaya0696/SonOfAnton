@@ -4,9 +4,14 @@
     --bg-panel: #252536;
     --bg-header: #2d2d42;
     --bg-input: #1a1a28;
+    --bg-primary: #11111b;
+    --bg-secondary: #1e1e2e;
+    --bg-tertiary: #313244;
+    --bg-hover: #313244;
     --text-primary: #cdd6f4;
     --text-secondary: #a6adc8;
     --text-muted: #6c7086;
+    --accent: #89b4fa;
     --accent-blue: #89b4fa;
     --accent-green: #a6e3a1;
     --accent-yellow: #f9e2af;

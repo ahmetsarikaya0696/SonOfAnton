@@ -25,12 +25,23 @@ public class WorkflowEntity
     public JsonDocument? GraphData { get; set; }
     
     public bool IsActive { get; set; }
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-    
+
+    // Statistics
+    public int RunCount { get; set; }
+    public int SuccessCount { get; set; }
+    public int FailureCount { get; set; }
+    public double AvgDurationMs { get; set; }
+    public DateTime? LastRunAt { get; set; }
+
+    // Folder
+    public Guid? FolderId { get; set; }
+
     // Navigation
+    public FolderEntity? Folder { get; set; }
     public ICollection<ExecutionEntity> Executions { get; set; } = [];
 }
 
@@ -71,8 +82,9 @@ public class ExecutionEntity
     
     // Navigation
     public WorkflowEntity Workflow { get; set; } = null!;
-    
+
     public ICollection<ExecutionLogEntity> Logs { get; set; } = [];
+    public ICollection<ExecutionSnapshotEntity> Snapshots { get; set; } = [];
 }
 
 /// <summary>
@@ -125,7 +137,60 @@ public class VectorStoreEntity
     /// EF Core migration'da vector(1536) olarak tan�mlanacak
     /// </summary>
     public Vector? Embedding { get; set; }
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Klasör entity — hiyerarşik workflow organizasyonu
+/// </summary>
+public class FolderEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "Yeni Klasör";
+    public string? Icon { get; set; }
+    public string? Color { get; set; }
+    public int SortOrder { get; set; }
+    public Guid? ParentFolderId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation
+    public FolderEntity? ParentFolder { get; set; }
+    public ICollection<FolderEntity> ChildFolders { get; set; } = [];
+    public ICollection<WorkflowEntity> Workflows { get; set; } = [];
+}
+
+/// <summary>
+/// Execution snapshot — belirli andaki execution durumunun kopyası
+/// </summary>
+public class ExecutionSnapshotEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ExecutionId { get; set; }
+    public string? Label { get; set; }
+    public JsonDocument? NodeStates { get; set; }
+    public JsonDocument? MemorySnapshot { get; set; }
+    public Guid? AtNodeId { get; set; }
+    public bool IsAutomatic { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation
+    public ExecutionEntity Execution { get; set; } = null!;
+}
+
+/// <summary>
+/// Workflow chat geçmişi
+/// </summary>
+public class ChatHistoryEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? WorkflowId { get; set; }
+    public string Role { get; set; } = "user";
+    public string Content { get; set; } = string.Empty;
+    public JsonDocument? Artifacts { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    // Navigation
+    public WorkflowEntity? Workflow { get; set; }
 }
 

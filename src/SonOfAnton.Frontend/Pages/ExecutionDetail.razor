@@ -1,0 +1,229 @@
+@page "/execution/{ExecutionIdParam:guid}"
+@inject WorkflowApiService ApiService
+@inject NavigationManager Nav
+
+<div class="execution-detail">
+    <header class="page-header">
+        <div class="header-left">
+            <a href="/executions" class="back-link"><Icon Name="arrow-left" Size="14" /></a>
+            <h2><Icon Name="activity" Size="20" /> Execution Detayı</h2>
+        </div>
+        @if (_execution != null)
+        {
+            <div class="header-right">
+                <span class="status-badge @GetStatusClass(_execution.Status)">
+                    @GetStatusLabel(_execution.Status)
+                </span>
+                @if (_execution.Status == ExecutionStatus.Running)
+                {
+                    <button class="btn-action danger" @onclick="CancelExecution">
+                        <Icon Name="square" Size="14" /> İptal Et
+                    </button>
+                }
+                @if (_execution.Status == ExecutionStatus.Paused)
+                {
+                    <button class="btn-action primary" @onclick="ResumeExecution">
+                        <Icon Name="play" Size="14" /> Devam Et
+                    </button>
+                }
+            </div>
+        }
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Yükleniyor...</span>
+        </div>
+    }
+    else if (_execution == null)
+    {
+        <div class="empty-state">
+            <Icon Name="alert-circle" Size="48" />
+            <p>Execution bulunamadı.</p>
+        </div>
+    }
+    else
+    {
+        <div class="detail-grid">
+            <div class="info-card">
+                <h3>Bilgiler</h3>
+                <div class="info-row">
+                    <span class="info-label">Execution ID</span>
+                    <code class="info-value">@_execution.Id.ToString()[..8]...</code>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Workflow</span>
+                    <span class="info-value">@_execution.WorkflowName</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Başlangıç</span>
+                    <span class="info-value">@_execution.StartedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Bitiş</span>
+                    <span class="info-value">@(_execution.CompletedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss") ?? "-")</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Süre</span>
+                    <span class="info-value">@FormatDuration(_execution.StartedAt, _execution.CompletedAt)</span>
+                </div>
+                @if (!string.IsNullOrEmpty(_execution.ErrorMessage))
+                {
+                    <div class="error-section">
+                        <Icon Name="alert-circle" Size="14" />
+                        <span>@_execution.ErrorMessage</span>
+                    </div>
+                }
+            </div>
+
+            <div class="snapshots-card">
+                <h3>
+                    <Icon Name="camera" Size="14" /> Snapshot'lar
+                    <button class="take-snapshot-btn" @onclick="TakeSnapshot" title="Manuel Snapshot Al">
+                        <Icon Name="plus" Size="12" />
+                    </button>
+                </h3>
+                @if (_snapshots.Count == 0)
+                {
+                    <div class="card-empty">Snapshot yok</div>
+                }
+                else
+                {
+                    @foreach (var snap in _snapshots.Take(5))
+                    {
+                        <div class="snapshot-item @(snap.IsAutomatic ? "auto" : "manual")">
+                            <span class="snap-label">@(snap.Label ?? (snap.IsAutomatic ? "Otomatik" : "Manuel"))</span>
+                            <span class="snap-time">@snap.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="logs-section">
+            <h3><Icon Name="terminal" Size="14" /> Loglar</h3>
+            <div class="logs-container">
+                @if (_logs.Count == 0)
+                {
+                    <div class="card-empty">Log kaydı yok</div>
+                }
+                else
+                {
+                    @foreach (var log in _logs)
+                    {
+                        <div class="log-entry @log.Level.ToString().ToLower()">
+                            <span class="log-time">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
+                            <span class="log-level">@log.Level</span>
+                            <span class="log-message">@log.Message</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ExecutionIdParam { get; set; }
+
+    private ExecutionDto? _execution;
+    private List<LogEventDto> _logs = [];
+    private List<SnapshotDto> _snapshots = [];
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _execution = await ApiService.GetExecutionAsync(ExecutionIdParam);
+            _logs = await ApiService.GetExecutionLogsAsync(ExecutionIdParam);
+            _snapshots = await ApiService.GetSnapshotsAsync(ExecutionIdParam);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Execution yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CancelExecution()
+    {
+        try
+        {
+            await ApiService.CancelExecutionAsync(ExecutionIdParam);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"İptal hatası: {ex.Message}");
+        }
+    }
+
+    private async Task ResumeExecution()
+    {
+        try
+        {
+            await ApiService.ResumeExecutionAsync(ExecutionIdParam);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Devam hatası: {ex.Message}");
+        }
+    }
+
+    private async Task TakeSnapshot()
+    {
+        try
+        {
+            var snap = await ApiService.TakeSnapshotAsync(ExecutionIdParam, $"Manuel - {DateTime.Now:HH:mm:ss}");
+            if (snap != null)
+                _snapshots.Insert(0, snap);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Snapshot hatası: {ex.Message}");
+        }
+    }
+
+    private static string GetStatusClass(ExecutionStatus status) => status switch
+    {
+        ExecutionStatus.Completed => "success",
+        ExecutionStatus.Failed => "failure",
+        ExecutionStatus.Running => "running",
+        ExecutionStatus.Paused => "paused",
+        ExecutionStatus.Cancelled => "cancelled",
+        _ => "queued"
+    };
+
+    private static string GetStatusLabel(ExecutionStatus status) => status switch
+    {
+        ExecutionStatus.Completed => "Başarılı",
+        ExecutionStatus.Failed => "Başarısız",
+        ExecutionStatus.Running => "Çalışıyor",
+        ExecutionStatus.Paused => "Duraklatılmış",
+        ExecutionStatus.Cancelled => "İptal Edildi",
+        ExecutionStatus.Queued => "Kuyrukta",
+        _ => status.ToString()
+    };
+
+    private static string FormatDuration(DateTime start, DateTime? end)
+    {
+        if (!end.HasValue) return "-";
+        var dur = end.Value - start;
+        if (dur.TotalSeconds < 1) return $"{dur.TotalMilliseconds:F0}ms";
+        if (dur.TotalMinutes < 1) return $"{dur.TotalSeconds:F1}s";
+        return $"{dur.TotalMinutes:F1}m";
+    }
+}

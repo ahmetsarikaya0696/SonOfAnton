@@ -322,6 +322,71 @@ Ama production'da mutlaka ortam deðiþkeni kullan!
 
 ---
 
+## 9. Yeni Tablolar (v2)
+
+Asagidaki tablolar ikinci fazda eklenmistir:
+
+### folders
+
+Hiyerarsik workflow organizasyonu (self-referencing).
+
+| Kolon | Tip | Aciklama |
+|-------|-----|----------|
+| id | UUID (PK) | Klasor ID |
+| name | VARCHAR(255) | Klasor adi |
+| icon | VARCHAR(50) | Ikon adi |
+| color | VARCHAR(20) | Renk kodu |
+| sort_order | INT | Siralama |
+| parent_folder_id | UUID (FK, nullable) | Ust klasor (self-reference) |
+| created_at | TIMESTAMP | Olusturulma tarihi |
+
+**Indeksler:** parent_folder_id
+
+### execution_snapshots
+
+Execution durumunun belirli bir andaki kopyasi.
+
+| Kolon | Tip | Aciklama |
+|-------|-----|----------|
+| id | UUID (PK) | Snapshot ID |
+| execution_id | UUID (FK) | Iliskili execution |
+| label | VARCHAR(255) | Etiket (opsiyonel) |
+| node_states | JSONB | Node durumlari |
+| memory_snapshot | JSONB | Memory kopyasi |
+| at_node_id | UUID | Hangi node'daydi |
+| is_automatic | BOOLEAN | Otomatik mi alinmis |
+| created_at | TIMESTAMP | Olusturulma tarihi |
+
+**Indeksler:** execution_id
+
+### chat_history
+
+Workflow chat gecmisi.
+
+| Kolon | Tip | Aciklama |
+|-------|-----|----------|
+| id | UUID (PK) | Kayit ID |
+| workflow_id | UUID (FK, nullable) | Iliskili workflow |
+| role | VARCHAR(20) | user / assistant |
+| content | TEXT | Mesaj icerigi |
+| artifacts | JSONB | Ek veriler (graph, yaml vb.) |
+| timestamp | TIMESTAMP | Zaman damgasi |
+
+**Indeksler:** workflow_id
+
+### workflows tablosuna eklenen yeni kolonlar
+
+| Kolon | Tip | Aciklama |
+|-------|-----|----------|
+| run_count | INT | Toplam calistirma sayisi |
+| success_count | INT | Basarili calistirma sayisi |
+| failure_count | INT | Basarisiz calistirma sayisi |
+| avg_duration_ms | DOUBLE | Ortalama sure (ms) |
+| last_run_at | TIMESTAMP | Son calistirma tarihi |
+| folder_id | UUID (FK, nullable) | Ait oldugu klasor |
+
+---
+
 > **Altýn Kural:** Migration oluþturduktan sonra mutlaka Up() ve Down()
 > metodlarýný gözden geçir. Otomatik üretilen kod bazen gereksiz veya
 > yanlýþ olabilir. `Down()` metodunun çalýþtýðýndan emin ol — bir gün

@@ -2,7 +2,10 @@ using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
+using SonOfAnton.Backend.Engine.Expressions;
+using SonOfAnton.Backend.Execution;
 using SonOfAnton.Backend.Services;
+using SonOfAnton.Backend.Services.Snapshots;
 using SonOfAnton.Shared.DTOs;
 using SonOfAnton.Shared.Entities;
 using SonOfAnton.Shared.Enums;
@@ -21,6 +24,7 @@ public class WorkflowRunner
     private readonly ILogger<WorkflowRunner> _logger;
     private readonly LogStreamService _logStream;
     private readonly PerformanceMetricsService _metrics;
+    private readonly PauseTokenRegistry _pauseTokens;
     private readonly Dictionary<string, INodeHandler> _handlers;
     private readonly SemaphoreSlim _dbLock = new(1, 1);
 
@@ -28,7 +32,7 @@ public class WorkflowRunner
     /// Node bazında varsayılan timeout (30 saniye)
     /// </summary>
     private static readonly TimeSpan DefaultNodeTimeout = TimeSpan.FromSeconds(30);
-    
+
     /// <summary>
     /// Node başına maksimum retry sayısı
     /// </summary>
@@ -39,12 +43,14 @@ public class WorkflowRunner
         ILogger<WorkflowRunner> logger,
         LogStreamService logStream,
         PerformanceMetricsService metrics,
+        PauseTokenRegistry pauseTokens,
         IEnumerable<INodeHandler> handlers)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _logStream = logStream;
         _metrics = metrics;
+        _pauseTokens = pauseTokens;
         _handlers = handlers.ToDictionary(h => h.NodeType, h => h);
     }
 
@@ -75,6 +81,7 @@ public class WorkflowRunner
 
         var sw = Stopwatch.StartNew();
         _metrics.RecordWorkflowStarted(execution.WorkflowId);
+        var memory = new Dictionary<string, object?>();
 
         try
         {
@@ -92,11 +99,22 @@ public class WorkflowRunner
             }
 
             // Memory'i hazırla
-            var memory = new Dictionary<string, object?>();
             if (execution.Memory != null)
             {
                 memory = JsonSerializer.Deserialize<Dictionary<string, object?>>(
                     execution.Memory.RootElement.GetRawText()) ?? [];
+            }
+
+            // Workflow değişkenlerini memory'ye yükle
+            if (graph.Variables.Count > 0)
+            {
+                foreach (var variable in graph.Variables)
+                {
+                    if (!memory.ContainsKey(variable.Name) && variable.DefaultValue != null)
+                    {
+                        memory[variable.Name] = variable.DefaultValue;
+                    }
+                }
             }
 
             // Çevrimsel bağımlılık kontrolü
@@ -139,6 +157,10 @@ public class WorkflowRunner
 
             _metrics.RecordWorkflowCompleted(execution.WorkflowId, sw.ElapsedMilliseconds);
 
+            // İstatistik güncelle
+            var statsUpdater = scope.ServiceProvider.GetRequiredService<WorkflowStatsUpdater>();
+            await statsUpdater.RecordExecutionAsync(execution.WorkflowId, true, sw.ElapsedMilliseconds, cancellationToken);
+
             await WriteLog(dbContext, execution, null, LogLevel.Info, 
                 $"Workflow başarıyla tamamlandı ({sw.ElapsedMilliseconds}ms)");
             
@@ -149,6 +171,8 @@ public class WorkflowRunner
         {
             sw.Stop();
             _metrics.RecordWorkflowFailed(execution.WorkflowId, "İptal edildi", sw.ElapsedMilliseconds);
+            var statsUpdater = scope.ServiceProvider.GetRequiredService<WorkflowStatsUpdater>();
+            await statsUpdater.RecordExecutionAsync(execution.WorkflowId, false, sw.ElapsedMilliseconds);
             await FailExecution(dbContext, execution, $"İptal edildi ({sw.ElapsedMilliseconds}ms)");
             _logStream.Complete(executionId);
         }
@@ -156,6 +180,11 @@ public class WorkflowRunner
         {
             sw.Stop();
             _metrics.RecordWorkflowFailed(execution.WorkflowId, ex.Message, sw.ElapsedMilliseconds);
+            var statsUpdater = scope.ServiceProvider.GetRequiredService<WorkflowStatsUpdater>();
+            await statsUpdater.RecordExecutionAsync(execution.WorkflowId, false, sw.ElapsedMilliseconds);
+            // Otomatik snapshot al
+            var snapshotSvc = scope.ServiceProvider.GetRequiredService<SnapshotService>();
+            await snapshotSvc.TakeAutomaticAsync(executionId, execution.CurrentNodeId, memory);
             _logger.LogError(ex, "Workflow execution hatası: {ExecutionId} ({Elapsed}ms)", 
                 executionId, sw.ElapsedMilliseconds);
             await FailExecution(dbContext, execution, ex.Message);
@@ -183,6 +212,10 @@ public class WorkflowRunner
 
         try
         {
+            // Pause kontrolü — duraklatılmışsa bekle
+            var pauseToken = _pauseTokens.GetOrCreate(execution.Id);
+            await pauseToken.WaitIfPausedAsync(cancellationToken);
+
             // Current node'u güncelle
             await _dbLock.WaitAsync(cancellationToken);
             try
@@ -208,8 +241,27 @@ public class WorkflowRunner
             }
 
             // Retry mekanizması ile node çalıştır
+            // Önce parametrelerdeki {{...}} ifadelerini resolve et
+            var variableStore = new VariableStore();
+            foreach (var (k, v) in memory)
+                variableStore.Set(k, v);
+            var resolvedParams = ExpressionEvaluator.ResolveParameters(node.Parameters, variableStore);
+            var resolvedNode = new WorkflowNodeDto
+            {
+                Id = node.Id,
+                Type = node.Type,
+                Name = node.Name,
+                Icon = node.Icon,
+                Color = node.Color,
+                X = node.X,
+                Y = node.Y,
+                Parameters = resolvedParams,
+                ChildGraph = node.ChildGraph,
+                SubflowType = node.SubflowType
+            };
+
             var result = await ExecuteNodeWithRetryAsync(
-                dbContext, execution, handler, node, inputData, memory, cancellationToken);
+                dbContext, execution, handler, resolvedNode, inputData, memory, cancellationToken);
 
             if (!result.Success)
             {

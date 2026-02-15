@@ -19,6 +19,8 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddScoped<WorkflowApiService>();
 builder.Services.AddScoped<LogStreamService>();
 builder.Services.AddSingleton<DiagramStateService>();
+builder.Services.AddSingleton<YamlSyncService>();
+builder.Services.AddSingleton<ChatDiagramBridge>();
 
 // Node Editor Services (JS Interop)
 builder.Services.AddScoped<NodeEditorInteropService>();

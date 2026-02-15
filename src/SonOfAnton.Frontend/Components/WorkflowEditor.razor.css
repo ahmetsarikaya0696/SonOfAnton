@@ -151,6 +151,14 @@
     height: 100%;
 }
 
+.folder-sidebar {
+    width: 220px;
+    border-right: 1px solid #313244;
+    background: #181825;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
 .canvas-container {
     flex: 1;
     position: relative;
@@ -276,4 +284,42 @@
 /* Node failed state */
 .canvas-container ::deep .node-failed {
     border-color: #f38ba8 !important;
+}
+
+/* Ghost button - toolbar icon buttons */
+.toolbar .btn-ghost {
+    background: transparent;
+    color: #6c7086;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid transparent;
+    text-decoration: none;
+}
+
+.toolbar .btn-ghost:hover {
+    background: #313244;
+    color: #cdd6f4;
+    border-color: #45475a;
+}
+
+/* Toolbar divider */
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: #313244;
+    margin: 0 4px;
+}
+
+/* Floating stats overlay */
+.stats-floating {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 360px;
+    z-index: 50;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+}
+
+.stats-floating:hover {
+    opacity: 1;
 }

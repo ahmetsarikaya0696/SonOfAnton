@@ -42,6 +42,15 @@ public enum OrchestratorState
     Completed,
     
     /// <summary>Hata durumu</summary>
-    Error
+    Error,
+
+    /// <summary>Workflow analiz ediliyor (Workflow Assist modu)</summary>
+    WorkflowAnalyzing,
+
+    /// <summary>Workflow düzenleme planı oluşturuluyor</summary>
+    WorkflowPlanning,
+
+    /// <summary>Workflow düzenleme uygulanıyor</summary>
+    WorkflowApplying
 }
 

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Threading.Channels;
 using SonOfAnton.Backend.Agents;
+using SonOfAnton.Shared.DTOs;
+using SonOfAnton.Shared.Enums;
 using SonOfAnton.Shared.Events;
 using SonOfAnton.Shared.Models;
 using SonOfAnton.Shared.VirtualFileSystem;
@@ -9,21 +11,25 @@ namespace SonOfAnton.Backend.Orchestrator;
 
 /// <summary>
 /// Ana orchestrator servisi
-/// State machine mant���n� y�netir ve agent'lar� koordine eder
+/// State machine mantığını yönetir ve agent'ları koordine eder.
+/// CodeGeneration + WorkflowAssistant modları desteklenir.
 /// </summary>
 public class ProjectOrchestrator
 {
     private readonly AgentService _agentService;
+    private readonly WorkflowAssistantService _workflowAssistant;
     private readonly IVirtualFileSystem _vfs;
     private readonly ILogger<ProjectOrchestrator> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public ProjectOrchestrator(
         AgentService agentService,
+        WorkflowAssistantService workflowAssistant,
         IVirtualFileSystem vfs,
         ILogger<ProjectOrchestrator> logger)
     {
         _agentService = agentService;
+        _workflowAssistant = workflowAssistant;
         _vfs = vfs;
         _logger = logger;
         _jsonOptions = new JsonSerializerOptions
@@ -34,21 +40,92 @@ public class ProjectOrchestrator
     }
 
     /// <summary>
-    /// Kullan�c� iste�ini i�ler ve event stream d�nd�r�r
+    /// Kullanıcı isteğini işler ve event stream döndürür (CodeGeneration modu)
     /// </summary>
     public async IAsyncEnumerable<AgentEvent> ProcessRequestAsync(
         string userPrompt,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         var channel = Channel.CreateUnbounded<AgentEvent>();
-        
-        // Background task olarak orchestration'� ba�lat
         _ = Task.Run(async () => await ExecuteOrchestrationAsync(userPrompt, channel.Writer, ct), ct);
 
-        // Channel'dan event'leri oku ve yield et
         await foreach (var evt in channel.Reader.ReadAllAsync(ct))
         {
             yield return evt;
+        }
+    }
+
+    /// <summary>
+    /// Workflow assist modu — doğal dilden workflow düzenleme
+    /// </summary>
+    public async IAsyncEnumerable<AgentEvent> ProcessWorkflowAssistAsync(
+        string userPrompt,
+        WorkflowGraphDto? currentGraph,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var channel = Channel.CreateUnbounded<AgentEvent>();
+        _ = Task.Run(async () => await ExecuteWorkflowAssistAsync(userPrompt, currentGraph, channel.Writer, ct), ct);
+
+        await foreach (var evt in channel.Reader.ReadAllAsync(ct))
+        {
+            yield return evt;
+        }
+    }
+
+    private async Task ExecuteWorkflowAssistAsync(
+        string userPrompt,
+        WorkflowGraphDto? currentGraph,
+        ChannelWriter<AgentEvent> writer,
+        CancellationToken ct)
+    {
+        try
+        {
+            await writer.WriteAsync(CreateLog("🔧 Workflow düzenleme asistanı başlatılıyor..."), ct);
+
+            var request = new WorkflowChatRequest
+            {
+                Message = userPrompt,
+                CurrentGraph = currentGraph
+            };
+
+            var response = await _workflowAssistant.ProcessChatAsync(request, ct);
+
+            // Chat mesajı event'i
+            await writer.WriteAsync(new AgentEvent
+            {
+                Type = EventType.ChatMessage,
+                Payload = response.Message
+            }, ct);
+
+            // Önerilen graph varsa diff event'i gönder
+            if (response.SuggestedGraph != null)
+            {
+                await writer.WriteAsync(new AgentEvent
+                {
+                    Type = EventType.WorkflowDiff,
+                    Payload = JsonSerializer.Serialize(new
+                    {
+                        before = currentGraph,
+                        after = response.SuggestedGraph,
+                        yaml = response.YamlPreview
+                    }, _jsonOptions)
+                }, ct);
+            }
+
+            await writer.WriteAsync(new AgentEvent
+            {
+                Type = EventType.Finish,
+                Payload = JsonSerializer.Serialize(new { message = "Workflow asistan yanıtı hazır" }, _jsonOptions)
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Workflow assist failed");
+            await writer.WriteAsync(CreateError($"Workflow asistan hatası: {ex.Message}"), ct);
+        }
+        finally
+        {
+            writer.Complete();
         }
     }
 

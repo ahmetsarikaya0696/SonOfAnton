@@ -1,0 +1,136 @@
+@inject WorkflowApiService ApiService
+
+<div class="global-search @(IsOpen ? "open" : "")">
+    @if (IsOpen)
+    {
+        <div class="search-overlay" @onclick="Close"></div>
+        <div class="search-dialog">
+            <div class="search-input-wrapper">
+                <Icon Name="search" Size="18" />
+                <input type="text"
+                       class="search-input"
+                       placeholder="Workflow, log veya node ara..."
+                       @bind="_query"
+                       @bind:event="oninput"
+                       @bind:after="PerformSearch"
+                       @ref="_inputRef" />
+                @if (!string.IsNullOrEmpty(_query))
+                {
+                    <button class="clear-btn" @onclick="ClearSearch">
+                        <Icon Name="x" Size="14" />
+                    </button>
+                }
+            </div>
+
+            @if (_isSearching)
+            {
+                <div class="search-loading">
+                    <span class="spinner"></span>
+                    <span>Aranıyor...</span>
+                </div>
+            }
+            else if (_results != null && _results.Hits.Count > 0)
+            {
+                <div class="search-results">
+                    @foreach (var hit in _results.Hits)
+                    {
+                        <div class="search-hit" @onclick="() => OnResultSelected(hit)">
+                            <div class="hit-type-badge @hit.ResultType">@hit.ResultType</div>
+                            <div class="hit-content">
+                                <div class="hit-highlight">@((MarkupString)(hit.Highlight ?? ""))</div>
+                            </div>
+                            <div class="hit-score">@hit.Score.ToString("F1")</div>
+                        </div>
+                    }
+                    @if (_results.TotalCount > _results.Hits.Count)
+                    {
+                        <div class="search-more">
+                            @(_results.TotalCount - _results.Hits.Count) sonuç daha...
+                        </div>
+                    }
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(_query) && _query.Length >= 2)
+            {
+                <div class="search-empty">
+                    <Icon Name="search" Size="24" />
+                    <span>Sonuç bulunamadı</span>
+                </div>
+            }
+
+            <div class="search-footer">
+                <kbd>Esc</kbd> kapat &middot; <kbd>↑↓</kbd> gezin &middot; <kbd>Enter</kbd> seç
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<SearchHitDto<object>> OnSelected { get; set; }
+
+    private string _query = string.Empty;
+    private bool _isSearching;
+    private SearchResultDto<object>? _results;
+    private ElementReference _inputRef;
+    private System.Timers.Timer? _debounceTimer;
+
+    private async Task PerformSearch()
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(_query) || _query.Length < 2)
+        {
+            _results = null;
+            return;
+        }
+
+        _debounceTimer = new System.Timers.Timer(300);
+        _debounceTimer.Elapsed += async (_, _) =>
+        {
+            _debounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                _isSearching = true;
+                StateHasChanged();
+
+                try
+                {
+                    _results = await ApiService.SearchAsync(_query);
+                }
+                catch
+                {
+                    _results = null;
+                }
+                finally
+                {
+                    _isSearching = false;
+                    StateHasChanged();
+                }
+            });
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+    }
+
+    private void ClearSearch()
+    {
+        _query = string.Empty;
+        _results = null;
+    }
+
+    private async Task Close()
+    {
+        _query = string.Empty;
+        _results = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task OnResultSelected(SearchHitDto<object> hit)
+    {
+        await OnSelected.InvokeAsync(hit);
+        await Close();
+    }
+}

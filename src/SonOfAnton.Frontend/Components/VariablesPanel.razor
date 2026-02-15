@@ -1,0 +1,144 @@
+@inject DiagramStateService DiagramState
+
+<div class="variables-panel @(IsOpen ? "open" : "")">
+    <div class="panel-header">
+        <h4><Icon Name="variable" Size="14" /> Değişkenler</h4>
+        <div class="header-actions">
+            <button class="add-btn" @onclick="AddVariable" title="Değişken Ekle">
+                <Icon Name="plus" Size="14" />
+            </button>
+            <button class="close-btn" @onclick="() => IsOpenChanged.InvokeAsync(false)">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+    </div>
+
+    <div class="variables-list">
+        @if (_variables.Count == 0)
+        {
+            <div class="empty-state">
+                <Icon Name="variable" Size="24" />
+                <p>Henüz değişken yok.</p>
+                <button class="add-first-btn" @onclick="AddVariable">
+                    <Icon Name="plus" Size="14" /> İlk Değişkeni Ekle
+                </button>
+            </div>
+        }
+        else
+        {
+            @for (var i = 0; i < _variables.Count; i++)
+            {
+                var idx = i;
+                var variable = _variables[idx];
+                <div class="variable-card">
+                    <div class="variable-header">
+                        <input type="text" class="var-name-input" 
+                               value="@variable.Name"
+                               @onchange="e => UpdateVariable(idx, name: e.Value?.ToString())" 
+                               placeholder="değişken_adı" />
+                        <select class="var-type-select" 
+                                value="@variable.Type"
+                                @onchange="e => UpdateVariable(idx, type: e.Value?.ToString())">
+                            <option value="String">String</option>
+                            <option value="Number">Number</option>
+                            <option value="Boolean">Boolean</option>
+                            <option value="Json">JSON</option>
+                            <option value="Secret">Secret</option>
+                        </select>
+                        <button class="remove-btn" @onclick="() => RemoveVariable(idx)">
+                            <Icon Name="trash-2" Size="12" />
+                        </button>
+                    </div>
+                    <div class="variable-body">
+                        <input type="@(variable.Type == VariableType.Secret ? "password" : "text")"
+                               class="var-default-input"
+                               value="@variable.DefaultValue"
+                               @onchange="e => UpdateVariable(idx, defaultValue: e.Value?.ToString())"
+                               placeholder="@(variable.Type == VariableType.Secret ? "••••••••" : "Varsayılan değer")" />
+                        <select class="var-scope-select"
+                                value="@variable.Scope"
+                                @onchange="e => UpdateVariable(idx, scope: e.Value?.ToString())">
+                            <option value="Execution">Execution</option>
+                            <option value="Global">Global</option>
+                            <option value="Node">Node</option>
+                        </select>
+                    </div>
+                    @if (!string.IsNullOrEmpty(variable.Description))
+                    {
+                        <div class="variable-desc">@variable.Description</div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <div class="panel-footer">
+        <span class="var-count">@_variables.Count değişken</span>
+        <span class="usage-hint">Kullanım: <code>{{"{{değişken_adı}}"}}</code></span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    private List<WorkflowVariableDto> _variables = [];
+
+    protected override void OnInitialized()
+    {
+        DiagramState.OnStateChanged += LoadVariables;
+        LoadVariables();
+    }
+
+    private void LoadVariables()
+    {
+        _variables = [.. DiagramState.GetVariables()];
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void AddVariable()
+    {
+        _variables.Add(new WorkflowVariableDto
+        {
+            Name = $"var_{_variables.Count + 1}",
+            Type = VariableType.String,
+            Scope = VariableScope.Execution
+        });
+        SyncToGraph();
+    }
+
+    private void RemoveVariable(int index)
+    {
+        if (index >= 0 && index < _variables.Count)
+        {
+            _variables.RemoveAt(index);
+            SyncToGraph();
+        }
+    }
+
+    private void UpdateVariable(int index, string? name = null, string? type = null,
+        string? defaultValue = null, string? scope = null)
+    {
+        if (index < 0 || index >= _variables.Count) return;
+
+        var v = _variables[index];
+        if (name != null) v.Name = name;
+        if (type != null && Enum.TryParse<VariableType>(type, out var vt)) v.Type = vt;
+        if (defaultValue != null) v.DefaultValue = defaultValue;
+        if (scope != null && Enum.TryParse<VariableScope>(scope, out var vs)) v.Scope = vs;
+
+        SyncToGraph();
+    }
+
+    private void SyncToGraph()
+    {
+        var graph = DiagramState.GetCurrentGraph();
+        graph.Variables = [.. _variables];
+        DiagramState.NotifyStateChanged();
+    }
+
+    public void Dispose()
+    {
+        DiagramState.OnStateChanged -= LoadVariables;
+    }
+}

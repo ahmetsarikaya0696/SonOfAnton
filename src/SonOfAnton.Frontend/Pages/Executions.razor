@@ -1,0 +1,162 @@
+@page "/executions"
+@page "/executions/{WorkflowIdParam:guid}"
+@inject WorkflowApiService ApiService
+@inject NavigationManager Nav
+
+<div class="executions-page">
+    <header class="page-header">
+        <div class="header-left">
+            <a href="/" class="back-link"><Icon Name="arrow-left" Size="14" /></a>
+            <h2><Icon Name="play-circle" Size="20" /> Execution Geçmişi</h2>
+        </div>
+        <div class="header-right">
+            <select class="filter-select" value="@_statusFilter" @onchange="OnStatusFilterChanged">
+                <option value="">Tüm Durumlar</option>
+                <option value="Completed">Başarılı</option>
+                <option value="Failed">Başarısız</option>
+                <option value="Running">Çalışıyor</option>
+                <option value="Paused">Duraklatılmış</option>
+                <option value="Cancelled">İptal Edildi</option>
+            </select>
+            <button class="btn-refresh" @onclick="LoadExecutionsAsync">
+                <Icon Name="refresh-cw" Size="14" />
+            </button>
+        </div>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Yükleniyor...</span>
+        </div>
+    }
+    else if (_executions.Count == 0)
+    {
+        <div class="empty-state">
+            <Icon Name="play-circle" Size="48" />
+            <p>Henüz execution yok.</p>
+            <a href="/" class="btn-cta">Workflow Editöre Git</a>
+        </div>
+    }
+    else
+    {
+        <div class="executions-table">
+            <div class="table-header">
+                <span>Durum</span>
+                <span>Workflow</span>
+                <span>Başlangıç</span>
+                <span>Süre</span>
+                <span>Hata</span>
+                <span></span>
+            </div>
+            @foreach (var exec in FilteredExecutions)
+            {
+                <div class="table-row @GetStatusClass(exec.Status)" @onclick="() => NavigateToDetail(exec.Id)">
+                    <span class="status-cell">
+                        <span class="status-dot @GetStatusClass(exec.Status)"></span>
+                        @GetStatusLabel(exec.Status)
+                    </span>
+                    <span class="workflow-cell">@exec.WorkflowName</span>
+                    <span class="time-cell">@FormatTime(exec.StartedAt)</span>
+                    <span class="duration-cell">@FormatDuration(exec.StartedAt, exec.CompletedAt)</span>
+                    <span class="error-cell" title="@exec.ErrorMessage">
+                        @(string.IsNullOrEmpty(exec.ErrorMessage) ? "-" : Truncate(exec.ErrorMessage, 40))
+                    </span>
+                    <span class="action-cell">
+                        <Icon Name="chevron-right" Size="14" />
+                    </span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? WorkflowIdParam { get; set; }
+
+    private List<ExecutionDto> _executions = [];
+    private bool _isLoading = true;
+    private string _statusFilter = "";
+
+    private IEnumerable<ExecutionDto> FilteredExecutions =>
+        string.IsNullOrEmpty(_statusFilter)
+            ? _executions
+            : _executions.Where(e => e.Status.ToString() == _statusFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExecutionsAsync();
+    }
+
+    private async Task LoadExecutionsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _executions = await ApiService.GetExecutionsAsync(WorkflowIdParam);
+        }
+        catch
+        {
+            _executions = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        _statusFilter = e.Value?.ToString() ?? "";
+    }
+
+    private void NavigateToDetail(Guid executionId)
+    {
+        Nav.NavigateTo($"/execution/{executionId}");
+    }
+
+    private static string GetStatusClass(ExecutionStatus status) => status switch
+    {
+        ExecutionStatus.Completed => "success",
+        ExecutionStatus.Failed => "failure",
+        ExecutionStatus.Running => "running",
+        ExecutionStatus.Paused => "paused",
+        ExecutionStatus.Cancelled => "cancelled",
+        _ => "queued"
+    };
+
+    private static string GetStatusLabel(ExecutionStatus status) => status switch
+    {
+        ExecutionStatus.Completed => "Başarılı",
+        ExecutionStatus.Failed => "Başarısız",
+        ExecutionStatus.Running => "Çalışıyor",
+        ExecutionStatus.Paused => "Duraklatılmış",
+        ExecutionStatus.Cancelled => "İptal",
+        ExecutionStatus.Queued => "Kuyrukta",
+        ExecutionStatus.Resuming => "Devam Ediyor",
+        _ => status.ToString()
+    };
+
+    private static string FormatTime(DateTime utc)
+    {
+        var local = utc.ToLocalTime();
+        var diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 1) return "az önce";
+        if (diff.TotalHours < 1) return $"{diff.TotalMinutes:F0} dk önce";
+        if (diff.TotalDays < 1) return local.ToString("HH:mm");
+        return local.ToString("dd MMM HH:mm");
+    }
+
+    private static string FormatDuration(DateTime start, DateTime? end)
+    {
+        if (!end.HasValue) return "-";
+        var dur = end.Value - start;
+        if (dur.TotalSeconds < 1) return $"{dur.TotalMilliseconds:F0}ms";
+        if (dur.TotalMinutes < 1) return $"{dur.TotalSeconds:F1}s";
+        return $"{dur.TotalMinutes:F1}m";
+    }
+
+    private static string Truncate(string text, int max)
+        => text.Length <= max ? text : text[..(max - 3)] + "...";
+}

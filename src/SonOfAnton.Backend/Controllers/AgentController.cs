@@ -30,26 +30,28 @@ public class AgentController : ControllerBase
     [HttpPost("stream")]
     public async Task StreamEvents([FromBody] UserRequest request, CancellationToken ct)
     {
-        _logger.LogInformation("Starting SSE stream for prompt: {Prompt}", 
-            request.Prompt[..Math.Min(50, request.Prompt.Length)]);
+        _logger.LogInformation("Starting SSE stream for prompt: {Prompt}, Mode: {Mode}", 
+            request.Prompt[..Math.Min(50, request.Prompt.Length)], request.Mode);
 
-        // SSE i�in response header'lar�
+        // SSE için response header'ları
         Response.Headers.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache, no-store";
         Response.Headers.Connection = "keep-alive";
-        Response.Headers["X-Accel-Buffering"] = "no"; // nginx buffering'i kapat
-        
-        // Response buffering'i kapat
+        Response.Headers["X-Accel-Buffering"] = "no";
+
         var feature = HttpContext.Features.Get<IHttpResponseBodyFeature>();
         feature?.DisableBuffering();
 
         try
         {
-            await foreach (var evt in _orchestrator.ProcessRequestAsync(request.Prompt, ct))
+            // Mode'a göre farklı pipeline
+            var eventStream = request.Mode == SonOfAnton.Shared.Enums.OrchestratorMode.WorkflowAssistant
+                ? _orchestrator.ProcessWorkflowAssistAsync(request.Prompt, request.WorkflowContext, ct)
+                : _orchestrator.ProcessRequestAsync(request.Prompt, ct);
+
+            await foreach (var evt in eventStream)
             {
                 var eventData = JsonSerializer.Serialize(evt, _jsonOptions);
-                
-                // SSE format: "data: {...}\n\n"
                 await Response.WriteAsync($"data: {eventData}\n\n", ct);
                 await Response.Body.FlushAsync(ct);
             }

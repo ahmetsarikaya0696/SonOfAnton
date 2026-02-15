@@ -1,151 +1,174 @@
-# 🤖 SonOfAnton AI Workflow Platform
+﻿# SonOfAnton AI Workflow Platform
 
-![SonOfAnton Banner](https://via.placeholder.com/800x200?text=SonOfAnton+AI+Automation)
-
-> **"Kendi yapay zeka asistanını lego parçaları gibi birleştirerek oluştur!"**
+> **Kendi yapay zeka asistanini lego parcalari gibi birlestirerek olustur!**
 
 ---
 
-## 👋 Bu Proje Nedir? (Basit Anlatım)
+## Bu Proje Nedir?
 
-Merhaba! **SonOfAnton**, bilgisayarınızda çalışan akıllı bir otomasyon fabrikasıdır. 
+**SonOfAnton**, bilgisayarinizda calisan akilli bir otomasyon fabrikasidir.
 
-Bunu dijital bir **Lego seti** gibi düşünebilirsiniz:
-*   🧱 **Parçalar (Node'lar):** Her bir parça farklı bir iş yapar. Biri "PDF oku" der, diğeri "Özet çıkar", bir başkası "Email gönder".
-*   🔗 **Bağlantılar (Kablolar):** Parçaları birbirine bağlayarak verinin nereden nereye akacağını belirlersiniz.
-*   🚀 **İş Akışı (Workflow):** Parçaları birleştirip "Çalıştır" tuşuna bastığınızda, kurduğunuz sistem otomatik olarak çalışır.
+Bunu dijital bir **Lego seti** gibi dusunebilirsiniz:
+- **Parcalar (Node'lar):** Her bir parca farkli bir is yapar - "PDF oku", "Ozet cikar", "Email gonder", "Vektor aramasi yap"...
+- **Baglantilar (Kablolar):** Parcalari birbirine baglayarak verinin nereden nereye akacagini belirlersiniz.
+- **Is Akisi (Workflow):** Parcalari birlestirip "Calistir" tusuna bastiginizda, kurdugunuz sistem otomatik olarak calisir.
 
-### ✨ Neler Yapabilirsiniz?
-*   📄 Uzun belgeleri otomatik özetleyen sistemler kurabilirsiniz.
-*   🔍 Kendi bilgisayarınızdaki belgeler içinde "akıllı arama" yapabilirsiniz (Kelime eşleşmesi değil, anlam eşleşmesi!).
-*   ⏰ Her sabah saat 08:00'de çalışıp size gündem özeti geçen botlar yapabilirsiniz.
-*   🔗 Web sitenizden gelen formları otomatik analiz edip sınıflandırabilirsiniz.
+### Neler Yapabilirsiniz?
+- Uzun belgeleri otomatik ozetleyen sistemler kurabilirsiniz.
+- Belgeler icinde **semantik arama** yapabilirsiniz (kelime eslesmesi degil, anlam eslesmesi!).
+- Her sabah 08:00'de calisip size gundem ozeti gecen botlar yapabilirsiniz.
+- Web sitenizden gelen formlari otomatik analiz edip siniflandirabilirsiniz.
+- **AI Asistan** ile dogal dilde konusarak workflow olusturabilirsiniz.
+- **ForEach / While / Parallel** donguleri ile karmasik akislar kurabilirsiniz.
+- Workflow'larinizi **klasorlerle** organize edebilirsiniz.
+- Calisan bir execution'in **snapshot**'ini alip daha sonra geri yukleyebilirsiniz.
 
-**En güzel yanı:** Bunların hepsini **kod yazmadan**, kutucukları sürükleyip bırakarak yaparsınız! Ayrıca yapay zeka modelleri (AI) tamamen **kendi bilgisayarınızda** çalışır, verileriniz dışarı çıkmaz.
-
----
-
-## 🛠️ Yazılımcılar İçin (Teknik Bakış)
-
-SonOfAnton, **Local First AI** prensibiyle geliştirilmiş, modern ve yüksek performanslı bir .NET çözümüdür. Harici API bağımlılığı olmadan (OpenAI vb. gerektirmeden) kendi makinenizde LLM ve Embedding modellerini çalıştırabilir.
-
-### 🏗️ Teknoloji Yığını (Tech Stack)
-
-*   **Backend:**
-    *   **.NET 10 (Preview):** En son teknoloji, yüksek performans.
-    *   **ASP.NET Core API:** RESTful servisler.
-    *   **Hangfire:** Arka plan iş yönetimi (Job Scheduling), Cron joblar ve kuyruk yönetimi.
-    *   **Entity Framework Core:** Veritabanı ORM.
-    *   **PostgreSQL + pgvector:** Vektör veritabanı. RAG (Retrieval-Augmented Generation) için HNSW indeksleme kullanır.
-    *   **ONNX Runtime:** Yerel model çalıştırma (Local Inference). `all-MiniLM-L6-v2` vb. modelleri CPU/GPU üzerinde çalıştırır.
-    *   **Semantic Kernel:** AI orkestrasyonu.
-
-*   **Frontend:**
-    *   **MAUI Blazor Hybrid:** Cross-platform masaüstü uygulaması (Windows/Mac/Linux).
-    *   **Blazor.Diagrams:** Node editör görselleştirmesi.
-    *   **Fabric.js:** Canvas manipülasyonu.
-    *   **Server-Sent Events (SSE):** Real-time execution takibi ve loglama.
-
-### 🧩 Temel Özellikler
-
-1.  **Görsel Node Editörü:**
-    *   Tamamen özelleştirilebilir node ve port yapısı.
-    *   Dinamik parametre yönetimi.
-    *   C# tabanlı güçlü graph motoru (DAG - Directed Acyclic Graph).
-
-2.  **Vektör Veritabanı & RAG:**
-    *   Dökümanları otomatik olarak parçalar (chunking).
-    *   Embedding vektörlerine çevirir (ONNX ile lokalde).
-    *   PostgreSQL üzerinde semantik arama yapar.
-
-3.  **Gelişmiş Execution Engine:**
-    *   **Trigger Sistemi:** Manual, Zamanlanmış (Cron), Webhook.
-    *   **Execution Monitoring:** İş akışını anlık olarak izleme, hangi node'un çalıştığını görme.
-    *   **Hata Yönetimi:** Hata alan node'ları yakalama, loglama.
+**En guzel yani:** Bunlarin hepsini **kod yazmadan**, kutucuklari surukleyip birakarak yaparsiniz! AI modelleri tamamen **kendi bilgisayarinizda** calisir, verileriniz disari cikmaz.
 
 ---
 
-## 🚀 Kurulum ve Çalıştırma
+## Teknoloji Yigini
 
-Projeyi kendi bilgisayarınızda çalıştırmak için aşağıdaki adımları izleyin.
+| Katman | Teknoloji | Aciklama |
+|--------|-----------|----------|
+| **Backend** | .NET 10, ASP.NET Core | RESTful API |
+| **Frontend** | Blazor WebAssembly | Tarayici tabanli SPA |
+| **Diagram** | Z.Blazor.Diagrams | Gorsel node editoru |
+| **Veritabani** | PostgreSQL + pgvector | JSONB + vektor arama + HNSW indeks |
+| **Arka Plan** | Hangfire | Job scheduling, cron, kuyruk yonetimi |
+| **AI** | Ollama + Semantic Kernel | Yerel LLM ve chat completion |
+| **Embedding** | ONNX Runtime | Yerel embedding (all-MiniLM-L6-v2) |
+| **YAML** | YamlDotNet | Workflow import/export |
+| **Gercek Zamanli** | Server-Sent Events (SSE) | Execution takibi ve loglama |
+
+---
+
+## Temel Ozellikler
+
+### Gorsel Workflow Editoru
+- Surukle-birak node ekleme, baglanti olusturma
+- 30+ node tipi (Tetikleyici, HTTP, Donusum, Mantik, AI, Vector DB, Donguler, Iletisim)
+- Dinamik parametre paneli, `{{variable}}` template destegi
+- Keyboard shortcut'lar (Ctrl+K - Global Search)
+
+### AI Asistan ve Chat
+- Dogal dilde workflow olusturma ve duzenleme
+- AI'dan gelen graph onerisini tek tikla uygulama
+- YAML preview ile workflow import/export
+
+### Subflow ve Donguler
+- **ForEach Loop:** Koleksiyon uzerinde dongu
+- **While Loop:** Kosul saglandigi surece tekrar
+- **Parallel:** Dallari eszamanli calistirma (WaitAll / WaitAny / FireAndForget)
+- **Break / Continue:** Dongu kontrol node'lari
+
+### Execution Engine
+- Hangfire tabanli arka plan calistirma
+- Node bazinda **retry** ve **timeout** mekanizmasi
+- **Pause / Resume:** Calisan execution'i duraklatma ve devam ettirme
+- **Snapshot:** Execution durumunu kaydetme ve geri yukleme
+- Cevrimsel bagimlilik tespiti
+
+### Vektor Veritabani ve RAG
+- pgvector + IVFFlat / HNSW indeksleme
+- ONNX ile yerel embedding (768 boyut)
+- Cosine / Euclidean / Inner Product benzerlik metrikleri
+
+### Organizasyon ve Istatistik
+- **Klasor sistemi:** Hiyerarsik workflow organizasyonu
+- **Dashboard:** Toplam workflow, execution, basari orani
+- **Workflow Stats:** Gunluk calistirma grafigi, ortalama sure
+- **Global Search:** Full-text + hybrid (vektor) arama
+
+### A2A Protocol
+- Agent-to-Agent iletisim altyapisi
+- Agent Registry ile agent kesfi
+- Task-based asenkron iletisim
+
+---
+
+## Kurulum ve Calistirma
 
 ### Gereksinimler
-*   [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Veritabanı için)
-*   [.NET 9.0 veya 10.0 SDK](https://dotnet.microsoft.com/download)
-*   Visual Studio 2022 veya VS Code
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
+- [Ollama](https://ollama.ai/) (AI ozellikleri icin)
 
-### Adım 1: Projeyi İndirin
+### Adim 1: Projeyi Indirin
 ```bash
-git clone https://github.com/yourusername/SonOfAnton.git
+git clone https://github.com/ahmetsarikaya0696/SonOfAnton.git
 cd SonOfAnton
 ```
 
-### Adım 2: Altyapıyı Hazırlayın (Docker)
-PostgreSQL ve pgvector içeren konteynerı ayağa kaldırın:
-```bash
-docker-compose up -d
-```
-*Bu komut `docker-compose.yml` dosyasını kullanarak gerekli veritabanı ortamını hazırlar.*
-
-### Adım 3: Backend'i Çalıştırın
-Terminalde backend klasörüne gidin ve uygulamayı başlatın:
+### Adim 2: Backend'i Calistirin
 ```bash
 cd src/SonOfAnton.Backend
 dotnet run
 ```
-*Backend ilk açılışta veritabanı tablolarını otomatik oluşturacak (Migration) ve gerekli AI modellerini (ONNX) internetten indirip `models/` klasörüne kaydedecektir.*
+> Backend ilk calistirmada Docker uzerinden PostgreSQL + pgvector container'ini otomatik ayaga kaldirir, veritabani tablolarini olusturur ve ONNX modellerini indirir.
 
-### Adım 4: Frontend'i Çalıştırın
-Yeni bir terminal açın ve frontend klasörüne gidin:
+### Adim 3: Frontend'i Calistirin
 ```bash
 cd src/SonOfAnton.Frontend
 dotnet run
 ```
-*Uygulama masaüstü penceresi olarak açılacaktır.*
+> Tarayicida `https://localhost:5001` adresinden erisebilirsiniz.
 
 ---
 
-## 📚 Proje Yapısı
+## Proje Yapisi
 
 ```
 SonOfAnton/
-├── src/
-│   ├── SonOfAnton.Backend/       # API, AI Motoru, Veritabanı Servisleri
-│   │   ├── Controllers/          # API Uç noktaları
-│   │   ├── Services/             # İş mantığı (AI, Job, SSE)
-│   │   ├── Engine/               # Workflow çalıştırma motoru
-│   │   └── Data/                 # Veritabanı modelleri
-│   │
-│   ├── SonOfAnton.Frontend/      # Masaüstü Arayüzü (Blazor Hybrid)
-│   │   ├── Components/           # UI Bileşenleri (Editor, Monitor)
-│   │   ├── Services/             # Backend ile iletişim
-│   │   └── wwwroot/              # CSS ve JS dosyaları
-│   │
-│   └── SonOfAnton.Shared/        # Ortak Veri Modelleri (DTOs)
-│       ├── Entities/             # Veritabanı varlıkları
-│       └── Models/               # Node tanımları
-└── docker-compose.yml            # Veritabanı konfigürasyonu
++-- src/
+|   +-- SonOfAnton.Backend/          # API, AI Motoru, Veritabani
+|   |   +-- Controllers/             # REST endpoint'leri (12 controller)
+|   |   +-- Engine/                  # Workflow calistirma motoru
+|   |   |   +-- Handlers/            # Node handler'lari (25+ handler)
+|   |   |   +-- Expressions/         # template engine
+|   |   +-- Services/                # Is servisleri
+|   |   |   +-- Search/              # Full-text + Hybrid arama
+|   |   |   +-- Snapshots/           # Execution snapshot
+|   |   +-- Execution/               # PauseToken, WorkflowExecutor
+|   |   +-- A2A/                     # Agent-to-Agent protocol
+|   |   +-- Agents/                  # AI Agent servisleri
+|   |   +-- Orchestrator/            # Proje orkestrasyon
+|   |   +-- Infrastructure/          # Embedding, VectorDB, Docker
+|   |   +-- Data/                    # EF Core DbContext
+|   |
+|   +-- SonOfAnton.Frontend/         # Blazor WebAssembly
+|   |   +-- Components/              # 20+ UI bileseni
+|   |   +-- Pages/                   # Dashboard, Executions, ExecutionDetail
+|   |   +-- Services/                # API, Diagram, SSE, Chat, YAML
+|   |   +-- wwwroot/                 # CSS, JS
+|   |
+|   +-- SonOfAnton.Shared/           # Ortak kod
+|       +-- DTOs/                    # Veri transfer objeleri
+|       +-- Entities/                # Veritabani entity'leri (7 entity)
+|       +-- Enums/                   # ExecutionStatus, SubflowType vb.
+|       +-- Models/                  # NodeRegistry, WorkflowTemplates
+|       +-- Serialization/           # YAML serializer
+|       +-- Core/GraphEngine/        # DAG motoru
+|
++-- docs/                            # Dokumantasyon
+    +-- API.md                       # API referansi
+    +-- ARCHITECTURE.md              # Mimari
+    +-- DATABASE.md                  # Veritabani semasi
+    +-- DEPLOYMENT.md                # Dagitim kilavuzu
 ```
 
 ---
 
-## 🤝 Katkıda Bulunma
+## Katkida Bulunma
 
-Projeye katkıda bulunmak isterseniz çok mutlu oluruz!
-1.  Bu repository'i Fork edin.
-2.  Yeni bir Branch oluşturun (`git checkout -b feature/HarikaOzellik`).
-3.  Değişikliklerinizi Commit edin (`git commit -m 'Harika özellik eklendi'`).
-4.  Branch'inizi Push edin (`git push origin feature/HarikaOzellik`).
-5.  Bir Pull Request açın.
-
----
-
-## 📝 Lisans
-
-Bu proje [MIT Lisansı](LICENSE) ile lisanslanmıştır. Kısaca: İstediğiniz gibi kullanabilir, değiştirebilir ve dağıtabilirsiniz.
+1. Bu repository'i Fork edin.
+2. Yeni bir Branch olusturun (`git checkout -b feature/HarikaOzellik`).
+3. Degisikliklerinizi Commit edin (`git commit -m 'Harika ozellik eklendi'`).
+4. Branch'inizi Push edin (`git push origin feature/HarikaOzellik`).
+5. Bir Pull Request acin.
 
 ---
 
-<div align="center">
-  Made with ❤️ by <b>SonOfAnton Team</b>
-</div>
+## Lisans
+
+Bu proje [MIT Lisansi](LICENSE) ile lisanslanmistir.

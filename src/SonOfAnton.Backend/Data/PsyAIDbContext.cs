@@ -19,6 +19,9 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<ExecutionLogEntity> ExecutionLogs => Set<ExecutionLogEntity>();
     public DbSet<VectorStoreEntity> VectorStore => Set<VectorStoreEntity>();
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
+    public DbSet<FolderEntity> Folders => Set<FolderEntity>();
+    public DbSet<ExecutionSnapshotEntity> ExecutionSnapshots => Set<ExecutionSnapshotEntity>();
+    public DbSet<ChatHistoryEntity> ChatHistory => Set<ChatHistoryEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -134,6 +137,78 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.WorkflowId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Workflow Statistics columns
+        modelBuilder.Entity<WorkflowEntity>(entity =>
+        {
+            entity.Property(e => e.RunCount).HasColumnName("run_count").HasDefaultValue(0);
+            entity.Property(e => e.SuccessCount).HasColumnName("success_count").HasDefaultValue(0);
+            entity.Property(e => e.FailureCount).HasColumnName("failure_count").HasDefaultValue(0);
+            entity.Property(e => e.AvgDurationMs).HasColumnName("avg_duration_ms").HasDefaultValue(0.0);
+            entity.Property(e => e.LastRunAt).HasColumnName("last_run_at");
+            entity.Property(e => e.FolderId).HasColumnName("folder_id");
+
+            entity.HasOne(e => e.Folder)
+                .WithMany(f => f.Workflows)
+                .HasForeignKey(e => e.FolderId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Folders
+        modelBuilder.Entity<FolderEntity>(entity =>
+        {
+            entity.ToTable("folders");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Icon).HasColumnName("icon").HasMaxLength(50);
+            entity.Property(e => e.Color).HasColumnName("color").HasMaxLength(20);
+            entity.Property(e => e.SortOrder).HasColumnName("sort_order");
+            entity.Property(e => e.ParentFolderId).HasColumnName("parent_folder_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasOne(e => e.ParentFolder)
+                .WithMany(e => e.ChildFolders)
+                .HasForeignKey(e => e.ParentFolderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Execution Snapshots
+        modelBuilder.Entity<ExecutionSnapshotEntity>(entity =>
+        {
+            entity.ToTable("execution_snapshots");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ExecutionId).HasColumnName("execution_id");
+            entity.Property(e => e.Label).HasColumnName("label").HasMaxLength(255);
+            entity.Property(e => e.NodeStates).HasColumnName("node_states").HasColumnType("jsonb");
+            entity.Property(e => e.MemorySnapshot).HasColumnName("memory_snapshot").HasColumnType("jsonb");
+            entity.Property(e => e.AtNodeId).HasColumnName("at_node_id");
+            entity.Property(e => e.IsAutomatic).HasColumnName("is_automatic");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => e.ExecutionId);
+
+            entity.HasOne(e => e.Execution)
+                .WithMany(e => e.Snapshots)
+                .HasForeignKey(e => e.ExecutionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Chat History
+        modelBuilder.Entity<ChatHistoryEntity>(entity =>
+        {
+            entity.ToTable("chat_history");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.WorkflowId).HasColumnName("workflow_id");
+            entity.Property(e => e.Role).HasColumnName("role").HasMaxLength(20);
+            entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.Artifacts).HasColumnName("artifacts").HasColumnType("jsonb");
+            entity.Property(e => e.Timestamp).HasColumnName("timestamp");
+
+            entity.HasIndex(e => e.WorkflowId);
         });
     }
 }

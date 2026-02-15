@@ -175,7 +175,11 @@ public class DiagramStateService
     {
         var graph = new WorkflowGraphDto();
 
-
+        // Mevcut workflow'un değişkenlerini koru
+        if (_currentWorkflow?.Graph?.Variables != null)
+        {
+            graph.Variables = _currentWorkflow.Graph.Variables;
+        }
 
         foreach (var node in Diagram.Nodes.OfType<WorkflowNodeModel>())
         {
@@ -184,9 +188,13 @@ public class DiagramStateService
                 Id = node.NodeData.Id,
                 Type = node.NodeData.Type,
                 Name = node.NodeData.Name,
+                Icon = node.NodeData.Icon,
+                Color = node.NodeData.Color,
                 X = node.Position.X,
                 Y = node.Position.Y,
-                Parameters = node.NodeData.Parameters
+                Parameters = node.NodeData.Parameters,
+                ChildGraph = node.NodeData.ChildGraph,
+                SubflowType = node.NodeData.SubflowType
             });
         }
 
@@ -266,6 +274,27 @@ public class DiagramStateService
     }
 
     public void NotifyStateChanged() => OnStateChanged?.Invoke();
+
+    /// <summary>
+    /// Workflow değişkenlerini günceller
+    /// </summary>
+    public void UpdateVariables(List<WorkflowVariableDto> variables)
+    {
+        if (_currentWorkflow != null)
+        {
+            _currentWorkflow.Graph ??= new WorkflowGraphDto();
+            _currentWorkflow.Graph.Variables = variables;
+            OnStateChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Mevcut workflow'un değişkenlerini döndürür
+    /// </summary>
+    public List<WorkflowVariableDto> GetVariables()
+    {
+        return _currentWorkflow?.Graph?.Variables ?? [];
+    }
     
     /// <summary>
     /// Node'un execution durumunu ayarlar

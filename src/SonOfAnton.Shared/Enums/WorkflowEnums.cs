@@ -20,20 +20,26 @@ public enum TriggerType
 /// </summary>
 public enum ExecutionStatus
 {
-    /// <summary>S�raya al�nd�, hen�z ba�lamad�</summary>
+    /// <summary>Sıraya alındı, henüz başlamadı</summary>
     Queued,
-    
-    /// <summary>�al���yor</summary>
+
+    /// <summary>Çalışıyor</summary>
     Running,
-    
-    /// <summary>Ba�ar�yla tamamland�</summary>
+
+    /// <summary>Başarıyla tamamlandı</summary>
     Completed,
-    
-    /// <summary>Hata ile ba�ar�s�z oldu</summary>
+
+    /// <summary>Hata ile başarısız oldu</summary>
     Failed,
-    
-    /// <summary>�ptal edildi</summary>
-    Cancelled
+
+    /// <summary>İptal edildi</summary>
+    Cancelled,
+
+    /// <summary>Duraklatıldı</summary>
+    Paused,
+
+    /// <summary>Devam ettiriliyor</summary>
+    Resuming
 }
 
 /// <summary>
@@ -66,5 +72,92 @@ public enum LogLevel
     Info,
     Warning,
     Error
+}
+
+/// <summary>
+/// Subflow tipi
+/// </summary>
+public enum SubflowType
+{
+    Loop,
+    Parallel,
+    Conditional,
+    ErrorHandler
+}
+
+/// <summary>
+/// Orchestrator çalışma modu
+/// </summary>
+public enum OrchestratorMode
+{
+    CodeGeneration,
+    WorkflowAssistant,
+    Hybrid
+}
+
+/// <summary>
+/// Workflow değişken tipi
+/// </summary>
+public enum VariableType
+{
+    String,
+    Number,
+    Boolean,
+    Json,
+    Secret
+}
+
+/// <summary>
+/// Değişken kapsamı
+/// </summary>
+public enum VariableScope
+{
+    Global,
+    Execution,
+    Node
+}
+
+/// <summary>
+/// A2A Task durumu
+/// </summary>
+public enum A2ATaskState
+{
+    Submitted,
+    Working,
+    InputRequired,
+    Completed,
+    Failed,
+    Canceled
+}
+
+/// <summary>
+/// Artifact tipi
+/// </summary>
+public enum ArtifactType
+{
+    Yaml,
+    Mermaid,
+    Json,
+    Markdown
+}
+
+/// <summary>
+/// Paralel join stratejisi
+/// </summary>
+public enum JoinStrategy
+{
+    WaitAll,
+    WaitAny,
+    WaitN
+}
+
+/// <summary>
+/// Paralel hata yönetimi
+/// </summary>
+public enum ParallelErrorPolicy
+{
+    FailFast,
+    Collect,
+    Ignore
 }
 

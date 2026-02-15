@@ -1,0 +1,97 @@
+@inject WorkflowApiService ApiService
+
+<div class="stats-card">
+    @if (_stats != null)
+    {
+        <div class="stats-grid">
+            <div class="stat-item">
+                <span class="stat-value">@_stats.TotalRuns</span>
+                <span class="stat-label">Toplam Çalışma</span>
+            </div>
+            <div class="stat-item success">
+                <span class="stat-value">@_stats.SuccessCount</span>
+                <span class="stat-label">Başarılı</span>
+            </div>
+            <div class="stat-item failure">
+                <span class="stat-value">@_stats.FailureCount</span>
+                <span class="stat-label">Başarısız</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">@FormatDuration(_stats.AvgDurationMs)</span>
+                <span class="stat-label">Ort. Süre</span>
+            </div>
+        </div>
+
+        <div class="success-bar">
+            <div class="bar-fill" style="width: @(_stats.SuccessRate)%"></div>
+            <span class="bar-label">@_stats.SuccessRate.ToString("F0")% başarı</span>
+        </div>
+
+        @if (_stats.LastRunAt.HasValue)
+        {
+            <div class="last-run">
+                <Icon Name="clock" Size="12" />
+                <span>Son çalışma: @FormatRelativeTime(_stats.LastRunAt.Value)</span>
+            </div>
+        }
+    }
+    else if (_isLoading)
+    {
+        <div class="stats-loading"><span class="spinner-sm"></span></div>
+    }
+    else
+    {
+        <div class="stats-empty">
+            <Icon Name="bar-chart-2" Size="20" />
+            <span>Henüz çalışma verisi yok</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid WorkflowId { get; set; }
+
+    private WorkflowStatsDto? _stats;
+    private bool _isLoading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (WorkflowId != Guid.Empty)
+        {
+            await LoadStatsAsync();
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _stats = await ApiService.GetWorkflowStatsAsync(WorkflowId);
+        }
+        catch
+        {
+            _stats = null;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string FormatDuration(double ms)
+    {
+        if (ms < 1000) return $"{ms:F0}ms";
+        if (ms < 60000) return $"{ms / 1000:F1}s";
+        return $"{ms / 60000:F1}m";
+    }
+
+    private static string FormatRelativeTime(DateTime utcTime)
+    {
+        var diff = DateTime.UtcNow - utcTime;
+        if (diff.TotalMinutes < 1) return "az önce";
+        if (diff.TotalHours < 1) return $"{diff.TotalMinutes:F0} dk önce";
+        if (diff.TotalDays < 1) return $"{diff.TotalHours:F0} saat önce";
+        return $"{diff.TotalDays:F0} gün önce";
+    }
+}

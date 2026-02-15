@@ -1,0 +1,127 @@
+@inject WorkflowApiService ApiService
+
+<div class="folder-tree">
+    <div class="tree-header">
+        <h4><Icon Name="folder" Size="14" /> Klasörler</h4>
+        <button class="add-folder-btn" @onclick="ShowCreateDialog" title="Yeni Klasör">
+            <Icon Name="folder-plus" Size="14" />
+        </button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="tree-loading"><span class="spinner-sm"></span></div>
+    }
+    else
+    {
+        <div class="tree-content">
+            @* Klasörsüz workflow'lar *@
+            <div class="tree-item root @(_selectedFolderId == null ? "selected" : "")"
+                 @onclick="() => SelectFolder(null)">
+                <Icon Name="inbox" Size="14" />
+                <span>Tüm Workflow'lar</span>
+            </div>
+
+            @foreach (var folder in _tree)
+            {
+                <FolderTreeNode Folder="folder"
+                                SelectedFolderId="_selectedFolderId"
+                                OnSelect="SelectFolder"
+                                OnDelete="DeleteFolder"
+                                OnWorkflowDrop="HandleWorkflowDrop" />
+            }
+        </div>
+    }
+
+    @if (_showCreateDialog)
+    {
+        <div class="create-folder-dialog">
+            <input type="text"
+                   class="folder-name-input"
+                   placeholder="Klasör adı..."
+                   @bind="_newFolderName"
+                   @onkeydown="HandleCreateKeyDown" />
+            <div class="dialog-actions">
+                <button class="btn-cancel" @onclick="() => _showCreateDialog = false">İptal</button>
+                <button class="btn-create" @onclick="CreateFolder">Oluştur</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback<Guid?> OnFolderSelected { get; set; }
+    [Parameter] public EventCallback<WorkflowDto> OnWorkflowSelected { get; set; }
+
+    private List<FolderTreeDto> _tree = [];
+    private Guid? _selectedFolderId;
+    private bool _isLoading = true;
+    private bool _showCreateDialog;
+    private string _newFolderName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTreeAsync();
+    }
+
+    private async Task LoadTreeAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _tree = await ApiService.GetFolderTreeAsync();
+        }
+        catch
+        {
+            _tree = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SelectFolder(Guid? folderId)
+    {
+        _selectedFolderId = folderId;
+        await OnFolderSelected.InvokeAsync(folderId);
+    }
+
+    private void ShowCreateDialog()
+    {
+        _showCreateDialog = true;
+        _newFolderName = string.Empty;
+    }
+
+    private async Task CreateFolder()
+    {
+        if (string.IsNullOrWhiteSpace(_newFolderName)) return;
+
+        await ApiService.CreateFolderAsync(new CreateFolderRequest
+        {
+            Name = _newFolderName,
+            ParentFolderId = _selectedFolderId
+        });
+
+        _showCreateDialog = false;
+        await LoadTreeAsync();
+    }
+
+    private async Task DeleteFolder(Guid folderId)
+    {
+        await ApiService.DeleteFolderAsync(folderId);
+        await LoadTreeAsync();
+    }
+
+    private async Task HandleWorkflowDrop((Guid WorkflowId, Guid? FolderId) args)
+    {
+        await ApiService.MoveWorkflowToFolderAsync(args.WorkflowId, args.FolderId);
+        await LoadTreeAsync();
+    }
+
+    private async Task HandleCreateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CreateFolder();
+        if (e.Key == "Escape") _showCreateDialog = false;
+    }
+}

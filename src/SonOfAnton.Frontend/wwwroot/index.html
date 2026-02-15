@@ -34,6 +34,14 @@
     </div>
     <!-- SSE Helper -->
     <script src="js/sse-helper.js"></script>
+    <!-- Clipboard & Keyboard helpers -->
+    <script>
+        window.clipboardHelper = {
+            copy: async function (text) {
+                await navigator.clipboard.writeText(text);
+            }
+        };
+    </script>
     <!-- Z.Blazor.Diagrams JavaScript -->
     <script src="_content/Z.Blazor.Diagrams/script.min.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>

@@ -1,0 +1,144 @@
+@inject WorkflowApiService ApiService
+
+<div class="snapshot-panel @(IsOpen ? "open" : "")">
+    <div class="panel-header">
+        <h4><Icon Name="camera" Size="14" /> Snapshot'lar</h4>
+        <div class="header-actions">
+            @if (ExecutionId != Guid.Empty)
+            {
+                <button class="take-btn" @onclick="TakeSnapshot" disabled="@_isTaking">
+                    <Icon Name="camera" Size="14" /> Snapshot Al
+                </button>
+            }
+            <button class="close-btn" @onclick="() => IsOpenChanged.InvokeAsync(false)">
+                <Icon Name="x" Size="14" />
+            </button>
+        </div>
+    </div>
+
+    <div class="snapshot-list">
+        @if (_isLoading)
+        {
+            <div class="loading"><span class="spinner-sm"></span></div>
+        }
+        else if (_snapshots.Count == 0)
+        {
+            <div class="empty-state">
+                <Icon Name="camera" Size="24" />
+                <p>Henüz snapshot yok</p>
+                <span class="hint">Execution sırasında veya hata durumunda otomatik alınır</span>
+            </div>
+        }
+        else
+        {
+            @foreach (var snapshot in _snapshots)
+            {
+                <div class="snapshot-card @(snapshot.IsAutomatic ? "auto" : "manual")">
+                    <div class="snapshot-header">
+                        <span class="snapshot-badge">
+                            @(snapshot.IsAutomatic ? "Otomatik" : "Manuel")
+                        </span>
+                        <span class="snapshot-time">@FormatTime(snapshot.CreatedAt)</span>
+                    </div>
+                    <div class="snapshot-body">
+                        @if (!string.IsNullOrEmpty(snapshot.Label))
+                        {
+                            <span class="snapshot-label">@snapshot.Label</span>
+                        }
+                        @if (snapshot.AtNodeId.HasValue)
+                        {
+                            <span class="snapshot-node">
+                                <Icon Name="git-commit" Size="12" />
+                                Node: @snapshot.AtNodeId.Value.ToString()[..8]...
+                            </span>
+                        }
+                    </div>
+                    <div class="snapshot-actions">
+                        <button class="restore-btn" @onclick="() => RestoreSnapshot(snapshot)">
+                            <Icon Name="rotate-ccw" Size="12" /> Geri Yükle
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public Guid ExecutionId { get; set; }
+    [Parameter] public EventCallback<ExecutionDto> OnRestored { get; set; }
+
+    private List<SnapshotDto> _snapshots = [];
+    private bool _isLoading;
+    private bool _isTaking;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && ExecutionId != Guid.Empty)
+        {
+            await LoadSnapshotsAsync();
+        }
+    }
+
+    private async Task LoadSnapshotsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _snapshots = await ApiService.GetSnapshotsAsync(ExecutionId);
+        }
+        catch
+        {
+            _snapshots = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task TakeSnapshot()
+    {
+        _isTaking = true;
+        try
+        {
+            var snapshot = await ApiService.TakeSnapshotAsync(ExecutionId, $"Manuel snapshot - {DateTime.Now:HH:mm:ss}");
+            if (snapshot != null)
+            {
+                _snapshots.Insert(0, snapshot);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Snapshot hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isTaking = false;
+        }
+    }
+
+    private async Task RestoreSnapshot(SnapshotDto snapshot)
+    {
+        try
+        {
+            var execution = await ApiService.RestoreFromSnapshotAsync(ExecutionId, snapshot.Id);
+            if (execution != null)
+            {
+                await OnRestored.InvokeAsync(execution);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Restore hatası: {ex.Message}");
+        }
+    }
+
+    private static string FormatTime(DateTime utcTime)
+    {
+        var local = utcTime.ToLocalTime();
+        return local.ToString("HH:mm:ss");
+    }
+}

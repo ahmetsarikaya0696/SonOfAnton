@@ -1,0 +1,173 @@
+@inject WorkflowApiService ApiService
+@inject ChatDiagramBridge ChatBridge
+@inject DiagramStateService DiagramState
+
+<div class="chat-panel @(IsOpen ? "open" : "")">
+    <div class="chat-header">
+        <h4><Icon Name="message-circle" Size="16" /> Workflow Asistan</h4>
+        <button class="close-btn" @onclick="() => IsOpenChanged.InvokeAsync(false)">
+            <Icon Name="x" Size="16" />
+        </button>
+    </div>
+
+    <div class="chat-messages" @ref="_messagesContainer">
+        @if (_messages.Count == 0)
+        {
+            <div class="chat-welcome">
+                <Icon Name="bot" Size="32" />
+                <p>Merhaba! Doğal dilde workflow oluşturmanıza yardımcı olabilirim.</p>
+                <div class="suggestions">
+                    <button @onclick='() => SendMessage("Webhook ile tetiklenen bir HTTP request workflow oluştur")'>
+                        Webhook → HTTP Request
+                    </button>
+                    <button @onclick='() => SendMessage("Her 5 dakikada API çağırıp sonucu e-posta ile gönderen bir workflow oluştur")'>
+                        Scheduled API + Email
+                    </button>
+                    <button @onclick='() => SendMessage("Gelen veriyi filtrele, AI ile analiz et ve Slack a gönder")'>
+                        Filter → AI → Slack
+                    </button>
+                </div>
+            </div>
+        }
+
+        @foreach (var msg in _messages)
+        {
+            <div class="chat-message @msg.Role">
+                <div class="message-avatar">
+                    <Icon Name="@(msg.Role == "user" ? "user" : "bot")" Size="16" />
+                </div>
+                <div class="message-content">
+                    <p>@msg.Content</p>
+                    @if (msg.Artifact != null)
+                    {
+                        <div class="message-artifact">
+                            <div class="artifact-header">
+                                <Icon Name="git-branch" Size="14" />
+                                <span>@msg.Artifact.Nodes.Count node, @msg.Artifact.Connections.Count bağlantı</span>
+                            </div>
+                            <button class="apply-btn" @onclick="() => ApplyGraph(msg.Artifact)">
+                                <Icon Name="check" Size="14" /> Uygula
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_isLoading)
+        {
+            <div class="chat-message assistant">
+                <div class="message-avatar"><Icon Name="bot" Size="16" /></div>
+                <div class="message-content typing">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_yamlPreview))
+    {
+        <div class="yaml-preview-section">
+            <div class="yaml-header">
+                <span><Icon Name="file-text" Size="14" /> YAML Önizleme</span>
+                <button class="toggle-yaml" @onclick="() => _showYaml = !_showYaml">
+                    <Icon Name="@(_showYaml ? "chevron-down" : "chevron-up")" Size="14" />
+                </button>
+            </div>
+            @if (_showYaml)
+            {
+                <pre class="yaml-content">@_yamlPreview</pre>
+            }
+        </div>
+    }
+
+    <div class="chat-input-area">
+        <textarea class="chat-input"
+                  placeholder="Workflow tarif edin..."
+                  @bind="_inputText"
+                  @onkeydown="HandleKeyDown"
+                  rows="2"></textarea>
+        <button class="send-btn" @onclick="() => SendMessage(null)" disabled="@(_isLoading || string.IsNullOrWhiteSpace(_inputText))">
+            <Icon Name="send" Size="16" />
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public Guid? WorkflowId { get; set; }
+
+    private List<ChatMessageDto> _messages = [];
+    private string _inputText = string.Empty;
+    private bool _isLoading;
+    private string? _yamlPreview;
+    private bool _showYaml;
+    private ElementReference _messagesContainer;
+
+    private async Task SendMessage(string? text)
+    {
+        var message = text ?? _inputText;
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        _inputText = string.Empty;
+        _messages.Add(new ChatMessageDto { Role = "user", Content = message });
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var request = new WorkflowChatRequest
+            {
+                Message = message,
+                WorkflowId = WorkflowId,
+                CurrentGraph = DiagramState.GetCurrentGraph(),
+                History = _messages.Select(m => new ChatMessageDto
+                {
+                    Role = m.Role,
+                    Content = m.Content
+                }).ToList()
+            };
+
+            var response = await ApiService.SendChatMessageAsync(request);
+            if (response != null)
+            {
+                _messages.Add(new ChatMessageDto
+                {
+                    Role = "assistant",
+                    Content = response.Message,
+                    Artifact = response.SuggestedGraph
+                });
+                _yamlPreview = response.YamlPreview;
+            }
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new ChatMessageDto
+            {
+                Role = "assistant",
+                Content = $"Üzgünüm, bir hata oluştu: {ex.Message}"
+            });
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyGraph(WorkflowGraphDto graph)
+    {
+        ChatBridge.ApplySuggestedGraph(graph);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage(null);
+        }
+    }
+}

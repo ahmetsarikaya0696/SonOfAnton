@@ -5,13 +5,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.SemanticKernel;
+using SonOfAnton.Backend.A2A;
+using SonOfAnton.Backend.Agents;
 using SonOfAnton.Backend.Data;
 using SonOfAnton.Backend.Engine;
 using SonOfAnton.Backend.Engine.Handlers;
+using SonOfAnton.Backend.Execution;
 using SonOfAnton.Backend.Infrastructure.Embeddings;
 using SonOfAnton.Backend.Infrastructure.VectorDatabase;
+using SonOfAnton.Backend.Orchestrator;
 using SonOfAnton.Backend.Services;
+using SonOfAnton.Backend.Services.Search;
+using SonOfAnton.Backend.Services.Snapshots;
 using SonOfAnton.Shared.Core.GraphEngine;
+using SonOfAnton.Shared.Serialization;
+using SonOfAnton.Shared.VirtualFileSystem;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 
@@ -236,6 +244,48 @@ builder.Services.AddSingleton<PerformanceMetricsService>();
 builder.Services.AddHostedService<ModelDownloadService>();
 builder.Services.AddSingleton<ModelDownloadService>();
 
+// ─── New Feature Services ──────────────────────────────────────
+
+// YAML Serializer (Shared)
+builder.Services.AddSingleton<WorkflowYamlSerializer>();
+
+// Virtual File System
+builder.Services.AddSingleton<IVirtualFileSystem, InMemoryFileSystem>();
+
+// Agent Services
+builder.Services.AddScoped<AgentService>();
+builder.Services.AddScoped<WorkflowAssistantService>();
+
+// Orchestrator
+builder.Services.AddScoped<ProjectOrchestrator>();
+
+// Workflow Stats Updater
+builder.Services.AddScoped<WorkflowStatsUpdater>();
+
+// Search Services (Full-text + Hybrid)
+builder.Services.AddScoped<FullTextSearchService>();
+builder.Services.AddScoped<HybridSearchService>();
+
+// Snapshot Service
+builder.Services.AddScoped<SnapshotService>();
+
+// Pause/Resume Registry (Singleton)
+builder.Services.AddSingleton<PauseTokenRegistry>();
+
+// HNSW Config
+builder.Services.AddSingleton(HnswConfig.FromConfiguration(builder.Configuration));
+
+// A2A Protocol Services
+builder.Services.AddSingleton<AgentRegistry>();
+builder.Services.AddSingleton<A2ATaskManager>();
+
+// Subflow Node Handlers
+builder.Services.AddScoped<INodeHandler, ForEachLoopHandler>();
+builder.Services.AddScoped<INodeHandler, WhileLoopHandler>();
+builder.Services.AddScoped<INodeHandler, ParallelHandler>();
+builder.Services.AddScoped<INodeHandler, BreakHandler>();
+builder.Services.AddScoped<INodeHandler, ContinueHandler>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)
@@ -249,6 +299,14 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
+
+    // A2A Agent'ları kaydet
+    var registry = app.Services.GetRequiredService<AgentRegistry>();
+    var agentService = scope.ServiceProvider.GetRequiredService<AgentService>();
+    registry.Register(new AnalystA2AAgent(agentService));
+    registry.Register(new CoderA2AAgent(agentService));
+    registry.Register(new AuditorA2AAgent(agentService));
+    registry.Register(new VisualizerA2AAgent(agentService));
 }
 
 // Configure the HTTP request pipeline
@@ -410,5 +468,18 @@ app.MapGet("/api/metrics", (PerformanceMetricsService metricsService) =>
 }).WithName("GetPerformanceMetrics");
 
 app.MapControllers();
+
+// A2A Well-known endpoint
+app.MapGet("/.well-known/agent.json", (AgentRegistry agentRegistry) =>
+{
+    var cards = agentRegistry.GetAllCards();
+    return Results.Ok(new
+    {
+        agents = cards,
+        protocol = "a2a",
+        version = "1.0",
+        endpoint = "/api/a2a"
+    });
+}).WithName("A2AAgentCard");
 
 app.Run();

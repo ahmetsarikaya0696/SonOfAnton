@@ -344,6 +344,11 @@ INodeHandler (interface)
 ??? VectorStoreHandler        (vector.store)
 ??? VectorSearchHandler       (vector.search)
 ??? VectorDeleteHandler       (vector.delete)
+??? ForEachLoopHandler        (subflow.foreach)    [YENi]
+??? WhileLoopHandler          (subflow.while)      [YENi]
+??? ParallelHandler           (subflow.parallel)   [YENi]
+??? BreakHandler              (flow.break)         [YENi]
+??? ContinueHandler           (flow.continue)      [YENi]
 ??? DebugHandler              (utility.debug)
 ??? EndHandler                (utility.end)
 ```
@@ -664,3 +669,47 @@ dotnet test --verbosity normal
 > **Sorularýn mý var?** Kodu okurken takýldýðýn bir yer olursa
 > önce bu dokümanýn ilgili bölümüne bak, sonra dosya baþlarýndaki
 > XML yorumlarýný oku. Yine anlamadýysan takým arkadaþlarýna sor!
+
+---
+
+## 15. Yeni Mimari Bilesenler (v2)
+
+Asagidaki bilesenler ikinci fazda eklenmistir:
+
+### Expression Engine
+- `Engine/Expressions/ExpressionEvaluator.cs` - `{{variable}}` template cozumleme
+- `Engine/Expressions/VariableStore.cs` - Degisken deposu
+- Her node'un parametreleri calistirilmadan once resolve edilir
+
+### Pause / Resume Mekanizmasi
+- `Execution/PauseToken.cs` - ManualResetEventSlim tabanli duraklatma
+- `PauseTokenRegistry` - Execution ID'ye gore PauseToken yonetimi
+- WorkflowRunner her node oncesi `WaitIfPausedAsync()` cagirir
+
+### Snapshot Sistemi
+- `Services/Snapshots/SnapshotService.cs` - Otomatik/manuel snapshot
+- Hata durumunda otomatik snapshot alinir
+- Snapshot'tan execution geri yuklenebilir
+
+### A2A Protocol
+- `A2A/IA2AAgent.cs` - Agent arayuzu
+- `A2A/AgentRegistry.cs` - Agent kesif ve kayit
+- `A2A/A2ATaskManager.cs` - Asenkron task yonetimi
+- `A2A/A2AAgentAdapters.cs` - Mevcut AgentService'i A2A'ya adapte eden siniflar
+
+### Arama Altyapisi
+- `Services/Search/FullTextSearchService.cs` - PostgreSQL tsvector ile tam metin arama
+- `Services/Search/HybridSearchService.cs` - Vektor + full-text birlestirmesi
+
+### Workflow Chat Asistan
+- `Agents/WorkflowAssistantService.cs` - Dogal dil -> workflow graph cevirici
+- Semantic Kernel ile Ollama LLM entegrasyonu
+- JSON ve YAML blok parse edici
+
+### Klasor Sistemi
+- `FolderEntity` - Hiyerarsik, self-referencing entity
+- `FoldersController` - CRUD + agac yapisi endpoint'leri
+
+### YAML Serialization
+- `Shared/Serialization/WorkflowYamlSerializer.cs` - YamlDotNet ile serialize/deserialize
+- Validation destegi (hata listesi doner)
