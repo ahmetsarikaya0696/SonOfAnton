@@ -34,6 +34,9 @@ public abstract class NodeBase : INode
     public IReadOnlyDictionary<string, Pin> OutputPins => _outputPins;
     
     /// <inheritdoc />
+    public bool IsBypassed { get; set; }
+    
+    /// <inheritdoc />
     public Dictionary<string, object?> Parameters { get; } = new();
     
     /// <inheritdoc />

@@ -250,6 +250,11 @@ public interface INode
     IReadOnlyDictionary<string, Pin> OutputPins { get; }
     
     /// <summary>
+    /// Node'un devre dışı bırakılıp bırakılmadığı
+    /// </summary>
+    bool IsBypassed { get; set; }
+
+    /// <summary>
     /// Node parametreleri (UI'dan düzenlenen)
     /// </summary>
     Dictionary<string, object?> Parameters { get; }

@@ -587,6 +587,33 @@ public class GraphExecutor
         
         try
         {
+            if (node.IsBypassed)
+            {
+                node.State = ExecutionState.Skipped;
+                await EmitEventAsync(context, new NodeExecutionCompletedEvent
+                {
+                    ExecutionId = context.ExecutionId,
+                    NodeId = node.Id,
+                    Success = true,
+                    Error = null,
+                    Duration = TimeSpan.Zero,
+                    OutputPreview = "Bypassed"
+                });
+                
+                return new NodeExecutionRecord
+                {
+                    NodeId = node.Id,
+                    NodeName = node.Name,
+                    NodeType = node.Type,
+                    StartTime = startTime,
+                    EndTime = DateTime.UtcNow,
+                    Success = true,
+                    Error = null,
+                    InputData = inputData,
+                    OutputData = inputData // Passthrough
+                };
+            }
+
             // State transition: Idle -> Pending -> Running
             if (node.State == ExecutionState.Idle)
                 node.State = ExecutionState.Pending;

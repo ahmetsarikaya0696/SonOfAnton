@@ -15,12 +15,14 @@ public class NodeEditorInteropService : IAsyncDisposable
     
     // Events
     public event Action<string>? OnNodeSelected;
+    public event Action<List<string>>? OnSelectionChanged;
     public event Action? OnSelectionCleared;
     public event Action<string, double, double>? OnNodeMoved;
     public event Action<double>? OnCanvasZoom;
     public event Action<string, string, string, string>? OnConnectionCreated;
     public event Action<string>? OnConnectionDeleted;
     public event Action<string, double, double>? OnContextMenu;
+    public event Action<string, string>? OnNoteContentChanged;
     
     public NodeEditorInteropService(IJSRuntime jsRuntime)
     {
@@ -158,6 +160,12 @@ public class NodeEditorInteropService : IAsyncDisposable
         return await _module.InvokeAsync<bool>("clearCanvas", _currentCanvasId);
     }
     
+    public async Task DisposeCanvasAsync(string canvasId)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("dispose", canvasId);
+    }
+    
     /// <summary>
     /// Zoom seviyesini ayarlar
     /// </summary>
@@ -236,6 +244,12 @@ public class NodeEditorInteropService : IAsyncDisposable
     }
     
     [JSInvokable]
+    public void OnSelectionChanged_Internal(List<string> nodeIds)
+    {
+        OnSelectionChanged?.Invoke(nodeIds);
+    }
+    
+    [JSInvokable]
     public void OnSelectionCleared_Internal()
     {
         OnSelectionCleared?.Invoke();
@@ -270,6 +284,12 @@ public class NodeEditorInteropService : IAsyncDisposable
     public void OnContextMenu_Internal(string nodeId, double x, double y)
     {
         OnContextMenu?.Invoke(nodeId, x, y);
+    }
+    
+    [JSInvokable]
+    public void OnNoteContentChanged_Internal(string noteId, string newContent)
+    {
+        OnNoteContentChanged?.Invoke(noteId, newContent);
     }
     
     #endregion

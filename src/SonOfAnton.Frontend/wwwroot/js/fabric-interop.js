@@ -61,6 +61,16 @@ export function initializeCanvas(canvasId, dotNetRef) {
         allowTouchScrolling: false
     });
 
+    // Minimap setup
+    const minimapEl = document.getElementById(`${canvasId}-minimap`);
+    let minimapCtx = null;
+    if (minimapEl) {
+        const miniContainer = minimapEl.parentElement;
+        minimapEl.width = miniContainer.clientWidth;
+        minimapEl.height = miniContainer.clientHeight;
+        minimapCtx = minimapEl.getContext('2d');
+    }
+
     // Canvas meta verisi
     const canvasData = {
         canvas: canvas,
@@ -68,13 +78,18 @@ export function initializeCanvas(canvasId, dotNetRef) {
         nodes: new Map(),
         connections: new Map(),
         zoom: 1,
-        panOffset: { x: 0, y: 0 }
+        panOffset: { x: 0, y: 0 },
+        minimapEl: minimapEl,
+        minimapCtx: minimapCtx
     };
 
     canvasInstances.set(canvasId, canvasData);
 
     // Event listeners
     setupEventListeners(canvasId, canvasData);
+    
+    // Minimap sync hook
+    canvas.on('after:render', () => updateMinimap(canvasId));
 
     // Resize observer
     const resizeObserver = new ResizeObserver(entries => {
@@ -100,23 +115,27 @@ function setupEventListeners(canvasId, canvasData) {
     const dotNetRef = canvasData.dotNetRef;
 
     // Node seçimi
-    canvas.on('selection:created', (e) => {
-        const selected = e.selected?.[0];
-        if (selected?.nodeId && dotNetRef) {
-            dotNetRef.invokeMethodAsync('OnNodeSelected', selected.nodeId);
+    const notifySelection = (e) => {
+        if (!dotNetRef) return;
+        const activeObjects = canvas.getActiveObjects();
+        const selectedIds = activeObjects
+            .map(obj => obj.nodeId || obj.noteId || obj.groupId)
+            .filter(id => id != null);
+        
+        if (selectedIds.length > 0) {
+            dotNetRef.invokeMethodAsync('OnSelectionChanged_Internal', selectedIds);
+            // Geriye dönük uyumluluk için ilk öğeyi de eski event'e gönderelim:
+            dotNetRef.invokeMethodAsync('OnNodeSelected_Internal', selectedIds[0]);
         }
-    });
+    };
 
-    canvas.on('selection:updated', (e) => {
-        const selected = e.selected?.[0];
-        if (selected?.nodeId && dotNetRef) {
-            dotNetRef.invokeMethodAsync('OnNodeSelected', selected.nodeId);
-        }
-    });
+    canvas.on('selection:created', notifySelection);
+    canvas.on('selection:updated', notifySelection);
 
     canvas.on('selection:cleared', () => {
         if (dotNetRef) {
-            dotNetRef.invokeMethodAsync('OnSelectionCleared');
+            dotNetRef.invokeMethodAsync('OnSelectionCleared_Internal');
+            dotNetRef.invokeMethodAsync('OnSelectionChanged_Internal', []);
         }
     });
 
@@ -124,7 +143,55 @@ function setupEventListeners(canvasId, canvasData) {
     canvas.on('object:modified', (e) => {
         const obj = e.target;
         if (obj?.nodeId && dotNetRef) {
-            dotNetRef.invokeMethodAsync('OnNodeMoved', obj.nodeId, obj.left, obj.top);
+            dotNetRef.invokeMethodAsync('OnNodeMoved_Internal', obj.nodeId, obj.left, obj.top);
+        }
+        
+        // Group dragging finished
+        if (obj?.isGroup && obj._containedNodes) {
+            obj._containedNodes.forEach(item => {
+                if (dotNetRef) {
+                    dotNetRef.invokeMethodAsync('OnNodeMoved_Internal', item.node.nodeId, item.node.left, item.node.top);
+                }
+                updateConnections(canvasId, item.node.nodeId);
+            });
+            obj._containedNodes = null;
+        }
+    });
+    
+    // Group dragging support
+    canvas.on('mouse:down', (opt) => {
+        const target = opt.target;
+        if (target && target.isGroup && canvas.getActiveObjects().length === 1) {
+            const groupBounds = target.getBoundingRect(true, true);
+            target._containedNodes = [];
+            
+            canvasData.nodes.forEach(node => {
+                const nodeBounds = node.getBoundingRect(true, true);
+                const centerX = nodeBounds.left + nodeBounds.width / 2;
+                const centerY = nodeBounds.top + nodeBounds.height / 2;
+                
+                if (centerX >= groupBounds.left && centerX <= groupBounds.left + groupBounds.width &&
+                    centerY >= groupBounds.top && centerY <= groupBounds.top + groupBounds.height) {
+                    target._containedNodes.push({
+                        node: node,
+                        offsetX: node.left - target.left,
+                        offsetY: node.top - target.top
+                    });
+                }
+            });
+        }
+    });
+
+    canvas.on('object:moving', (opt) => {
+        const target = opt.target;
+        if (target && target.isGroup && target._containedNodes) {
+            target._containedNodes.forEach(item => {
+                item.node.set({
+                    left: target.left + item.offsetX,
+                    top: target.top + item.offsetY
+                });
+                item.node.setCoords();
+            });
         }
     });
 
@@ -319,6 +386,44 @@ function setupEventListeners(canvasId, canvasData) {
     canvas.upperCanvasEl.addEventListener('contextmenu', (e) => {
         e.preventDefault();
     });
+
+    // ===== MINIMAP PANNING =====
+    if (canvasData.minimapEl) {
+        let isMinimapPanning = false;
+        
+        const handleMinimapPan = (e) => {
+            const rect = canvasData.minimapEl.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            
+            const ms = canvasData.minimapState;
+            if (!ms) return;
+            
+            const canvasX = (clickX - ms.offsetX) / ms.scale;
+            const canvasY = (clickY - ms.offsetY) / ms.scale;
+            
+            const zoom = canvas.getZoom();
+            const vpt = canvas.viewportTransform;
+            
+            vpt[4] = canvas.width / 2 - canvasX * zoom;
+            vpt[5] = canvas.height / 2 - canvasY * zoom;
+            
+            canvas.requestRenderAll();
+        };
+
+        canvasData.minimapEl.addEventListener('mousedown', (e) => {
+            isMinimapPanning = true;
+            handleMinimapPan(e);
+        });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (isMinimapPanning) handleMinimapPan(e);
+        });
+        
+        window.addEventListener('mouseup', () => {
+            isMinimapPanning = false;
+        });
+    }
 }
 
 /**
@@ -1038,49 +1143,31 @@ export function addNote(canvasId, noteId, content, x, y, color) {
     const canvasData = canvasInstances.get(canvasId);
     if (!canvasData) return false;
 
-    const width = 200;
-    const height = 150;
-
-    const rect = new fabric.Rect({
-        width: width,
-        height: height,
-        fill: color,
-        stroke: '#00000020',
-        strokeWidth: 1,
-        rx: 2,
-        ry: 2,
-        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.2)', blur: 5, offsetX: 2, offsetY: 2 })
-    });
-
-    // Textbox düzenlenebilir
-    const text = new fabric.Textbox(content, {
-        width: width - 20,
-        height: height - 20,
+    const note = new fabric.Textbox(content, {
+        width: 200,
+        backgroundColor: color,
         fontSize: 14,
         fontFamily: 'Inter, sans-serif',
         fill: '#4c4f69',
-        left: 10,
-        top: 10,
-        splitByGrapheme: true,
-        editable: true
-    });
-
-    const group = new fabric.Group([rect, text], {
+        padding: 10,
         left: x,
         top: y,
-        subTargetCheck: true,
-        hasBorders: true,
-        borderColor: '#f9e2af',
-        cornerColor: '#f9e2af',
-        cornerSize: 8,
-        transparentCorners: false
+        splitByGrapheme: true,
+        editable: true,
+        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.2)', blur: 5, offsetX: 2, offsetY: 2 })
     });
 
-    group.noteId = noteId;
-    group.isNote = true;
+    note.noteId = noteId;
+    note.isNote = true;
 
-    canvasData.canvas.add(group);
-    canvasData.canvas.sendToBack(group); 
+    note.on('changed', function() {
+        if (canvasData.dotNetRef) {
+            canvasData.dotNetRef.invokeMethodAsync('OnNoteContentChanged_Internal', noteId, note.text);
+        }
+    });
+
+    canvasData.canvas.add(note);
+    canvasData.canvas.sendToBack(note); 
     canvasData.canvas.renderAll();
     return true;
 }
@@ -1142,19 +1229,29 @@ export function updateNodeName(canvasId, nodeId, newName) {
     const node = canvasData.nodes.get(nodeId);
     if (!node) return false;
     
-    // Group nesneleri
+    const newWidth = Math.max(NODE_CONFIG.minWidth, newName.length * 8 + 60);
     const objects = node.getObjects();
-    // Node başlığı 13px bold, text tipinde
-    const titleObj = objects.find(o => o.type === 'text' && o.fontSize === 13 && o.fontWeight === 'bold');
-
-    if (titleObj) {
-        titleObj.set('text', newName);
-        node.addWithUpdate(); // Grubu güncelle
-        canvasData.canvas.renderAll();
-        return true;
-    }
     
-    return false;
+    objects.forEach(obj => {
+        if (obj.type === 'rect') {
+            obj.set({ width: newWidth });
+        } else if (obj.type === 'text' && obj.fontSize === 13 && obj.fontWeight === 'bold') {
+            obj.set({ text: newName });
+        } else if (obj.type === 'text' && obj.fontSize === 10) {
+            obj.set({ left: newWidth - 10 });
+        } else if (obj.pinType === 'output') {
+            if (obj.type === 'circle') {
+                obj.set({ left: newWidth });
+            } else if (obj.type === 'text') {
+                obj.set({ left: newWidth - 15 });
+            }
+        }
+    });
+
+    node.addWithUpdate(); 
+    updateConnections(canvasId, nodeId);
+    canvasData.canvas.requestRenderAll();
+    return true;
 }
 
 /**
@@ -1174,5 +1271,179 @@ export function setNodeBypass(canvasId, nodeId, isBypassed) {
     }
     
     canvasData.canvas.renderAll();
+    return true;
+}
+
+// ===== MINIMAP =====
+
+/**
+ * Minimap'i günceller
+ */
+function updateMinimap(canvasId) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData || !canvasData.minimapCtx) return;
+
+    const main = canvasData.canvas;
+    const miniEl = canvasData.minimapEl;
+    const ctx = canvasData.minimapCtx;
+
+    const width = miniEl.width;
+    const height = miniEl.height;
+
+    // Clear background
+    ctx.fillStyle = NODE_CONFIG.colors.background;
+    ctx.fillRect(0, 0, width, height);
+
+    const objects = main.getObjects();
+    if (objects.length === 0) return;
+
+    // Find bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    objects.forEach(obj => {
+        const bounds = obj.getBoundingRect(true, true);
+        minX = Math.min(minX, bounds.left);
+        minY = Math.min(minY, bounds.top);
+        maxX = Math.max(maxX, bounds.left + bounds.width);
+        maxY = Math.max(maxY, bounds.top + bounds.height);
+    });
+
+    if (minX === Infinity) return;
+
+    // Add padding
+    const padding = 100;
+    minX -= padding; minY -= padding;
+    maxX += padding; maxY += padding;
+
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+
+    const scaleX = width / contentWidth;
+    const scaleY = height / contentHeight;
+    const scale = Math.min(scaleX, scaleY);
+    
+    // Save minimap state for interaction mapping
+    canvasData.minimapState = { scale, minX, minY, padding };
+
+    const offsetX = (width - contentWidth * scale) / 2 - minX * scale;
+    const offsetY = (height - contentHeight * scale) / 2 - minY * scale;
+    
+    canvasData.minimapState.offsetX = offsetX;
+    canvasData.minimapState.offsetY = offsetY;
+
+    // Draw objects
+    objects.forEach(obj => {
+        if (obj.isNote) {
+            ctx.fillStyle = '#f9e2af';
+        } else if (obj.isGroup) {
+            ctx.strokeStyle = '#313244';
+            ctx.lineWidth = 1;
+        } else if (obj.type === 'path') {
+            ctx.strokeStyle = NODE_CONFIG.colors.pin.output;
+            ctx.lineWidth = 1;
+        } else {
+            ctx.fillStyle = obj.nodeConfig?.color || NODE_CONFIG.colors.default;
+        }
+
+        if (obj.type === 'path') {
+            const bounds = obj.getBoundingRect(true, true);
+            ctx.beginPath();
+            ctx.moveTo(bounds.left * scale + offsetX, bounds.top * scale + offsetY);
+            ctx.lineTo((bounds.left + bounds.width) * scale + offsetX, (bounds.top + bounds.height) * scale + offsetY);
+            ctx.stroke();
+        } else {
+            const bounds = obj.getBoundingRect(true, true);
+            const rX = bounds.left * scale + offsetX;
+            const rY = bounds.top * scale + offsetY;
+            const rW = bounds.width * scale;
+            const rH = bounds.height * scale;
+            
+            if (obj.isGroup) {
+                ctx.strokeRect(rX, rY, rW, rH);
+            } else {
+                ctx.fillRect(rX, rY, rW, rH);
+            }
+        }
+    });
+
+    // Draw viewport bounds
+    const vpt = main.viewportTransform;
+    const tVpt = fabric.util.invertTransform(vpt);
+    const tl = fabric.util.transformPoint({x: 0, y: 0}, tVpt);
+    const br = fabric.util.transformPoint({x: main.width, y: main.height}, tVpt);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+        tl.x * scale + offsetX,
+        tl.y * scale + offsetY,
+        (br.x - tl.x) * scale,
+        (br.y - tl.y) * scale
+    );
+}
+
+export function setZoom(canvasId, zoomLevel) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const canvas = canvasData.canvas;
+    const newZoom = Math.max(0.1, Math.min(5.0, zoomLevel));
+    
+    canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, newZoom);
+    
+    if (dotNetRef) {
+        dotNetRef.invokeMethodAsync('OnCanvasZoom_Internal', canvas.getZoom());
+    }
+    canvas.requestRenderAll();
+    updateMinimap(canvasId);
+    return true;
+}
+
+export function fitToScreen(canvasId) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const canvas = canvasData.canvas;
+    const objects = canvas.getObjects().filter(o => o.type !== 'path');
+    
+    if (objects.length === 0) {
+        setZoom(canvasId, 1.0);
+        canvas.absolutePan({ x: 0, y: 0 });
+        return true;
+    }
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    objects.forEach(obj => {
+        const bound = obj.getBoundingRect(true, true);
+        if (bound.left < minX) minX = bound.left;
+        if (bound.top < minY) minY = bound.top;
+        if (bound.left + bound.width > maxX) maxX = bound.left + bound.width;
+        if (bound.top + bound.height > maxY) maxY = bound.top + bound.height;
+    });
+
+    const padding = 50;
+    const cw = canvas.width - padding * 2;
+    const ch = canvas.height - padding * 2;
+    
+    const objW = maxX - minX;
+    const objH = maxY - minY;
+
+    const scaleX = cw / (objW || 1);
+    const scaleY = ch / (objH || 1);
+    const zoom = Math.min(scaleX, scaleY, 2.0);
+
+    canvas.setZoom(1); 
+    canvas.absolutePan({
+        x: minX * zoom - padding - (cw - objW * zoom) / 2,
+        y: minY * zoom - padding - (ch - objH * zoom) / 2
+    });
+    
+    canvas.setZoom(zoom);
+    
+    if (dotNetRef) {
+        dotNetRef.invokeMethodAsync('OnCanvasZoom_Internal', canvas.getZoom());
+    }
+    canvas.requestRenderAll();
+    updateMinimap(canvasId);
     return true;
 }

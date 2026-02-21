@@ -4,7 +4,7 @@
 @inject NodeEditorInteropService EditorInterop
 @inject IJSRuntime JSRuntime
 
-<div class="fabric-node-editor">
+<div class="fabric-node-editor" tabindex="0" @onkeydown="HandleKeyDown">
     <div class="editor-toolbar">
         <button class="btn btn-icon" @onclick="FitToScreen" title="Ekrana Sığdır">
             <Icon Name="maximize" Size="16" />
@@ -40,6 +40,9 @@
     
     <div class="canvas-container" @ref="_canvasContainer">
         <canvas id="@CanvasId"></canvas>
+        <div class="minimap-container">
+            <canvas id="@($"{CanvasId}-minimap")"></canvas>
+        </div>
 
         @if (_contextMenu.Visible)
         {
@@ -63,6 +66,20 @@
                 </button>
             </div>
         }
+        
+        @if (_renameDialogOpen)
+        {
+            <div class="rename-dialog-overlay" @onclick="CancelRename">
+                <div class="rename-dialog" @onclick:stopPropagation="true">
+                    <h4>Yeniden Adlandır</h4>
+                    <input @bind="_renameInput" @bind:event="oninput" @onkeyup="HandleRenameKey" placeholder="Yeni İsim" autofocus />
+                    <div class="rename-actions">
+                        <button class="btn btn-secondary" @onclick="CancelRename">İptal</button>
+                        <button class="btn btn-primary" @onclick="ConfirmRename">Kaydet</button>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </div>
 
@@ -72,6 +89,7 @@
     [Parameter] public EventCallback OnStop { get; set; }
     [Parameter] public EventCallback<string> OnNodeSelected { get; set; }
     [Parameter] public EventCallback OnSelectionCleared { get; set; }
+    [Parameter] public EventCallback<List<string>> OnSelectionChanged { get; set; }
     [Parameter] public EventCallback<(string FromNode, string FromPort, string ToNode, string ToPort)> OnConnectionCreated { get; set; }
     [Parameter] public EventCallback<string> OnNodeDeleted { get; set; }
     [Parameter] public EventCallback<string> OnNodeRenamed { get; set; }
@@ -85,7 +103,38 @@
     private bool _initialized = false;
     private string? _contextMenuNodeId;
     private (bool Visible, double X, double Y) _contextMenu;
+    private bool _renameDialogOpen;
+    private string _renameInput = string.Empty;
+    private List<string> _selectedNodeIds = new();
     
+    protected override void OnInitialized()
+    {
+        EditorInterop.OnNodeSelected += HandleNodeSelected;
+        EditorInterop.OnSelectionChanged += HandleSelectionChanged;
+        EditorInterop.OnSelectionCleared += HandleSelectionCleared;
+        EditorInterop.OnNodeMoved += HandleNodeMoved;
+        EditorInterop.OnCanvasZoom += HandleZoom;
+        EditorInterop.OnConnectionCreated += HandleConnectionCreated;
+        EditorInterop.OnContextMenu += HandleContextMenu;
+    }
+
+    public async ValueTask DisposeAsync()
+    {   
+        if (_initialized)
+        {
+            EditorInterop.OnNodeSelected -= HandleNodeSelected;
+            EditorInterop.OnSelectionChanged -= HandleSelectionChanged;
+            EditorInterop.OnSelectionCleared -= HandleSelectionCleared;
+            EditorInterop.OnNodeMoved -= HandleNodeMoved;
+            EditorInterop.OnCanvasZoom -= HandleZoom;
+            EditorInterop.OnConnectionCreated -= HandleConnectionCreated;
+            EditorInterop.OnContextMenu -= HandleContextMenu;
+            await EditorInterop.DisposeCanvasAsync(CanvasId);
+        }
+        
+        await EditorInterop.DisposeAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && !_initialized)
@@ -94,13 +143,6 @@
             
             if (_initialized)
             {
-                EditorInterop.OnNodeSelected += HandleNodeSelected;
-                EditorInterop.OnSelectionCleared += HandleSelectionCleared;
-                EditorInterop.OnNodeMoved += HandleNodeMoved;
-                EditorInterop.OnCanvasZoom += HandleZoom;
-                EditorInterop.OnConnectionCreated += HandleConnectionCreated;
-                EditorInterop.OnContextMenu += HandleContextMenu;
-
                 if (EnableGridSnapping)
                 {
                     await EditorInterop.SetGridSnappingAsync(true);
@@ -225,13 +267,20 @@
     
     private void HandleNodeSelected(string nodeId)
     {
-        _contextMenu = (false, 0, 0);
         OnNodeSelected.InvokeAsync(nodeId);
     }
-    
+
+    private void HandleSelectionChanged(List<string> nodeIds)
+    {
+        _selectedNodeIds = nodeIds ?? new List<string>();
+        OnSelectionChanged.InvokeAsync(nodeIds);
+    }
+
     private void HandleSelectionCleared()
     {
-        _contextMenu = (false, 0, 0);
+        _selectedNodeIds.Clear();
+        OnNodeSelected.InvokeAsync(null);
+        OnSelectionChanged.InvokeAsync(new List<string>());
         OnSelectionCleared.InvokeAsync();
     }
     
@@ -259,18 +308,60 @@
         InvokeAsync(StateHasChanged);
     }
 
+    [Parameter] public EventCallback OnCopyRequested { get; set; }
+    [Parameter] public EventCallback OnPasteRequested { get; set; }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Check if inside input
+        if (_renameDialogOpen) return;
+
+        if (e.CtrlKey && e.Key.ToLower() == "c")
+        {
+            await OnCopyRequested.InvokeAsync();
+        }
+        else if (e.CtrlKey && e.Key.ToLower() == "v")
+        {
+            await OnPasteRequested.InvokeAsync();
+        }
+        else if (e.Key == "Delete")
+        {
+            await DeleteSelectedNode();
+        }
+    }
+
     private async Task RenameSelectedNode()
     {
         _contextMenu = (false, 0, 0);
         if (_contextMenuNodeId != null)
         {
-            var newName = await JSRuntime.InvokeAsync<string>("prompt", "Node ismi:", "Yeni İsim");
-            if (!string.IsNullOrWhiteSpace(newName))
-            {
-                await EditorInterop.UpdateNodeNameAsync(_contextMenuNodeId, newName);
-                await OnNodeRenamed.InvokeAsync(_contextMenuNodeId);
-            }
+            _renameInput = ""; // You could prefill if you track names locally
+            _renameDialogOpen = true;
+            StateHasChanged();
         }
+    }
+
+    private async Task ConfirmRename()
+    {
+        if (_contextMenuNodeId != null && !string.IsNullOrWhiteSpace(_renameInput))
+        {
+            await EditorInterop.UpdateNodeNameAsync(_contextMenuNodeId, _renameInput);
+            await OnNodeRenamed.InvokeAsync(_contextMenuNodeId);
+        }
+        _renameDialogOpen = false;
+    }
+
+    private void CancelRename()
+    {
+        _renameDialogOpen = false;
+    }
+
+    private async Task HandleRenameKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await ConfirmRename();
+        else if (e.Key == "Escape")
+            CancelRename();
     }
 
     private async Task ToggleBypassSelectedNode()
@@ -294,8 +385,20 @@
     private async Task DeleteSelectedNode()
     {
         _contextMenu = (false, 0, 0);
-        if (_contextMenuNodeId != null)
+        
+        // Multi-delete via keyboard
+        if (_selectedNodeIds.Any())
         {
+            foreach (var id in _selectedNodeIds.ToList())
+            {
+                await EditorInterop.RemoveNodeAsync(id);
+                await OnNodeDeleted.InvokeAsync(id);
+            }
+            _selectedNodeIds.Clear();
+        }
+        else if (_contextMenuNodeId != null)
+        {
+            // Context menu single delete
             await EditorInterop.RemoveNodeAsync(_contextMenuNodeId);
             await OnNodeDeleted.InvokeAsync(_contextMenuNodeId);
         }
@@ -319,20 +422,5 @@
     private async Task OnStopClicked()
     {
         await OnStop.InvokeAsync();
-    }
-    
-    public async ValueTask DisposeAsync()
-    {
-        if (_initialized)
-        {
-            EditorInterop.OnNodeSelected -= HandleNodeSelected;
-            EditorInterop.OnSelectionCleared -= HandleSelectionCleared;
-            EditorInterop.OnNodeMoved -= HandleNodeMoved;
-            EditorInterop.OnCanvasZoom -= HandleZoom;
-            EditorInterop.OnConnectionCreated -= HandleConnectionCreated;
-            EditorInterop.OnContextMenu -= HandleContextMenu;
-        }
-        
-        await EditorInterop.DisposeAsync();
     }
 }
