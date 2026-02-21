@@ -51,6 +51,7 @@ public class WorkflowEntity
     public TenantEntity? Tenant { get; set; }
     public UserEntity? CreatedByUser { get; set; }
     public ICollection<ExecutionEntity> Executions { get; set; } = [];
+    public ICollection<WorkflowRevisionEntity> Revisions { get; set; } = [];
 }
 
 /// <summary>
@@ -203,5 +204,29 @@ public class ChatHistoryEntity
 
     // Navigation
     public WorkflowEntity? Workflow { get; set; }
+}
+
+/// <summary>
+/// Workflow revizyon/geçmiş kaydı
+/// </summary>
+public class WorkflowRevisionEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    
+    public Guid WorkflowId { get; set; }
+    
+    public int Version { get; set; }
+    
+    /// <summary>
+    /// O anki workflow state'inin tam JSON kopyası
+    /// </summary>
+    public JsonDocument? WorkflowJson { get; set; }
+    
+    public string? CommitMessage { get; set; }
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    // Navigation
+    public WorkflowEntity Workflow { get; set; } = null!;
 }
 

@@ -32,9 +32,9 @@ public class ChatDiagramBridge
     /// <summary>
     /// Mevcut graph ile önerilen graph arasındaki farkları hesapla
     /// </summary>
-    public WorkflowDiffResult ComputeDiff(WorkflowGraphDto? before, WorkflowGraphDto? after)
+    public ChatWorkflowDiffResult ComputeDiff(WorkflowGraphDto? before, WorkflowGraphDto? after)
     {
-        var result = new WorkflowDiffResult();
+        var result = new ChatWorkflowDiffResult();
         if (after == null) return result;
 
         var beforeIds = before?.Nodes.Select(n => n.Id).ToHashSet() ?? [];
@@ -49,7 +49,7 @@ public class ChatDiagramBridge
     }
 }
 
-public class WorkflowDiffResult
+public class ChatWorkflowDiffResult
 {
     public List<WorkflowNodeDto> AddedNodes { get; set; } = [];
     public List<Guid> RemovedNodeIds { get; set; } = [];

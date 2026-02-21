@@ -1,0 +1,148 @@
+@using SonOfAnton.Frontend.Services
+@using SonOfAnton.Shared.DTOs
+@using SonOfAnton.Shared.Core
+@inject WorkflowApiService ApiService
+@inject DiagramStateService DiagramState
+
+<div class="side-panel @(IsOpen ? "open" : "")">
+    <div class="panel-header">
+        <h3>Revizyon Geçmişi</h3>
+        <button class="btn btn-ghost" @onclick="ClosePanel">
+            <Icon Name="x" Size="16" />
+        </button>
+    </div>
+
+    <div class="panel-content">
+        @if (_isLoading)
+        {
+            <div class="loading-state">
+                <span class="spinner"></span> Yükleniyor...
+            </div>
+        }
+        else if (_revisions == null || !_revisions.Any())
+        {
+            <div class="empty-state">
+                <Icon Name="clock" Size="32" />
+                <p>Henüz hiç revizyon bulunmuyor.</p>
+            </div>
+        }
+        else
+        {
+            <div class="revision-list">
+                @foreach (var rev in _revisions)
+                {
+                    <div class="revision-item">
+                        <div class="rev-info">
+                            <span class="rev-version">v@(rev.Version)</span>
+                            <span class="rev-date">@rev.CreatedAt.ToLocalTime().ToString("g")</span>
+                        </div>
+                        <div class="rev-message">@rev.CommitMessage</div>
+                        <div class="rev-actions">
+                            <button class="btn btn-sm btn-secondary" @onclick="() => CompareRevision(rev.Version)">
+                                <Icon Name="git-compare" Size="12" /> Diff
+                            </button>
+                            <button class="btn btn-sm btn-primary" @onclick="() => RestoreRevision(rev.Version)">
+                                <Icon Name="rotate-ccw" Size="12" /> Geri Yükle
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (_diffResult != null)
+{
+    <WorkflowDiffViewer 
+        DiffResult="_diffResult" 
+        TargetVersion="_targetVersion"
+        OnClose="CloseDiff" />
+}
+
+<style>
+    .revision-list { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; }
+    .revision-item { 
+        background: var(--surface-1); padding: 0.75rem; border-radius: 6px; 
+        border: 1px solid var(--border-color);
+    }
+    .rev-info { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+    .rev-version { font-weight: bold; color: var(--accent-color); }
+    .rev-date { font-size: 0.85rem; color: var(--text-muted); }
+    .rev-message { font-size: 0.9rem; margin-bottom: 0.75rem; }
+    .rev-actions { display: flex; gap: 0.5rem; }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    private bool _isLoading;
+    private List<WorkflowRevisionDto> _revisions = new();
+    
+    private WorkflowDiffResult? _diffResult;
+    private int _targetVersion;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && DiagramState.CurrentWorkflow?.Id != null && DiagramState.CurrentWorkflow.Id != Guid.Empty)
+        {
+            await LoadRevisions();
+        }
+    }
+
+    private async Task LoadRevisions()
+    {
+        if (DiagramState.CurrentWorkflow?.Id == null) return;
+        
+        _isLoading = true;
+        try
+        {
+            _revisions = await ApiService.GetRevisionsAsync(DiagramState.CurrentWorkflow.Id);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CompareRevision(int oldVersion)
+    {
+        if (DiagramState.CurrentWorkflow?.Id == null) return;
+
+        var oldRev = await ApiService.GetRevisionAsync(DiagramState.CurrentWorkflow.Id, oldVersion);
+        if (oldRev?.Graph == null) return;
+
+        var currentGraph = DiagramState.GetCurrentGraph();
+        _diffResult = WorkflowDiffService.Compare(oldRev.Graph, currentGraph);
+        _targetVersion = oldVersion;
+    }
+
+    private async Task RestoreRevision(int version)
+    {
+        if (DiagramState.CurrentWorkflow?.Id == null) return;
+
+        var rev = await ApiService.GetRevisionAsync(DiagramState.CurrentWorkflow.Id, version);
+        if (rev?.Graph != null)
+        {
+            var workflow = DiagramState.CurrentWorkflow;
+            workflow.Graph = rev.Graph;
+            DiagramState.LoadWorkflow(workflow);
+            
+            DiagramState.NotifyStateChanged();
+            
+            await ClosePanel();
+        }
+    }
+
+    private void CloseDiff()
+    {
+        _diffResult = null;
+    }
+
+    private async Task ClosePanel()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+    }
+}

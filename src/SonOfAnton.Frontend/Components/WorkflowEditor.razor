@@ -34,6 +34,18 @@
             <button class="btn btn-secondary" @onclick="OpenTemplates">
                 <Icon Name="layers" Size="14" /> Şablonlar
             </button>
+            
+            <span class="toolbar-divider" style="margin: 0 8px; border-left: 1px solid var(--border-color); height: 20px;"></span>
+
+            <button class="btn btn-ghost" @onclick="() => DiagramState.Undo()" disabled="@(!DiagramState.CanUndo)" title="Geri Al (Ctrl+Z)">
+                <Icon Name="corner-up-left" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => DiagramState.Redo()" disabled="@(!DiagramState.CanRedo)" title="Yinele (Ctrl+Y)">
+                <Icon Name="corner-up-right" Size="14" />
+            </button>
+
+            <span class="toolbar-divider" style="margin: 0 8px; border-left: 1px solid var(--border-color); height: 20px;"></span>
+
             <button class="btn btn-success" @onclick="SaveWorkflow" disabled="@_isSaving">
                 @if (_isSaving)
                 {
@@ -45,6 +57,15 @@
                 }
                 Kaydet
             </button>
+            
+            @if (_isAutoSaving)
+            {
+                <span class="autosave-indicator" style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">Kaydediliyor...</span>
+            }
+            else if (_lastSaved.HasValue)
+            {
+                <span class="autosave-indicator" style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">Kayıtlı: @_lastSaved.Value.ToString("HH:mm")</span>
+            }
         </div>
         
         <div class="toolbar-center">
@@ -70,6 +91,9 @@
             </button>
             <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isVariablesOpen))" title="Değişkenler">
                 <Icon Name="variable" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isRevisionsOpen))" title="Revizyon Geçmişi">
+                <Icon Name="history" Size="14" />
             </button>
             <span class="toolbar-divider"></span>
             @if (_isExecuting)
@@ -157,6 +181,8 @@
 
 <VariablesPanel IsOpen="_isVariablesOpen" IsOpenChanged="v => { _isVariablesOpen = v; if (!v) StateHasChanged(); }" />
 
+<RevisionsPanel IsOpen="_isRevisionsOpen" IsOpenChanged="v => { _isRevisionsOpen = v; if (!v) StateHasChanged(); }" />
+
 <SnapshotPanel IsOpen="_isSnapshotOpen" IsOpenChanged="v => _isSnapshotOpen = v"
                ExecutionId="_currentExecutionId ?? Guid.Empty" />
 
@@ -182,10 +208,15 @@
     private bool _isChatOpen;
     private bool _isYamlOpen;
     private bool _isVariablesOpen;
+    private bool _isRevisionsOpen;
     private bool _isSnapshotOpen;
     private bool _isPaused;
     private bool _isFolderTreeOpen;
     private string _currentTheme = "dark";
+    
+    private System.Timers.Timer? _autoSaveTimer;
+    private bool _isAutoSaving;
+    private DateTime? _lastSaved;
 
     private async Task ToggleTheme()
     {
@@ -210,6 +241,7 @@
             nameof(_isChatOpen) => !_isChatOpen,
             nameof(_isYamlOpen) => !_isYamlOpen,
             nameof(_isVariablesOpen) => !_isVariablesOpen,
+            nameof(_isRevisionsOpen) => !_isRevisionsOpen,
             _ => false
         };
 
@@ -217,6 +249,7 @@
         _isChatOpen = false;
         _isYamlOpen = false;
         _isVariablesOpen = false;
+        _isRevisionsOpen = false;
 
         // Sadece tıklanan paneli aç (eğer kapalıysa)
         if (willOpen)
@@ -226,6 +259,7 @@
                 case nameof(_isChatOpen): _isChatOpen = true; break;
                 case nameof(_isYamlOpen): _isYamlOpen = true; break;
                 case nameof(_isVariablesOpen): _isVariablesOpen = true; break;
+                case nameof(_isRevisionsOpen): _isRevisionsOpen = true; break;
             }
         }
     }
@@ -234,6 +268,11 @@
     {
         DiagramState.OnStateChanged += HandleStateChanged;
         DiagramState.CreateNewWorkflow();
+        
+        // Timer
+        _autoSaveTimer = new System.Timers.Timer(3000);
+        _autoSaveTimer.Elapsed += async (sender, e) => await HandleAutoSaveTimerAsync();
+        _autoSaveTimer.AutoReset = false;
         
         // İlk workflow adını ayarla
         _workflowName = DiagramState.CurrentWorkflow?.Name ?? "Yeni İş Akışı";
@@ -247,7 +286,23 @@
         {
             _workflowName = DiagramState.CurrentWorkflow.Name;
         }
+        
+        // Autosave Timer reset
+        _autoSaveTimer?.Stop();
+        _autoSaveTimer?.Start();
+        
         StateHasChanged();
+    }
+
+    private async Task HandleAutoSaveTimerAsync()
+    {
+        _isAutoSaving = true;
+        await InvokeAsync(StateHasChanged);
+        
+        await SaveWorkflow();
+        
+        _isAutoSaving = false;
+        await InvokeAsync(StateHasChanged);
     }
 
     private void NewWorkflow()
@@ -269,6 +324,14 @@
         {
             _isSearchOpen = !_isSearchOpen;
             StateHasChanged();
+        }
+        else if (e.CtrlKey && e.Key == "z")
+        {
+            DiagramState.Undo();
+        }
+        else if (e.CtrlKey && (e.Key == "y" || (e.ShiftKey && e.Key == "Z")))
+        {
+            DiagramState.Redo();
         }
     }
 
@@ -298,8 +361,13 @@
             var saved = await ApiService.SaveWorkflowAsync(request);
             if (saved != null)
             {
-                DiagramState.LoadWorkflow(saved);
+                // Grafikte radikal değişikleri önlemek için yeniden load etmeyiz eğer aynı graph ise.
+                if (DiagramState.CurrentWorkflow?.Id != saved.Id) 
+                {
+                    DiagramState.LoadWorkflow(saved);
+                }
                 _workflowName = saved.Name;
+                _lastSaved = DateTime.Now;
             }
         }
         catch (Exception ex)
@@ -485,6 +553,12 @@
     {
         DiagramState.OnStateChanged -= HandleStateChanged;
         
+        if (_autoSaveTimer != null)
+        {
+            _autoSaveTimer.Stop();
+            _autoSaveTimer.Dispose();
+        }
+
         if (_executionMonitor != null)
         {
             await _executionMonitor.DisposeAsync();

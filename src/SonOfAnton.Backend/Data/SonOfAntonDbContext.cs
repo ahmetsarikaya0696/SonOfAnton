@@ -29,6 +29,7 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<FolderEntity> Folders => Set<FolderEntity>();
     public DbSet<ExecutionSnapshotEntity> ExecutionSnapshots => Set<ExecutionSnapshotEntity>();
     public DbSet<ChatHistoryEntity> ChatHistory => Set<ChatHistoryEntity>();
+    public DbSet<WorkflowRevisionEntity> WorkflowRevisions => Set<WorkflowRevisionEntity>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -139,6 +140,26 @@ public class SonOfAntonDbContext : DbContext
 
             entity.HasMany(e => e.Executions)
                 .WithOne(e => e.Workflow)
+                .HasForeignKey(e => e.WorkflowId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // WorkflowRevision
+        modelBuilder.Entity<WorkflowRevisionEntity>(entity =>
+        {
+            entity.ToTable("workflow_revisions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.WorkflowId).HasColumnName("workflow_id");
+            entity.Property(e => e.Version).HasColumnName("version");
+            entity.Property(e => e.WorkflowJson).HasColumnName("workflow_json").HasColumnType("jsonb");
+            entity.Property(e => e.CommitMessage).HasColumnName("commit_message").HasMaxLength(500);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => new { e.WorkflowId, e.Version }).IsUnique();
+
+            entity.HasOne(e => e.Workflow)
+                .WithMany(w => w.Revisions)
                 .HasForeignKey(e => e.WorkflowId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

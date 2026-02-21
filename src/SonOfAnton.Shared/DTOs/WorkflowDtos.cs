@@ -358,3 +358,15 @@ public class YamlValidationResult
     public WorkflowGraphDto? ParsedGraph { get; set; }
 }
 
+// ─── Revision DTOs ─────────────────────────────────────────────
+
+public class WorkflowRevisionDto
+{
+    public Guid Id { get; set; }
+    public Guid WorkflowId { get; set; }
+    public int Version { get; set; }
+    public string? CommitMessage { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public WorkflowGraphDto? Graph { get; set; }
+}
+

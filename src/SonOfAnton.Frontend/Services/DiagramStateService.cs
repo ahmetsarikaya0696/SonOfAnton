@@ -18,6 +18,10 @@ public class DiagramStateService
     private WorkflowDto? _currentWorkflow;
     private WorkflowNodeModel? _selectedNode;
 
+    private Stack<string> _undoStack = new();
+    private Stack<string> _redoStack = new();
+    private bool _isTrackingState = true;
+
     public event Action? OnStateChanged;
     public event Action<WorkflowNodeModel?>? OnNodeSelected;
 
@@ -67,7 +71,7 @@ public class DiagramStateService
         Diagram.Links.Clear();
         
         _selectedNode = null;
-        OnStateChanged?.Invoke();
+        NotifyStateChanged();
     }
 
     public void LoadWorkflow(WorkflowDto workflow)
@@ -106,7 +110,7 @@ public class DiagramStateService
         }
 
         _selectedNode = null;
-        OnStateChanged?.Invoke();
+        if (_isTrackingState) NotifyStateChanged(); else OnStateChanged?.Invoke();
     }
 
     /// <summary>
@@ -168,7 +172,7 @@ public class DiagramStateService
         }
 
         _selectedNode = null;
-        OnStateChanged?.Invoke();
+        if (_isTrackingState) NotifyStateChanged(); else OnStateChanged?.Invoke();
     }
 
     public WorkflowGraphDto GetCurrentGraph()
@@ -240,7 +244,7 @@ public class DiagramStateService
         var node = new WorkflowNodeModel(nodeDto, new Point(x, y));
         Diagram.Nodes.Add(node);
         
-        OnStateChanged?.Invoke();
+        NotifyStateChanged();
         return node;
     }
 
@@ -251,7 +255,7 @@ public class DiagramStateService
             Diagram.Nodes.Remove(_selectedNode);
             _selectedNode = null;
             OnNodeSelected?.Invoke(null);
-            OnStateChanged?.Invoke();
+            NotifyStateChanged();
         }
     }
 
@@ -269,11 +273,70 @@ public class DiagramStateService
         if (node != null)
         {
             node.NodeData.Parameters[paramName] = value;
-            OnStateChanged?.Invoke();
+            NotifyStateChanged();
         }
     }
 
-    public void NotifyStateChanged() => OnStateChanged?.Invoke();
+    public void NotifyStateChanged()
+    {
+        if (_isTrackingState && _currentWorkflow != null)
+        {
+            var graphJson = System.Text.Json.JsonSerializer.Serialize(GetCurrentGraph());
+            
+            if (_undoStack.Count == 0 || _undoStack.Peek() != graphJson)
+            {
+                _undoStack.Push(graphJson);
+                _redoStack.Clear();
+            }
+        }
+        OnStateChanged?.Invoke();
+    }
+
+    public bool CanUndo => _undoStack.Count > 1;
+    public bool CanRedo => _redoStack.Count > 0;
+
+    public void Undo()
+    {
+        if (CanUndo)
+        {
+            var currentJson = _undoStack.Pop();
+            _redoStack.Push(currentJson);
+
+            var previousJson = _undoStack.Peek();
+            RestoreFromSnapshot(previousJson);
+        }
+    }
+
+    public void Redo()
+    {
+        if (CanRedo)
+        {
+            var nextJson = _redoStack.Pop();
+            _undoStack.Push(nextJson);
+            RestoreFromSnapshot(nextJson);
+        }
+    }
+
+    private void RestoreFromSnapshot(string json)
+    {
+        if (_currentWorkflow == null) return;
+        
+        _isTrackingState = false;
+        try
+        {
+            var graph = System.Text.Json.JsonSerializer.Deserialize<WorkflowGraphDto>(json);
+            if (graph != null)
+            {
+                _currentWorkflow.Graph = graph;
+                LoadWorkflow(_currentWorkflow);
+            }
+        }
+        finally
+        {
+            _isTrackingState = true;
+            OnStateChanged?.Invoke();
+        }
+    }
 
     /// <summary>
     /// Workflow değişkenlerini günceller
@@ -338,7 +401,7 @@ public class DiagramStateService
             node.IsCompleted = false;
             node.IsSuccess = false;
         }
-        OnStateChanged?.Invoke();
+        NotifyStateChanged();
     }
 }
 

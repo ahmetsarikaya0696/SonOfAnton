@@ -106,7 +106,7 @@ public class WorkflowsController : ControllerBase
 
         if (request.Id.HasValue)
         {
-            // G�ncelleme
+            // Güncelleme
             workflow = await _dbContext.Workflows.FindAsync(request.Id.Value);
             if (workflow == null)
                 return NotFound();
@@ -119,7 +119,7 @@ public class WorkflowsController : ControllerBase
         }
         else
         {
-            // Yeni olu�tur
+            // Yeni oluştur
             workflow = new WorkflowEntity
             {
                 Name = request.Name,
@@ -130,12 +130,49 @@ public class WorkflowsController : ControllerBase
             _dbContext.Workflows.Add(workflow);
         }
 
+        bool stateChanged = true;
+        JsonDocument? newGraphDoc = null;
+        string newGraphJson = string.Empty;
+
         if (request.Graph != null)
         {
-            workflow.GraphData = JsonDocument.Parse(JsonSerializer.Serialize(request.Graph));
+            newGraphJson = JsonSerializer.Serialize(request.Graph);
+            newGraphDoc = JsonDocument.Parse(newGraphJson);
+            
+            // Eğer güncelleme ise önceki JSON ile karşılaştır
+            if (request.Id.HasValue && workflow.GraphData != null)
+            {
+                string oldGraphJson = workflow.GraphData.RootElement.GetRawText();
+                if (oldGraphJson == newGraphJson)
+                {
+                    stateChanged = false; // JSON aynı, revizyon atmaya gerek yok
+                }
+            }
+            
+            workflow.GraphData = newGraphDoc;
         }
 
+        // Önce workflow kaydedilsin (yeni ise Id'si oluşsun)
         await _dbContext.SaveChangesAsync();
+
+        // Eğer grafikte bir değişiklik varsa yeni bir revizyon ekleyelim
+        if (stateChanged && request.Graph != null)
+        {
+            var latestVersionNumber = await _dbContext.WorkflowRevisions
+                .Where(r => r.WorkflowId == workflow.Id)
+                .Select(r => (int?)r.Version)
+                .MaxAsync() ?? 0;
+
+            var revision = new WorkflowRevisionEntity
+            {
+                WorkflowId = workflow.Id,
+                Version = latestVersionNumber + 1,
+                WorkflowJson = newGraphDoc,
+                CommitMessage = request.Id.HasValue ? "Güncelleme" : "İlk Sürüm"
+            };
+            _dbContext.WorkflowRevisions.Add(revision);
+            await _dbContext.SaveChangesAsync();
+        }
 
         _logger.LogInformation("Workflow kaydedildi: {WorkflowId} - {Name}", workflow.Id, workflow.Name);
 
@@ -569,6 +606,61 @@ public class WorkflowsController : ControllerBase
         }
 
         return Ok(artifacts);
+    }
+
+    /// <summary>
+    /// Workflow'un tüm revizyon geçmişini listele
+    /// </summary>
+    [HttpGet("{id:guid}/revisions")]
+    public async Task<ActionResult<List<WorkflowRevisionDto>>> GetRevisions(Guid id)
+    {
+        var workflow = await _dbContext.Workflows.FindAsync(id);
+        if (workflow == null) return NotFound();
+
+        var revisions = await _dbContext.WorkflowRevisions
+            .Where(r => r.WorkflowId == id)
+            .OrderByDescending(r => r.Version)
+            .Select(r => new WorkflowRevisionDto
+            {
+                Id = r.Id,
+                WorkflowId = r.WorkflowId,
+                Version = r.Version,
+                CommitMessage = r.CommitMessage,
+                CreatedAt = r.CreatedAt
+                // Graph JSON parselamıyoruz ki liste ufak olsun
+            })
+            .ToListAsync();
+
+        return Ok(revisions);
+    }
+
+    /// <summary>
+    /// Workflow'un belirli bir revizyon detayını (grafiğini) getir
+    /// </summary>
+    [HttpGet("{id:guid}/revisions/{version:int}")]
+    public async Task<ActionResult<WorkflowRevisionDto>> GetRevision(Guid id, int version)
+    {
+        var revision = await _dbContext.WorkflowRevisions
+            .FirstOrDefaultAsync(r => r.WorkflowId == id && r.Version == version);
+
+        if (revision == null) return NotFound();
+
+        var dto = new WorkflowRevisionDto
+        {
+            Id = revision.Id,
+            WorkflowId = revision.WorkflowId,
+            Version = revision.Version,
+            CommitMessage = revision.CommitMessage,
+            CreatedAt = revision.CreatedAt
+        };
+
+        if (revision.WorkflowJson != null)
+        {
+            dto.Graph = JsonSerializer.Deserialize<WorkflowGraphDto>(
+                revision.WorkflowJson.RootElement.GetRawText());
+        }
+
+        return Ok(dto);
     }
 }
 

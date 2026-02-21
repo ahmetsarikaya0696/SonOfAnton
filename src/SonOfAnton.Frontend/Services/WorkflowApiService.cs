@@ -40,6 +40,16 @@ public class WorkflowApiService
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<List<WorkflowRevisionDto>> GetRevisionsAsync(Guid workflowId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<WorkflowRevisionDto>>($"api/workflows/{workflowId}/revisions") ?? [];
+    }
+
+    public async Task<WorkflowRevisionDto?> GetRevisionAsync(Guid workflowId, int version)
+    {
+        return await _httpClient.GetFromJsonAsync<WorkflowRevisionDto>($"api/workflows/{workflowId}/revisions/{version}");
+    }
+
     public async Task<ExecutionDto?> ExecuteWorkflowAsync(Guid workflowId, Dictionary<string, object?>? initialData = null)
     {
         var request = new StartExecutionRequest 

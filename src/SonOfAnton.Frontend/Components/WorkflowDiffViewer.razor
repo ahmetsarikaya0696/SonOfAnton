@@ -1,0 +1,138 @@
+@using SonOfAnton.Shared.Core
+
+<div class="diff-overlay" @onclick="Close">
+    <div class="diff-modal" @onclick:stopPropagation="true">
+        <div class="diff-header">
+            <h3>Versiyon Karşılaştırması (v@(TargetVersion) -> Mevcut)</h3>
+            <button class="btn btn-ghost" @onclick="Close">
+                <Icon Name="x" Size="16" />
+            </button>
+        </div>
+        
+        <div class="diff-content">
+            @if (!DiffResult.HasChanges)
+            {
+                <div class="no-changes">
+                    <Icon Name="check-circle" Size="32" />
+                    <p>Herhangi bir değişiklik bulunamadı.</p>
+                </div>
+            }
+            else
+            {
+                if (DiffResult.Nodes.Any())
+                {
+                    <h4>Düğümler (Nodes)</h4>
+                    <ul class="diff-list">
+                        @foreach (var nd in DiffResult.Nodes)
+                        {
+                            <li class="diff-item diff-@nd.Type.ToString().ToLower()">
+                                <span class="diff-icon">
+                                    @if (nd.Type == DiffType.Added) { <Icon Name="plus-circle" Size="14" /> }
+                                    else if (nd.Type == DiffType.Removed) { <Icon Name="minus-circle" Size="14" /> }
+                                    else { <Icon Name="edit" Size="14" /> }
+                                </span>
+                                <span class="diff-name">@nd.Name</span>
+                                @if (nd.Type == DiffType.Modified && nd.ChangedProperties.Any())
+                                {
+                                    <span class="diff-props">(Değişenler: @string.Join(", ", nd.ChangedProperties))</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+
+                if (DiffResult.Connections.Any())
+                {
+                    <h4>Bağlantılar (Connections)</h4>
+                    <ul class="diff-list">
+                        @foreach (var cd in DiffResult.Connections)
+                        {
+                            <li class="diff-item diff-@cd.Type.ToString().ToLower()">
+                                <span class="diff-icon">
+                                    @if (cd.Type == DiffType.Added) { <Icon Name="plus-circle" Size="14" /> }
+                                    else if (cd.Type == DiffType.Removed) { <Icon Name="minus-circle" Size="14" /> }
+                                </span>
+                                <span class="diff-desc">@cd.Description</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        </div>
+        
+        <div class="diff-footer">
+            <button class="btn btn-secondary" @onclick="Close">Kapat</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .diff-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    }
+    .diff-modal {
+        background: var(--surface-0);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        width: 600px;
+        max-width: 90vw;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .diff-header {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .diff-header h3 { margin: 0; font-size: 1.1rem; }
+    .diff-content {
+        padding: 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .diff-footer {
+        padding: 1rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: flex-end;
+    }
+    .diff-list {
+        list-style: none; padding: 0; margin: 0 0 1.5rem 0;
+    }
+    .diff-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        background: var(--crust);
+    }
+    .diff-added { color: var(--success-color); border-left: 3px solid var(--success-color); }
+    .diff-removed { color: var(--danger-color); border-left: 3px solid var(--danger-color); }
+    .diff-modified { color: var(--warning-color); border-left: 3px solid var(--warning-color); }
+    .diff-icon { margin-right: 0.5rem; display: flex; }
+    .diff-props { font-size: 0.85rem; opacity: 0.8; margin-left: 0.5rem; }
+    .diff-desc { font-family: monospace; }
+    .no-changes { text-align: center; color: var(--text-muted); padding: 2rem 0; }
+</style>
+
+@code {
+    [Parameter] public required WorkflowDiffResult DiffResult { get; set; }
+    [Parameter] public int TargetVersion { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+}
