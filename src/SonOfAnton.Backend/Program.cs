@@ -294,6 +294,7 @@ builder.Services.AddSingleton<IVectorDatabaseService>(sp =>
 });
 
 // Node Handlers (Strategy Pattern)
+builder.Services.AddScoped<INodeHandler, ErrorTriggerHandler>();
 builder.Services.AddScoped<INodeHandler, ManualTriggerHandler>();
 builder.Services.AddScoped<INodeHandler, WebhookTriggerHandler>();
 builder.Services.AddScoped<INodeHandler, ScheduleTriggerHandler>();
@@ -375,6 +376,7 @@ builder.Services.AddScoped<INodeHandler, WhileLoopHandler>();
 builder.Services.AddScoped<INodeHandler, ParallelHandler>();
 builder.Services.AddScoped<INodeHandler, BreakHandler>();
 builder.Services.AddScoped<INodeHandler, ContinueHandler>();
+builder.Services.AddScoped<INodeHandler, TryCatchHandler>();
 
 var app = builder.Build();
 

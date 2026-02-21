@@ -10,6 +10,16 @@ public static class NodeRegistry
         // Tetikleyiciler
         new NodeDefinition
         {
+            Type = "trigger.error",
+            Name = "Hata Tetikleyici",
+            Icon = "alert-triangle",
+            Category = "Tetikleyiciler",
+            Description = "Baska bir akis hata aldiginda tetiklenir",
+            Color = "#f38ba8",
+            Outputs = [new NodePort { Name = "output", Type = "any" }]
+        },
+        new NodeDefinition
+        {
             Type = "trigger.manual",
             Name = "Manuel Tetikleyici",
             Icon = "play",
@@ -77,7 +87,7 @@ public static class NodeRegistry
             Description = "HTTP istekleri gonder",
             Color = "#89b4fa",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "url", DisplayName = "URL", Type = "string", Required = true, Placeholder = "https://api.example.com" },
@@ -126,7 +136,7 @@ public static class NodeRegistry
             Description = "Ozel JavaScript kodu calistir",
             Color = "#f9e2af",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "code", DisplayName = "JavaScript Kodu", Type = "code", Required = true, DefaultValue = "return items;" }
@@ -197,6 +207,21 @@ public static class NodeRegistry
         },
 
         // Mantik
+        new NodeDefinition
+        {
+            Type = "flow.trycatch",
+            Name = "Try / Catch",
+            Icon = "shield-alert",
+            Category = "Mantik",
+            Description = "Alt akis calistir ve hatalari yakala",
+            Color = "#f38ba8",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs =
+            [
+                new NodePort { Name = "output", Type = "any" },
+                new NodePort { Name = "error", Type = "any" }
+            ]
+        },
         new NodeDefinition
         {
             Type = "logic.if",
@@ -288,7 +313,7 @@ public static class NodeRegistry
             Description = "Buyuk Dil Modeli ile metin uret",
             Color = "#74c7ec",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "prompt", DisplayName = "Prompt", Type = "string", Required = true },
@@ -304,7 +329,7 @@ public static class NodeRegistry
             Description = "OpenAI API cagir",
             Color = "#74c7ec",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter
@@ -332,7 +357,7 @@ public static class NodeRegistry
             Description = "Metni vektore cevir ve kaydet",
             Color = "#74c7ec",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "text", DisplayName = "Metin", Type = "string" },
@@ -348,7 +373,7 @@ public static class NodeRegistry
             Description = "Benzer metinleri bul (Cosine Similarity)",
             Color = "#74c7ec",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "query", DisplayName = "Sorgu", Type = "string" },
@@ -367,7 +392,7 @@ public static class NodeRegistry
             Description = "Veritabani sorgulari calistir",
             Color = "#fab387",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "operation", DisplayName = "Islem", Type = "select", DefaultValue = "select",
@@ -393,7 +418,7 @@ public static class NodeRegistry
             Description = "E-posta gonder",
             Color = "#eba0ac",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "to", DisplayName = "Alici", Type = "string", Required = true },
@@ -410,7 +435,7 @@ public static class NodeRegistry
             Description = "Slack mesaji gonder",
             Color = "#eba0ac",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "channel", DisplayName = "Kanal", Type = "string", Required = true },
@@ -467,7 +492,7 @@ public static class NodeRegistry
             Description = "Embedding vektorunu PostgreSQL'e kaydet",
             Color = "#94e2d5",
             Inputs = [new NodePort { Name = "input", Type = "vector" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "collection", DisplayName = "Koleksiyon", Type = "string", DefaultValue = "default", Required = true },
@@ -483,7 +508,7 @@ public static class NodeRegistry
             Description = "Benzer vektorleri bul (Cosine/Euclidean)",
             Color = "#94e2d5",
             Inputs = [new NodePort { Name = "input", Type = "vector" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "collection", DisplayName = "Koleksiyon", Type = "string", DefaultValue = "default", Required = true },
@@ -513,7 +538,7 @@ public static class NodeRegistry
             Description = "ID'ye gore vektor sil",
             Color = "#94e2d5",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "collection", DisplayName = "Koleksiyon", Type = "string", DefaultValue = "default", Required = true }
@@ -530,7 +555,7 @@ public static class NodeRegistry
             Description = "Koleksiyon üzerinde döngü",
             Color = "#f5c2e7",
             Inputs = [new NodePort { Name = "input", Type = "any" }],
-            Outputs = [new NodePort { Name = "output", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
             Parameters =
             [
                 new NodeParameter { Name = "collection", DisplayName = "Koleksiyon", Type = "string", Placeholder = "{{items}}" },
@@ -632,4 +657,5 @@ public static class NodeRegistry
     public static NodeDefinition? GetNode(string type) =>
         GetAllNodes().FirstOrDefault(n => n.Type == type);
 }
+
 

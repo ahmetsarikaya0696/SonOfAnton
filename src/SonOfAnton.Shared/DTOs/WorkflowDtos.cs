@@ -13,6 +13,7 @@ public class WorkflowDto
     public TriggerType TriggerType { get; set; }
     public WorkflowGraphDto? Graph { get; set; }
     public bool IsActive { get; set; }
+    public Guid? GlobalErrorWorkflowId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
@@ -81,6 +82,7 @@ public class SaveWorkflowRequest
     public TriggerType TriggerType { get; set; }
     public WorkflowGraphDto? Graph { get; set; }
     public bool IsActive { get; set; }
+    public Guid? GlobalErrorWorkflowId { get; set; }
     public Guid? FolderId { get; set; }
 }
 

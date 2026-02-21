@@ -25,6 +25,8 @@ public class WorkflowEntity
     public JsonDocument? GraphData { get; set; }
     
     public bool IsActive { get; set; }
+    
+    public Guid? GlobalErrorWorkflowId { get; set; }
 
     // ─── Multi-Tenant & Ownership ───────────────────────────────
     /// <summary>Kullanıcının ait olduğu tenant</summary>

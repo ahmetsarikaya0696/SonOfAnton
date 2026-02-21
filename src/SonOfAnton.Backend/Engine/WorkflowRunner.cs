@@ -189,6 +189,28 @@ public class WorkflowRunner
                 executionId, sw.ElapsedMilliseconds);
             await FailExecution(dbContext, execution, ex.Message);
             _logStream.Complete(executionId);
+
+            // GLOBAL ERROR HANDLER
+            if (workflow.GlobalErrorWorkflowId.HasValue)
+            {
+                try
+                {
+                    var jobService = scope.ServiceProvider.GetRequiredService<WorkflowJobService>();
+                    var errorData = new {
+                        sourceWorkflowId = workflow.Id,
+                        sourceWorkflowName = workflow.Name,
+                        executionId = execution.Id,
+                        errorMessage = ex.Message,
+                        failedNodeId = execution.CurrentNodeId
+                    };
+                    jobService.EnqueueWorkflow(workflow.GlobalErrorWorkflowId.Value, errorData);
+                    _logger.LogInformation("Global Error Workflow tetiklendi: {ErrorWorkflowId}", workflow.GlobalErrorWorkflowId.Value);
+                }
+                catch (Exception handlerEx)
+                {
+                    _logger.LogError(handlerEx, "Global Error Workflow tetiklenirken hata oluştu.");
+                }
+            }
         }
     }
 
@@ -276,7 +298,24 @@ public class WorkflowRunner
                 }
                 else
                 {
-                    throw new InvalidOperationException($"Node hatası ({node.Name}): {result.Error}");
+                    var hasErrorConnection = graph.Connections.Any(c => c.SourceNodeId == node.Id && c.SourcePort == "error");
+                    
+                    if (hasErrorConnection)
+                    {
+                        await WriteLog(dbContext, execution, node.Id, LogLevel.Warning,
+                            $"Node hatası yakalandı (error pinine yönlendiriliyor): {result.Error}");
+                        
+                        memory[$"node_{node.Id}_error"] = result.Error;
+                        
+                        await ExecuteNextNodes(dbContext, execution, graph, node, new { error = result.Error }, 
+                            "error", memory, visitedNodes, cancellationToken);
+                        
+                        return;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Node hatası ({node.Name}): {result.Error}");
+                    }
                 }
             }
 

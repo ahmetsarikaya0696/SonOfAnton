@@ -555,6 +555,9 @@ namespace SonOfAnton.Backend.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("folder_id");
 
+                    b.Property<Guid?>("GlobalErrorWorkflowId")
+                        .HasColumnType("uuid");
+
                     b.Property<JsonDocument>("GraphData")
                         .HasColumnType("jsonb")
                         .HasColumnName("graph_data");
