@@ -137,6 +137,30 @@ public class NodeExecutionResultDto
     public TimeSpan Duration { get; set; }
 }
 
+/// <summary>
+/// Tek node çalıştırma isteği
+/// </summary>
+public class ExecuteSingleNodeRequest
+{
+    public Guid WorkflowId { get; set; }
+    public WorkflowNodeDto Node { get; set; } = null!;
+    public object? InputData { get; set; }
+    public Dictionary<string, object?>? Memory { get; set; }
+}
+
+/// <summary>
+/// Tek node çalıştırma yanıtı
+/// </summary>
+public class ExecuteSingleNodeResponse
+{
+    public bool Success { get; set; }
+    public object? OutputData { get; set; }
+    public string? Error { get; set; }
+    public string OutputPort { get; set; } = "output";
+    public Dictionary<string, object?> Memory { get; set; } = [];
+    public List<string> Logs { get; set; } = [];
+}
+
 // ─── Workflow Variables ────────────────────────────────────────
 
 public class WorkflowVariableDto

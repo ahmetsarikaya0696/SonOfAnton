@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
 using SonOfAnton.Backend.Engine;
 using SonOfAnton.Backend.Execution;
+using SonOfAnton.Backend.Services;
 using SonOfAnton.Shared.DTOs;
 using SonOfAnton.Shared.Entities;
 using SonOfAnton.Shared.Enums;
@@ -21,17 +22,20 @@ public class WorkflowsController : ControllerBase
     private readonly SonOfAntonDbContext _dbContext;
     private readonly IBackgroundJobClient _jobClient;
     private readonly PauseTokenRegistry _pauseTokens;
+    private readonly ISingleNodeExecutionService _singleNodeSvc;
     private readonly ILogger<WorkflowsController> _logger;
 
     public WorkflowsController(
         SonOfAntonDbContext dbContext,
         IBackgroundJobClient jobClient,
         PauseTokenRegistry pauseTokens,
+        ISingleNodeExecutionService singleNodeSvc,
         ILogger<WorkflowsController> logger)
     {
         _dbContext = dbContext;
         _jobClient = jobClient;
         _pauseTokens = pauseTokens;
+        _singleNodeSvc = singleNodeSvc;
         _logger = logger;
     }
 
@@ -251,6 +255,63 @@ public class WorkflowsController : ControllerBase
             Status = execution.Status,
             StartedAt = execution.StartedAt
         });
+    }
+
+    /// <summary>
+    /// Workflow'u test modunda (adım adım) başlatır
+    /// </summary>
+    [HttpPost("{id:guid}/test-run")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    public async Task<ActionResult<ExecutionDto>> TestRun(Guid id, [FromBody] StartExecutionRequest? request = null)
+    {
+        var workflow = await _dbContext.Workflows.FindAsync(id);
+        if (workflow == null) return NotFound();
+
+        var execution = new ExecutionEntity
+        {
+            WorkflowId = id,
+            Status = ExecutionStatus.Queued
+        };
+
+        if (request?.InitialData != null)
+        {
+            execution.Memory = JsonDocument.Parse(JsonSerializer.Serialize(request.InitialData));
+        }
+
+        _dbContext.Executions.Add(execution);
+        await _dbContext.SaveChangesAsync();
+
+        var token = _pauseTokens.GetOrCreate(execution.Id);
+        token.IsStepMode = true;
+        token.Pause();
+
+        var jobId = _jobClient.Enqueue<WorkflowRunner>(runner => 
+            runner.RunAsync(execution.Id, CancellationToken.None));
+
+        execution.HangfireJobId = jobId;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new ExecutionDto
+        {
+            Id = execution.Id,
+            WorkflowId = id,
+            WorkflowName = workflow.Name,
+            Status = execution.Status,
+            StartedAt = execution.StartedAt
+        });
+    }
+
+    /// <summary>
+    /// Test modundaki execution'da bir sonraki adıma geçer
+    /// </summary>
+    [HttpPost("execution/{id:guid}/step")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    public IActionResult StepExecution(Guid id)
+    {
+        var token = _pauseTokens.GetOrCreate(id);
+        token.IsStepMode = true;
+        token.Resume();
+        return Ok();
     }
     
     /// <summary>
@@ -661,6 +722,22 @@ public class WorkflowsController : ControllerBase
         }
 
         return Ok(dto);
+    }
+
+    /// <summary>
+    /// Workflow içindeki tek bir node'u test/debug için çalıştır
+    /// </summary>
+    [HttpPost("{id:guid}/execute-node")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    public async Task<ActionResult<ExecuteSingleNodeResponse>> ExecuteSingleNode(Guid id, [FromBody] ExecuteSingleNodeRequest request)
+    {
+        var workflow = await _dbContext.Workflows.FindAsync(id);
+        if (workflow == null) return NotFound();
+
+        request.WorkflowId = id;
+        var result = await _singleNodeSvc.ExecuteNodeAsync(request);
+
+        return Ok(result);
     }
 }
 

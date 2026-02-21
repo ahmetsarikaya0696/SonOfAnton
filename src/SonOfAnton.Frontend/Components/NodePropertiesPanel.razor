@@ -21,78 +21,109 @@
             <button class="close-btn" @onclick="Close">?</button>
         </div>
 
-        <div class="panel-body">
-            @if (!string.IsNullOrEmpty(_nodeDefinition.Description))
-            {
-                <div class="node-description">
-                    @_nodeDefinition.Description
-                </div>
-            }
+        <div class="panel-tabs" style="display: flex; gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--border-color);">
+            <button class="tab-btn @(_activeTab == "settings" ? "active" : "")" @onclick="@(() => _activeTab = "settings")" style="flex: 1; padding: 5px; background: none; border: none; border-bottom: 2px solid @(_activeTab == "settings" ? "var(--accent-color)" : "transparent"); color: @(_activeTab == "settings" ? "var(--text-primary)" : "var(--text-muted)"); cursor: pointer; font-weight: 600;">Ayarlar</button>
+            <button class="tab-btn @(_activeTab == "test" ? "active" : "")" @onclick="@(() => _activeTab = "test")" style="flex: 1; padding: 5px; background: none; border: none; border-bottom: 2px solid @(_activeTab == "test" ? "var(--accent-color)" : "transparent"); color: @(_activeTab == "test" ? "var(--text-primary)" : "var(--text-muted)"); cursor: pointer; font-weight: 600;">Test & Veri</button>
+        </div>
 
-            <div class="parameters">
-                @foreach (var param in _nodeDefinition.Parameters)
+        <div class="panel-body">
+            @if (_activeTab == "settings")
+            {
+                @if (!string.IsNullOrEmpty(_nodeDefinition.Description))
                 {
-                    <div class="parameter">
-                        <label class="param-label">
-                            @param.DisplayName
-                            @if (param.Required)
-                            {
-                                <span class="required">*</span>
-                            }
-                        </label>
-                        
-                        @switch (param.Type)
-                        {
-                            case "string":
-                                <input type="text" 
-                                       class="param-input"
-                                       placeholder="@param.Placeholder"
-                                       value="@GetParamValue(param.Name)"
-                                       @onchange="(e) => SetParamValue(param.Name, e.Value)" />
-                                break;
-                                
-                            case "number":
-                                <input type="number" 
-                                       class="param-input"
-                                       value="@GetParamValue(param.Name)"
-                                       @onchange="(e) => SetParamValue(param.Name, e.Value)" />
-                                break;
-                                
-                            case "boolean":
-                                <label class="toggle">
-                                    <input type="checkbox" 
-                                           checked="@(GetParamValueBool(param.Name))"
-                                           @onchange="(e) => SetParamValue(param.Name, e.Value)" />
-                                    <span class="toggle-slider"></span>
-                                </label>
-                                break;
-                                
-                            case "select":
-                                <select class="param-select"
-                                        @onchange="(e) => SetParamValue(param.Name, e.Value)">
-                                    @if (param.Options != null)
-                                    {
-                                        @foreach (var option in param.Options)
-                                        {
-                                            <option value="@option.Value" 
-                                                    selected="@(GetParamValue(param.Name)?.ToString() == option.Value)">
-                                                @option.Label
-                                            </option>
-                                        }
-                                    }
-                                </select>
-                                break;
-                                
-                            case "code":
-                            case "json":
-                                <textarea class="param-textarea"
-                                          placeholder="@param.Placeholder"
-                                          @onchange="(e) => SetParamValue(param.Name, e.Value)">@GetParamValue(param.Name)</textarea>
-                                break;
-                        }
+                    <div class="node-description">
+                        @_nodeDefinition.Description
                     </div>
                 }
-            </div>
+
+                <div class="parameters">
+                    @foreach (var param in _nodeDefinition.Parameters)
+                    {
+                        <div class="parameter">
+                            <label class="param-label">
+                                @param.DisplayName
+                                @if (param.Required)
+                                {
+                                    <span class="required">*</span>
+                                }
+                            </label>
+                            
+                            @switch (param.Type)
+                            {
+                                case "string":
+                                    <input type="text" 
+                                           class="param-input"
+                                           placeholder="@param.Placeholder"
+                                           value="@GetParamValue(param.Name)"
+                                           @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                    break;
+                                    
+                                case "number":
+                                    <input type="number" 
+                                           class="param-input"
+                                           value="@GetParamValue(param.Name)"
+                                           @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                    break;
+                                    
+                                case "boolean":
+                                    <label class="toggle">
+                                        <input type="checkbox" 
+                                               checked="@(GetParamValueBool(param.Name))"
+                                               @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    break;
+                                    
+                                case "select":
+                                    <select class="param-select"
+                                            @onchange="(e) => SetParamValue(param.Name, e.Value)">
+                                        @if (param.Options != null)
+                                        {
+                                            @foreach (var option in param.Options)
+                                            {
+                                                <option value="@option.Value" 
+                                                        selected="@(GetParamValue(param.Name)?.ToString() == option.Value)">
+                                                    @option.Label
+                                                </option>
+                                            }
+                                        }
+                                    </select>
+                                    break;
+                                    
+                                case "code":
+                                case "json":
+                                    <textarea class="param-textarea"
+                                              placeholder="@param.Placeholder"
+                                              @onchange="(e) => SetParamValue(param.Name, e.Value)">@GetParamValue(param.Name)</textarea>
+                                    break;
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else if (_activeTab == "test")
+            {
+                <div class="test-tab">
+                    <label class="param-label">Mock Input (JSON)</label>
+                    <textarea class="param-textarea" @bind="_mockInputJson" placeholder='{"key": "value"}' rows="5"></textarea>
+                    
+                    <button class="btn btn-primary" style="margin-top: 15px; width: 100%;" @onclick="TestSingleNode" disabled="@_isTesting">
+                        @if(_isTesting) { <span class="spinner-sm"></span> } 
+                        Düğümü Test Et (Çalıştır)
+                    </button>
+                    
+                    @if (!string.IsNullOrEmpty(_testError))
+                    {
+                        <div class="alert alert-danger" style="margin-top: 15px; padding: 10px; font-size: 12px; background: rgba(243, 139, 168, 0.1); border: 1px solid var(--error-color); color: var(--error-color); border-radius: 4px;">@_testError</div>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(_testOutputJson))
+                    {
+                        <label class="param-label" style="margin-top: 20px;">Çıktı Sonucu</label>
+                        <pre style="background: var(--surface0); padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; margin-top: 5px; color: var(--text-primary);">@_testOutputJson</pre>
+                    }
+                </div>
+            }
         </div>
 
         <div class="panel-footer">
@@ -114,6 +145,12 @@
     private WorkflowNodeModel? _selectedNode;
     private NodeDefinitionDto? _nodeDefinition;
 
+    private string _activeTab = "settings";
+    private string _mockInputJson = "{}";
+    private string _testOutputJson = "";
+    private string _testError = "";
+    private bool _isTesting = false;
+
     protected override void OnInitialized()
     {
         DiagramState.OnNodeSelected += HandleNodeSelected;
@@ -122,6 +159,9 @@
     private async void HandleNodeSelected(WorkflowNodeModel? node)
     {
         _selectedNode = node;
+        _activeTab = "settings";
+        _testOutputJson = "";
+        _testError = "";
         
         if (node != null)
         {
@@ -133,6 +173,60 @@
         }
         
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task TestSingleNode()
+    {
+        if (_selectedNode == null || DiagramState.CurrentWorkflow?.Id == null) return;
+        
+        _isTesting = true;
+        _testError = "";
+        _testOutputJson = "";
+        await InvokeAsync(StateHasChanged);
+        
+        try
+        {
+            object? inputData = null;
+            if (!string.IsNullOrWhiteSpace(_mockInputJson) && _mockInputJson.Trim() != "{}")
+            {
+                inputData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(_mockInputJson);
+            }
+            
+            var request = new ExecuteSingleNodeRequest
+            {
+                WorkflowId = DiagramState.CurrentWorkflow.Id,
+                Node = _selectedNode.NodeData,
+                InputData = inputData,
+                Memory = new Dictionary<string, object?>()
+            };
+            
+            var result = await ApiService.ExecuteSingleNodeAsync(DiagramState.CurrentWorkflow.Id, request);
+            
+            if (result != null)
+            {
+                if (result.Success)
+                {
+                    _testOutputJson = System.Text.Json.JsonSerializer.Serialize(result.OutputData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    string shortOutput = _testOutputJson.Length > 40 ? _testOutputJson.Substring(0, 37) + "..." : _testOutputJson;
+                    DiagramState.SetNodeOutput(_selectedNode.NodeData.Id, shortOutput);
+                }
+                else
+                {
+                    _testError = result.Error ?? "Bilinmeyen bir hata oluştu";
+                    DiagramState.SetNodeError(_selectedNode.NodeData.Id, _testError);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _testError = ex.Message;
+            DiagramState.SetNodeError(_selectedNode.NodeData.Id, _testError);
+        }
+        finally
+        {
+            _isTesting = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void Close()

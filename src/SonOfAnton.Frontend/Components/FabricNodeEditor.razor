@@ -229,6 +229,24 @@
     }
     
     /// <summary>
+    /// Node üzerinde inline çıktı gösterir
+    /// </summary>
+    public async Task ShowNodeOutputAsync(Guid nodeId, string outputText)
+    {
+        if (!_initialized) return;
+        await EditorInterop.ShowNodeInlineOutputAsync(nodeId.ToString(), outputText);
+    }
+
+    /// <summary>
+    /// Node inline çıktıyı temizler
+    /// </summary>
+    public async Task ClearNodeOutputAsync(Guid nodeId)
+    {
+        if (!_initialized) return;
+        await EditorInterop.ClearNodeInlineOutputAsync(nodeId.ToString());
+    }
+    
+    /// <summary>
     /// Canvas'ı temizler
     /// </summary>
     public async Task ClearAsync()

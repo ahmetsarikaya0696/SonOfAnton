@@ -62,6 +62,25 @@ public class WorkflowApiService
         return await response.Content.ReadFromJsonAsync<ExecutionDto>();
     }
 
+    public async Task<ExecutionDto?> TestRunWorkflowAsync(Guid workflowId, Dictionary<string, object?>? initialData = null)
+    {
+        var request = new StartExecutionRequest 
+        { 
+            WorkflowId = workflowId,
+            InitialData = initialData
+        };
+        var response = await _httpClient.PostAsJsonAsync($"api/workflows/{workflowId}/test-run", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ExecutionDto>();
+    }
+
+    public async Task<ExecuteSingleNodeResponse?> ExecuteSingleNodeAsync(Guid workflowId, ExecuteSingleNodeRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"api/workflows/{workflowId}/execute-node", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ExecuteSingleNodeResponse>();
+    }
+
     #endregion
 
     #region Executions
@@ -169,6 +188,12 @@ public class WorkflowApiService
     public async Task ResumeExecutionAsync(Guid executionId)
     {
         var response = await _httpClient.PostAsync($"api/workflows/execution/{executionId}/resume", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task StepExecutionAsync(Guid executionId)
+    {
+        var response = await _httpClient.PostAsync($"api/workflows/execution/{executionId}/step", null);
         response.EnsureSuccessStatusCode();
     }
 

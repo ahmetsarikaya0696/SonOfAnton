@@ -15,6 +15,11 @@ public class PauseToken
     public bool IsPaused => _isPaused;
 
     /// <summary>
+    /// Step mode (adım adım çalışma) aktif mi
+    /// </summary>
+    public bool IsStepMode { get; set; }
+
+    /// <summary>
     /// Duraklat
     /// </summary>
     public void Pause()
@@ -38,12 +43,20 @@ public class PauseToken
     /// </summary>
     public async Task WaitIfPausedAsync(CancellationToken cancellationToken = default)
     {
-        if (!_isPaused) return;
-
-        await Task.Run(() =>
+        if (!_isPaused && !IsStepMode) return;
+        
+        if (_isPaused)
         {
-            _pauseEvent.Wait(cancellationToken);
-        }, cancellationToken);
+            await Task.Run(() =>
+            {
+                _pauseEvent.Wait(cancellationToken);
+            }, cancellationToken);
+        }
+
+        if (IsStepMode)
+        {
+            Pause();
+        }
     }
 }
 

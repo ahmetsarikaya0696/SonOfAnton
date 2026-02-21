@@ -1447,3 +1447,76 @@ export function fitToScreen(canvasId) {
     updateMinimap(canvasId);
     return true;
 }
+
+/**
+ * Node üzerinde inline çıktı gösterir
+ */
+export function showNodeInlineOutput(canvasId, nodeId, outputText) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const node = canvasData.nodes.get(nodeId);
+    if (!node) return false;
+
+    clearNodeInlineOutput(canvasId, nodeId);
+
+    const displayStr = outputText.length > 30 ? outputText.substring(0, 30) + '...' : outputText;
+
+    const textEl = new fabric.Text(displayStr, {
+        fontSize: 10,
+        fontFamily: 'Inter, sans-serif',
+        fill: '#ffffff',
+        originX: 'center',
+        originY: 'center'
+    });
+
+    const padding = 6;
+    const bgRect = new fabric.Rect({
+        width: textEl.width + padding * 2,
+        height: textEl.height + padding * 2,
+        fill: 'rgba(0,0,0,0.8)',
+        rx: 4,
+        ry: 4,
+        originX: 'center',
+        originY: 'center',
+        stroke: '#f9e2af',
+        strokeWidth: 1
+    });
+
+    const badgeGroup = new fabric.Group([bgRect, textEl], {
+        originX: 'center',
+        originY: 'bottom',
+        selectable: false,
+        evented: false,
+        top: -5,
+        left: node.width / 2
+    });
+
+    badgeGroup.isOutputBadge = true;
+    node.addWithUpdate(badgeGroup);
+    node.setCoords();
+
+    canvasData.canvas.requestRenderAll();
+    return true;
+}
+
+/**
+ * Node üzerindeki inline çıktıyı temizler
+ */
+export function clearNodeInlineOutput(canvasId, nodeId) {
+    const canvasData = canvasInstances.get(canvasId);
+    if (!canvasData) return false;
+
+    const node = canvasData.nodes.get(nodeId);
+    if (!node) return false;
+
+    const objects = node.getObjects();
+    const badge = objects.find(o => o.isOutputBadge);
+    
+    if (badge) {
+        node.removeWithUpdate(badge);
+        canvasData.canvas.requestRenderAll();
+    }
+    return true;
+}
+

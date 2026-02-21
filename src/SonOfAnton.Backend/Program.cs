@@ -324,6 +324,7 @@ builder.Services.AddScoped<INodeHandler, VectorDeleteHandler>();
 
 // Workflow Runner
 builder.Services.AddScoped<WorkflowRunner>();
+builder.Services.AddScoped<ISingleNodeExecutionService, SingleNodeExecutionService>();
 
 // Workflow Job Service (Hangfire)
 builder.Services.AddScoped<WorkflowJobService>();

@@ -98,9 +98,21 @@
             <span class="toolbar-divider"></span>
             @if (_isExecuting)
             {
-                <button class="btn btn-warning" @onclick="PauseResumeExecution">
-                    <Icon Name="@(_isPaused ? "play" : "pause")" Size="14" /> @(_isPaused ? "Devam" : "Duraklat")
-                </button>
+                if (_isTestMode)
+                {
+                    <button class="btn btn-warning" @onclick="StepExecution" title="Bir sonraki adımı çalıştır">
+                        <Icon Name="skip-forward" Size="14" /> İleri Sar
+                    </button>
+                    <button class="btn btn-success" @onclick="PauseResumeExecution">
+                        <Icon Name="play" Size="14" /> Normal Hız
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-warning" @onclick="PauseResumeExecution">
+                        <Icon Name="@(_isPaused ? "play" : "pause")" Size="14" /> @(_isPaused ? "Devam" : "Duraklat")
+                    </button>
+                }
                 <button class="btn btn-ghost" @onclick="() => _isSnapshotOpen = !_isSnapshotOpen" title="Snapshot'lar">
                     <Icon Name="camera" Size="14" />
                 </button>
@@ -110,6 +122,12 @@
             }
             else
             {
+                <button class="btn btn-success"
+                        @onclick="TestRunWorkflow"
+                        disabled="@(DiagramState.CurrentWorkflow?.Id == Guid.Empty)"
+                        title="Adım Adım Test Run">
+                    <Icon Name="terminal" Size="14" /> Test Et
+                </button>
                 <button class="btn btn-warning"
                         @onclick="ExecuteWorkflow"
                         disabled="@(DiagramState.CurrentWorkflow?.Id == Guid.Empty)">
@@ -196,6 +214,7 @@
 @code {
     private bool _isSaving;
     private bool _isExecuting;
+    private bool _isTestMode;
     private Guid? _currentExecutionId;
     private bool _isTemplatesPanelOpen;
     private bool _isMonitorVisible;
@@ -311,6 +330,7 @@
         _workflowName = "Yeni İş Akışı";
         _currentExecutionId = null;
         _isExecuting = false;
+        _isTestMode = false;
     }
 
     private void HandleFolderSelected(Guid? folderId)
@@ -386,7 +406,10 @@
             return;
 
         _isExecuting = true;
+        _isTestMode = false;
         _isMonitorVisible = true;
+
+        DiagramState.ResetAllNodeStates();
 
         try
         {
@@ -408,6 +431,42 @@
         {
             Console.WriteLine($"Çalıştırma hatası: {ex.Message}");
             _isExecuting = false;
+            _isTestMode = false;
+        }
+    }
+    
+    private async Task TestRunWorkflow()
+    {
+        if (_isExecuting || DiagramState.CurrentWorkflow?.Id == null || DiagramState.CurrentWorkflow.Id == Guid.Empty)
+            return;
+
+        _isExecuting = true;
+        _isTestMode = true;
+        _isPaused = true;
+        _isMonitorVisible = true;
+
+        DiagramState.ResetAllNodeStates();
+
+        try
+        {
+            var execution = await ApiService.TestRunWorkflowAsync(DiagramState.CurrentWorkflow.Id);
+            if (execution != null)
+            {
+                _currentExecutionId = execution.Id;
+                
+                if (_executionMonitor != null)
+                {
+                    await _executionMonitor.ConnectAsync();
+                }
+                
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Test çalıştırma hatası: {ex.Message}");
+            _isExecuting = false;
+            _isTestMode = false;
         }
     }
     
@@ -426,6 +485,7 @@
         }
         
         _isExecuting = false;
+        _isTestMode = false;
         
         if (_executionMonitor != null)
         {
@@ -532,6 +592,16 @@
 
         try
         {
+            if (_isTestMode)
+            {
+                // Normal hıza çevirmek için Resume yapıp step modundan çıkmayı simüle edebiliriz, 
+                // ama şimdilik sadece Resume yapıyor
+                await ApiService.ResumeExecutionAsync(_currentExecutionId.Value);
+                _isTestMode = false; 
+                _isPaused = false;
+                return;
+            }
+
             if (_isPaused)
             {
                 await ApiService.ResumeExecutionAsync(_currentExecutionId.Value);
@@ -546,6 +616,20 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Pause/Resume hatası: {ex.Message}");
+        }
+    }
+
+    private async Task StepExecution()
+    {
+        if (!_currentExecutionId.HasValue) return;
+
+        try
+        {
+            await ApiService.StepExecutionAsync(_currentExecutionId.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Step hatası: {ex.Message}");
         }
     }
 

@@ -225,6 +225,24 @@ public class NodeEditorInteropService : IAsyncDisposable
     }
     
     /// <summary>
+    /// Node üzerinde inline çıktı gösterir
+    /// </summary>
+    public async Task<bool> ShowNodeInlineOutputAsync(string nodeId, string outputText)
+    {
+        if (_module == null || _currentCanvasId == null) return false;
+        return await _module.InvokeAsync<bool>("showNodeInlineOutput", _currentCanvasId, nodeId, outputText);
+    }
+
+    /// <summary>
+    /// Node üzerindeki inline çıktıyı temizler
+    /// </summary>
+    public async Task<bool> ClearNodeInlineOutputAsync(string nodeId)
+    {
+        if (_module == null || _currentCanvasId == null) return false;
+        return await _module.InvokeAsync<bool>("clearNodeInlineOutput", _currentCanvasId, nodeId);
+    }
+    
+    /// <summary>
     /// Node hareket ettiğinde connection'ları günceller
     /// </summary>
     public async Task<bool> UpdateConnectionsAsync(string nodeId)

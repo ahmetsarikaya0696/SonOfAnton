@@ -400,8 +400,36 @@ public class DiagramStateService
             node.IsExecuting = false;
             node.IsCompleted = false;
             node.IsSuccess = false;
+            node.InlineOutput = null;
+            node.ErrorMessage = null;
         }
         NotifyStateChanged();
+    }
+    
+    public void SetNodeOutput(Guid nodeId, string output)
+    {
+        var node = Diagram.Nodes.OfType<WorkflowNodeModel>()
+            .FirstOrDefault(n => n.NodeData.Id == nodeId);
+        
+        if (node != null)
+        {
+            node.InlineOutput = output;
+            OnStateChanged?.Invoke();
+        }
+    }
+
+    public void SetNodeError(Guid nodeId, string error)
+    {
+        var node = Diagram.Nodes.OfType<WorkflowNodeModel>()
+            .FirstOrDefault(n => n.NodeData.Id == nodeId);
+        
+        if (node != null)
+        {
+            node.ErrorMessage = error;
+            node.IsCompleted = true;
+            node.IsSuccess = false;
+            OnStateChanged?.Invoke();
+        }
     }
 }
 
@@ -416,6 +444,8 @@ public class WorkflowNodeModel : NodeModel
     public bool IsExecuting { get; set; }
     public bool IsCompleted { get; set; }
     public bool IsSuccess { get; set; }
+    public string? InlineOutput { get; set; }
+    public string? ErrorMessage { get; set; }
 
     public WorkflowNodeModel(WorkflowNodeDto data, Point position) : base(position)
     {
