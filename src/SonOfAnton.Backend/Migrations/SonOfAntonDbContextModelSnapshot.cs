@@ -19,7 +19,7 @@ namespace SonOfAnton.Backend.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.2")
+                .HasAnnotation("ProductVersion", "10.0.3")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -123,6 +123,108 @@ namespace SonOfAnton.Backend.Migrations
                     b.HasIndex("WorkflowId");
 
                     b.ToTable("chat_history", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.CustomNodeDefinitionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("icon");
+
+                    b.Property<JsonDocument>("InputsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("inputs_json");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<JsonDocument>("OutputsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("outputs_json");
+
+                    b.Property<JsonDocument>("ParametersJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("parameters_json");
+
+                    b.Property<string>("ScriptCode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("script_code");
+
+                    b.Property<string>("ScriptType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("script_type");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "Type")
+                        .IsUnique();
+
+                    b.ToTable("custom_node_definitions", (string)null);
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionEntity", b =>
@@ -309,6 +411,187 @@ namespace SonOfAnton.Backend.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("folders", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceInstallEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("InstalledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("installed_at");
+
+                    b.Property<string>("InstalledVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("installed_version");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ItemId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("marketplace_installs", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceItemEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<double>("AverageRating")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(0.0)
+                        .HasColumnName("average_rating");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("category");
+
+                    b.Property<JsonDocument>("ContentJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("content_json");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("DownloadCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("download_count");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("icon");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("item_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("PublishedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by_user_id");
+
+                    b.Property<JsonDocument>("Tags")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("ItemType");
+
+                    b.HasIndex("PublishedByUserId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("marketplace_items", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceReviewEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer")
+                        .HasColumnName("rating");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ItemId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("marketplace_reviews", (string)null);
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantEntity", b =>
@@ -669,6 +952,24 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("Workflow");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.CustomNodeDefinitionEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
@@ -717,6 +1018,62 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("ParentFolder");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceInstallEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.MarketplaceItemEntity", "Item")
+                        .WithMany("Installs")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceItemEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "PublishedByUser")
+                        .WithMany()
+                        .HasForeignKey("PublishedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PublishedByUser");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceReviewEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.MarketplaceItemEntity", "Item")
+                        .WithMany("Reviews")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantRoleEntity", b =>
@@ -807,6 +1164,13 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("ChildFolders");
 
                     b.Navigation("Workflows");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceItemEntity", b =>
+                {
+                    b.Navigation("Installs");
+
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantEntity", b =>

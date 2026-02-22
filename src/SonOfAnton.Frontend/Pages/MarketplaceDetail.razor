@@ -1,11 +1,22 @@
 @page "/marketplace/{Id:guid}"
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <div class="marketplace-detail">
     <header class="detail-header">
-        <a href="/marketplace" class="back-link">
-            <Icon Name="arrow-left" Size="14" /> Marketplace'e Dön
-        </a>
+        <div class="header-left">
+            <div class="nav-buttons">
+                <button class="nav-btn" title="Geri" @onclick="GoBack">
+                    <Icon Name="chevron-left" Size="18" />
+                </button>
+                <button class="nav-btn" title="İleri" @onclick="GoForward">
+                    <Icon Name="chevron-right" Size="18" />
+                </button>
+            </div>
+            <a href="/marketplace" class="back-link">
+                <Icon Name="arrow-left" Size="14" /> Marketplace'e Dön
+            </a>
+        </div>
     </header>
 
     @if (_isLoading)
@@ -159,6 +170,8 @@
     private int _newRating;
     private string _newComment = "";
 
+    private async Task GoBack() => await JS.InvokeVoidAsync("history.back");
+    private async Task GoForward() => await JS.InvokeVoidAsync("history.forward");
     protected override async Task OnInitializedAsync()
     {
         await LoadItem();
