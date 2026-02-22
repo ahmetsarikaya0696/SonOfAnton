@@ -30,6 +30,8 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<ExecutionSnapshotEntity> ExecutionSnapshots => Set<ExecutionSnapshotEntity>();
     public DbSet<ChatHistoryEntity> ChatHistory => Set<ChatHistoryEntity>();
     public DbSet<WorkflowRevisionEntity> WorkflowRevisions => Set<WorkflowRevisionEntity>();
+    public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
+    public DbSet<WorkflowApiEndpointEntity> WorkflowApiEndpoints => Set<WorkflowApiEndpointEntity>();
 
     // ─── Custom Nodes & Marketplace ──────────────────────────────
     public DbSet<CustomNodeDefinitionEntity> CustomNodeDefinitions => Set<CustomNodeDefinitionEntity>();
@@ -257,6 +259,74 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.WorkflowId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ApiKey
+        modelBuilder.Entity<ApiKeyEntity>(entity =>
+        {
+            entity.ToTable("api_keys");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.KeyPrefix).HasColumnName("key_prefix").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.KeyHash).HasColumnName("key_hash").HasMaxLength(128).IsRequired();
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+            entity.Property(e => e.Scopes).HasColumnName("scopes").HasColumnType("jsonb");
+            entity.Property(e => e.RateLimitPerMinute).HasColumnName("rate_limit_per_minute").HasDefaultValue(60);
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.LastUsedAt).HasColumnName("last_used_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => e.KeyHash).IsUnique();
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // WorkflowApiEndpoint
+        modelBuilder.Entity<WorkflowApiEndpointEntity>(entity =>
+        {
+            entity.ToTable("workflow_api_endpoints");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.WorkflowId).HasColumnName("workflow_id");
+            entity.Property(e => e.Route).HasColumnName("route").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.HttpMethod).HasColumnName("http_method").HasMaxLength(10).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.InputSchema).HasColumnName("input_schema").HasColumnType("jsonb");
+            entity.Property(e => e.OutputTemplate).HasColumnName("output_template");
+            entity.Property(e => e.ResponseContentType).HasColumnName("response_content_type").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.RequireApiKey).HasColumnName("require_api_key");
+            entity.Property(e => e.WaitForResult).HasColumnName("wait_for_result");
+            entity.Property(e => e.WaitTimeoutSeconds).HasColumnName("wait_timeout_seconds");
+            entity.Property(e => e.RateLimitPerMinute).HasColumnName("rate_limit_per_minute");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.Route).IsUnique();
+            entity.HasIndex(e => e.WorkflowId);
+
+            entity.HasOne(e => e.Workflow)
+                .WithMany()
+                .HasForeignKey(e => e.WorkflowId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Workflow Statistics columns

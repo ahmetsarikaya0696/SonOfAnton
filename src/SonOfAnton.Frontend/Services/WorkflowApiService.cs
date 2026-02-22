@@ -286,5 +286,64 @@ public class WorkflowApiService
     }
 
     #endregion
+
+    #region Published API Endpoints
+
+    public async Task<List<WorkflowApiEndpointDto>> GetPublishedEndpointsAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<WorkflowApiEndpointDto>>("api/workflow-endpoints") ?? new List<WorkflowApiEndpointDto>();
+    }
+
+    public async Task<WorkflowApiEndpointDto?> CreatePublishedEndpointAsync(CreateWorkflowApiEndpointRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/workflow-endpoints", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WorkflowApiEndpointDto>();
+    }
+
+    public async Task<WorkflowApiEndpointDto?> UpdatePublishedEndpointAsync(Guid id, UpdateWorkflowApiEndpointRequest request)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/workflow-endpoints/{id}", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WorkflowApiEndpointDto>();
+    }
+
+    public async Task DeletePublishedEndpointAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"api/workflow-endpoints/{id}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    #endregion
+
+    #region Webhooks
+
+    public async Task<List<WebhookDto>> GetWebhooksAsync(Guid workflowId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<WebhookDto>>($"api/webhook/list/{workflowId}") ?? new List<WebhookDto>();
+    }
+
+    public async Task<WebhookDto?> CreateWebhookAsync(CreateWebhookRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/webhook/create", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WebhookDto>();
+    }
+
+    public async Task DeleteWebhookAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"api/webhook/{id}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<bool> ToggleWebhookAsync(Guid id)
+    {
+        var response = await _httpClient.PatchAsync($"api/webhook/{id}/toggle", null);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<ToggleWebhookResponse>();
+        return result?.IsActive ?? false;
+    }
+
+    #endregion
 }
 

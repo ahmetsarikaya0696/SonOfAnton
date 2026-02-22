@@ -146,6 +146,20 @@
             <a class="btn btn-ghost" href="/dashboard" title="Dashboard">
                 <Icon Name="bar-chart-2" Size="14" />
             </a>
+            <span class="toolbar-divider"></span>
+            <span class="toolbar-divider"></span>
+            <button class="btn btn-ghost" @onclick="() => _isWebhooksDialogOpen = true" title="Webhook'lar (Dışarıdan Tetikleme)">
+                <Icon Name="webhook" Size="14" />
+            </button>
+            <button class="btn btn-ghost" @onclick="() => _isPublishDialogOpen = true" title="Workflow'u REST API Olarak Yayınla">
+                <Icon Name="globe" Size="14" />
+            </button>
+            <a class="btn btn-ghost" href="/published-endpoints" title="Yayınlanan API'ler">
+                <Icon Name="link" Size="14" />
+            </a>
+            <a class="btn btn-ghost" href="/apikeys" title="API Anahtarları">
+                <Icon Name="key" Size="14" />
+            </a>
         </div>
     </div>
 
@@ -214,6 +228,17 @@
     </div>
 }
 
+<PublishEndpointDialog IsVisible="_isPublishDialogOpen" 
+                       IsVisibleChanged="v => _isPublishDialogOpen = v" 
+                       PreselectedWorkflowId="DiagramState.CurrentWorkflow?.Id" />
+
+@if (DiagramState.CurrentWorkflow?.Id != null && DiagramState.CurrentWorkflow.Id != Guid.Empty)
+{
+    <WebhooksDialog IsVisible="_isWebhooksDialogOpen" 
+                  IsVisibleChanged="v => _isWebhooksDialogOpen = v" 
+                  WorkflowId="DiagramState.CurrentWorkflow.Id" />
+}
+
 @code {
     private bool _isSaving;
     private bool _isExecuting;
@@ -235,6 +260,8 @@
     private bool _isPaused;
     private bool _isFolderTreeOpen;
     private string _currentTheme = "dark";
+    private bool _isPublishDialogOpen;
+    private bool _isWebhooksDialogOpen;
     
     private System.Timers.Timer? _autoSaveTimer;
     private bool _isAutoSaving;

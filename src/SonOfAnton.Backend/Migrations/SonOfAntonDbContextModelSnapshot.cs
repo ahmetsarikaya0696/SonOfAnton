@@ -25,7 +25,7 @@ namespace SonOfAnton.Backend.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("SonOfAnton.Backend.Controllers.WebhookEntity", b =>
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ApiKeyEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -36,22 +36,33 @@ namespace SonOfAnton.Backend.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<DateTime?>("LastTriggeredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_triggered_at");
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("key_hash");
 
-                    b.Property<int>("MinIntervalSeconds")
-                        .HasColumnType("integer")
-                        .HasColumnName("min_interval_seconds");
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("key_prefix");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -59,33 +70,31 @@ namespace SonOfAnton.Backend.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("name");
 
-                    b.Property<string>("Secret")
+                    b.Property<int>("RateLimitPerMinute")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(60)
+                        .HasColumnName("rate_limit_per_minute");
+
+                    b.Property<JsonDocument>("Scopes")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("scopes");
+
+                    b.Property<string>("TenantId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
-                        .HasColumnName("secret");
-
-                    b.Property<int>("TriggerCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("trigger_count");
-
-                    b.Property<string>("WebhookId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("webhook_id");
-
-                    b.Property<Guid>("WorkflowId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("workflow_id");
+                        .HasColumnName("tenant_id");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("WebhookId")
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("KeyHash")
                         .IsUnique();
 
-                    b.HasIndex("WorkflowId");
+                    b.HasIndex("TenantId");
 
-                    b.ToTable("webhooks", (string)null);
+                    b.ToTable("api_keys", (string)null);
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatHistoryEntity", b =>
@@ -802,6 +811,93 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("vector_store", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.WorkflowApiEndpointEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("http_method");
+
+                    b.Property<JsonDocument>("InputSchema")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_schema");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("OutputTemplate")
+                        .HasColumnType("text")
+                        .HasColumnName("output_template");
+
+                    b.Property<int>("RateLimitPerMinute")
+                        .HasColumnType("integer")
+                        .HasColumnName("rate_limit_per_minute");
+
+                    b.Property<bool>("RequireApiKey")
+                        .HasColumnType("boolean")
+                        .HasColumnName("require_api_key");
+
+                    b.Property<string>("ResponseContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("response_content_type");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("route");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<bool>("WaitForResult")
+                        .HasColumnType("boolean")
+                        .HasColumnName("wait_for_result");
+
+                    b.Property<int>("WaitTimeoutSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("wait_timeout_seconds");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Route")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("WorkflowId");
+
+                    b.ToTable("workflow_api_endpoints", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.WorkflowEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -932,15 +1028,97 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("workflow_revisions", (string)null);
                 });
 
-            modelBuilder.Entity("SonOfAnton.Backend.Controllers.WebhookEntity", b =>
+            modelBuilder.Entity("WebhookEntity", b =>
                 {
-                    b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
-                        .WithMany()
-                        .HasForeignKey("WorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
-                    b.Navigation("Workflow");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastTriggeredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_triggered_at");
+
+                    b.Property<int>("MinIntervalSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("min_interval_seconds");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ResponseContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResponseTemplate")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Secret")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("secret");
+
+                    b.Property<int>("TriggerCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("trigger_count");
+
+                    b.Property<bool>("WaitForResult")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("WaitTimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("WebhookId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("webhook_id");
+
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workflow_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WebhookId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkflowId");
+
+                    b.ToTable("webhooks", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ApiKeyEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatHistoryEntity", b =>
@@ -1117,6 +1295,24 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.WorkflowApiEndpointEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("Workflow");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.WorkflowEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "CreatedByUser")
@@ -1145,6 +1341,17 @@ namespace SonOfAnton.Backend.Migrations
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
                         .WithMany("Revisions")
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Workflow");
+                });
+
+            modelBuilder.Entity("WebhookEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
+                        .WithMany()
                         .HasForeignKey("WorkflowId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

@@ -1,0 +1,231 @@
+@using SonOfAnton.Shared.DTOs
+@using SonOfAnton.Shared.Enums
+@using System.Text.Json
+@inject WorkflowApiService ApiService
+
+<div class="dialog-overlay @(IsVisible ? "" : "hidden")">
+    <div class="dialog">
+        <header class="dialog-header">
+            <h3>API Endpoint Olarak Yayınla</h3>
+            <button class="btn-icon" @onclick="CloseAsync"><Icon Name="x" Size="16" /></button>
+        </header>
+
+        <div class="dialog-body">
+            @if (_isLoading)
+            {
+                <div class="loading-state">
+                    <span class="spinner"></span> Yükleniyor...
+                </div>
+            }
+            else
+            {
+                <EditForm Model="_request" OnValidSubmit="PublishAsync">
+                    <div class="form-group">
+                        <label>Workflow</label>
+                        @if (PreselectedWorkflowId.HasValue)
+                        {
+                            <span class="form-control" style="background:var(--surface)">@_workflows.FirstOrDefault(x => x.Id == PreselectedWorkflowId)?.Name</span>
+                        }
+                        else
+                        {
+                            <InputSelect @bind-Value="_request.WorkflowId" class="form-control" required>
+                                <option value="">Seçiniz...</option>
+                                @foreach (var wf in _workflows)
+                                {
+                                    <option value="@wf.Id">@wf.Name</option>
+                                }
+                            </InputSelect>
+                        }
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2">
+                            <label>HTTP Metodu</label>
+                            <InputSelect @bind-Value="_request.HttpMethod" class="form-control">
+                                <option value="POST">POST</option>
+                                <option value="GET">GET</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                            </InputSelect>
+                        </div>
+                        <div class="form-group" style="flex: 8">
+                            <label>Rota (Route)</label>
+                            <div class="input-group">
+                                <span class="input-prefix">/api/published/</span>
+                                <InputText @bind-Value="_request.Route" class="form-control" placeholder="my-custom-endpoint" required />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Açıklama (OpenAPI için)</label>
+                        <InputTextArea @bind-Value="_request.Description" class="form-control" rows="2" />
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Güvenlik & Limitler</label>
+                        <div class="checkbox-group">
+                            <label><InputCheckbox @bind-Value="_request.RequireApiKey" /> API Anahtarı Gerektir (X-Api-Key)</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Beklenen JSON Input (Schema)</label>
+                        <InputTextArea @bind-Value="_schemaJson" class="form-control font-mono" rows="4" placeholder='{ "type": "object", "properties": { "name": { "type": "string" } } }' />
+                        <small class="text-muted">OpenAPI dokümantasyonunda görünmesi için JSON Schema formatında girin. Opsiyonel.</small>
+                    </div>
+
+                    <div class="dialog-actions">
+                        <button type="button" class="btn btn-secondary" disabled="@_isSubmitting" @onclick="CloseAsync">İptal</button>
+                        <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
+                            @if (_isSubmitting)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Yayınlanıyor...</span>
+                            }
+                            else
+                            {
+                                <Icon Name="globe" Size="14" /> <span>Yayınla</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+    [Parameter] public Guid? PreselectedWorkflowId { get; set; }
+    [Parameter] public EventCallback OnPublished { get; set; }
+
+    private CreateWorkflowApiEndpointRequest _request = new() { HttpMethod = "POST", RequireApiKey = true };
+    private string _schemaJson = "";
+    private List<WorkflowDto> _workflows = new();
+    private bool _isLoading = false;
+    private bool _isSubmitting = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && _workflows.Count == 0)
+        {
+            await LoadWorkflowsAsync();
+        }
+
+        if (IsVisible)
+        {
+            if (PreselectedWorkflowId.HasValue)
+            {
+                _request.WorkflowId = PreselectedWorkflowId.Value;
+            }
+        }
+    }
+
+    private async Task LoadWorkflowsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _workflows = await ApiService.GetWorkflowsAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        _isSubmitting = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_schemaJson))
+            {
+                try
+                {
+                    _request.InputSchema = JsonSerializer.Deserialize<JsonDocument>(_schemaJson);
+                }
+                catch
+                {
+                    // Fallback or validation error logic
+                    _request.InputSchema = null;
+                }
+            }
+
+            await ApiService.CreatePublishedEndpointAsync(_request);
+            await OnPublished.InvokeAsync();
+            await CloseAsync();
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        _request = new() { HttpMethod = "POST", RequireApiKey = true };
+        _schemaJson = "";
+        IsVisible = false;
+        await IsVisibleChanged.InvokeAsync(false);
+    }
+}
+
+<style>
+    .dialog-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        backdrop-filter: blur(2px);
+    }
+    .dialog-overlay.hidden { display: none; }
+    .dialog {
+        background: var(--surface-color, #1e1e1e);
+        border: 1px solid var(--border-color, #333);
+        border-radius: 8px;
+        width: 100%;
+        max-width: 600px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .dialog-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border-color, #333);
+    }
+    .dialog-header h3 { margin: 0; font-size: 1.125rem; }
+    .btn-icon { background: none; border: none; color: inherit; cursor: pointer; }
+    .dialog-body { padding: 1.25rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-row { display: flex; gap: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: #aaa; }
+    .form-control {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--border-color, #333);
+        border-radius: 4px;
+        background: var(--bg-color, #121212);
+        color: white;
+    }
+    .input-group { display: flex; align-items: center; }
+    .input-prefix {
+        background: var(--surface-hover, #2d2d2d);
+        padding: 0.5rem;
+        border: 1px solid var(--border-color, #333);
+        border-right: none;
+        border-radius: 4px 0 0 4px;
+        color: #aaa;
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+    .input-group .form-control { border-radius: 0 4px 4px 0; }
+    .font-mono { font-family: monospace; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
+</style>

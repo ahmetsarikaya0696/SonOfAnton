@@ -42,6 +42,14 @@ public static class Permissions
     public const string AgentsRead = "Agents.Read";
     public const string AgentsManage = "Agents.Manage";
 
+    // ─── API Keys ────────────────────────────────────────────────
+    public const string ApiKeysRead = "ApiKeys.Read";
+    public const string ApiKeysManage = "ApiKeys.Manage";
+
+    // ─── API Endpoints ──────────────────────────────────────────
+    public const string ApiEndpointsRead = "ApiEndpoints.Read";
+    public const string ApiEndpointsManage = "ApiEndpoints.Manage";
+
     // ─── Search ─────────────────────────────────────────────────
     public const string SearchExecute = "Search.Execute";
 
@@ -60,6 +68,8 @@ public static class Permissions
         WebhooksRead, WebhooksManage,
         FoldersRead, FoldersManage,
         AgentsRead, AgentsManage,
+        ApiKeysRead, ApiKeysManage,
+        ApiEndpointsRead, ApiEndpointsManage,
         SearchExecute, ChatUse
     ];
 }

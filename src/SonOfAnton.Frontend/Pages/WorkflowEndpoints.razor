@@ -1,0 +1,152 @@
+@page "/published-endpoints"
+@using SonOfAnton.Frontend.Components
+@using System.Text.Json
+@inject WorkflowApiService ApiService
+@inject IJSRuntime JS
+@inject NavigationManager NavManager
+
+<div class="endpoints-page">
+    <header class="page-header">
+        <div class="header-title">
+            <h2><Icon Name="globe" Size="24" /> Yayınlanan API Endpoint'leri</h2>
+            <p>Dış sistemlerin platforma REST üzerinden doğrudan erişebileceği workflow entegrasyonları.</p>
+        </div>
+        <div class="header-actions">
+            <a href="/swagger" target="_blank" class="btn btn-secondary" title="OpenAPI / Swagger Dokümantasyonu">
+                <Icon Name="book-open" Size="14" /> API Dokümantasyonu
+            </a>
+            <button class="btn btn-primary" @onclick="OpenPublishDialog">
+                <Icon Name="plus" Size="14" /> Yeni Yayınla
+            </button>
+            <a href="/" class="btn btn-ghost" title="Editör">
+                <Icon Name="arrow-left" Size="14" /> Editöre Dön
+            </a>
+        </div>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span> Yükleniyor...
+        </div>
+    }
+    else if (_endpoints.Count == 0)
+    {
+        <div class="empty-state">
+            <Icon Name="globe" Size="48" color="var(--accent-color)" />
+            <p>Henüz dışarıya açık bir API endpoint'i bulunmuyor.</p>
+            <button class="btn btn-primary mt-3" @onclick="OpenPublishDialog">İlk Workflow'unu Yayınla</button>
+        </div>
+    }
+    else
+    {
+        <div class="endpoint-cards">
+            @foreach (var ep in _endpoints)
+            {
+                <div class="endpoint-card @(!ep.IsActive ? "inactive" : "")">
+                    <div class="card-header">
+                        <div class="method-route">
+                            <span class="http-method @ep.HttpMethod.ToLower()">@ep.HttpMethod</span>
+                            <span class="route">/api/published/@ep.Route</span>
+                        </div>
+                        <div class="actions">
+                            <button class="btn-icon" title="Kopyala" @onclick="() => CopyRoute(ep.FullUrl)">
+                                <Icon Name="copy" Size="14" />
+                            </button>
+                            <button class="btn-icon text-danger" title="Sil" @onclick="() => DeleteEndpoint(ep)">
+                                <Icon Name="trash-2" Size="14" />
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="detail-row">
+                            <span class="label">Bağlı Workflow:</span>
+                            <span class="value font-weight-bold">@(WorkflowsDict.GetValueOrDefault(ep.WorkflowId, "Bilinmeyen Workflow"))</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">Açıklama:</span>
+                            <span class="value text-muted">@(string.IsNullOrEmpty(ep.Description) ? "Belirtilmedi" : ep.Description)</span>
+                        </div>
+                        
+                        <div class="security-badges">
+                            @if (ep.RequireApiKey)
+                            {
+                                <span class="badge badge-warning"><Icon Name="lock" Size="12" /> API Key Gerektirir</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-danger"><Icon Name="unlock" Size="12" /> Herkese Açık</span>
+                            }
+                            
+                            @if (ep.IsActive)
+                            {
+                                <span class="badge badge-success">Aktif</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-secondary">Pasif</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<PublishEndpointDialog IsVisible="_isPublishDialogOpen" 
+                       IsVisibleChanged="v => _isPublishDialogOpen = v" 
+                       OnPublished="LoadDataAsync" />
+
+@code {
+    private List<WorkflowApiEndpointDto> _endpoints = new();
+    private Dictionary<Guid, string> WorkflowsDict = new();
+    private bool _isLoading = true;
+    private bool _isPublishDialogOpen = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var wfsTask = ApiService.GetWorkflowsAsync();
+            var epsTask = ApiService.GetPublishedEndpointsAsync();
+
+            await Task.WhenAll(wfsTask, epsTask);
+
+            WorkflowsDict = wfsTask.Result.ToDictionary(k => k.Id, v => v.Name);
+            _endpoints = epsTask.Result;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenPublishDialog()
+    {
+        _isPublishDialogOpen = true;
+    }
+
+    private async Task CopyRoute(string? fullUrl)
+    {
+        if (string.IsNullOrEmpty(fullUrl)) return;
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", fullUrl);
+    }
+
+    private async Task DeleteEndpoint(WorkflowApiEndpointDto ep)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"'{ep.Route}' rotasını silmek istediğinize emin misiniz? Bu işlem geri alınamaz ve API çalışmayı durdurur.");
+        if (confirmed)
+        {
+            await ApiService.DeletePublishedEndpointAsync(ep.Id);
+            _endpoints.Remove(ep);
+            StateHasChanged();
+        }
+    }
+}

@@ -7,8 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using SonOfAnton.Shared.Core.Identity;
-
-namespace SonOfAnton.Backend.Controllers;
+using SonOfAnton.Shared.DTOs;
 
 /// <summary>
 /// Webhook endpoint'leri - dış servislerden workflow tetikleme
@@ -99,12 +98,81 @@ public class WebhookController : ControllerBase
             "Webhook workflow tetikledi: {WebhookId} -> Workflow: {WorkflowId}, Execution: {ExecutionId}",
             webhookId, webhook.WorkflowId, executionId);
         
+        // Eğer sonucu bekleyeceksek
+        if (webhook.WaitForResult)
+        {
+            try
+            {
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(webhook.WaitTimeoutSeconds));
+                var isCompleted = await WaitForResultAsync(Guid.Parse(executionId), cts.Token);
+                
+                if (!isCompleted)
+                {
+                    return StatusCode(504, new { error = "Execution timeout", executionId = executionId });
+                }
+
+                // Execution sonucunu getir
+                var execution = await _dbContext.Executions
+                    .Include(e => e.Logs)
+                    .FirstOrDefaultAsync(e => e.Id == Guid.Parse(executionId));
+
+                if (execution == null) return NotFound("Execution bulunamadı");
+
+                if (!string.IsNullOrEmpty(webhook.ResponseTemplate))
+                {
+                    var contextData = new Dictionary<string, object?>
+                    {
+                        ["executionId"] = execution.Id,
+                        ["status"] = execution.Status.ToString(),
+                        ["memory"] = execution.Memory,
+                        ["error"] = execution.ErrorMessage
+                    };
+
+                    var renderedContent = ResponseTemplateEngine.Render(webhook.ResponseTemplate, contextData);
+                    return Content(renderedContent, webhook.ResponseContentType);
+                }
+                
+                return Ok(new
+                {
+                    executionId = execution.Id,
+                    status = execution.Status.ToString(),
+                    memory = execution.Memory
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return StatusCode(504, new { error = "Execution timeout", executionId = executionId });
+            }
+        }
+
         return Ok(new
         {
             success = true,
             executionId = executionId,
             message = "Workflow triggered successfully"
         });
+    }
+    
+    // Basit bir polling mekanizması. Production ortamında Redis Pub/Sub veya EventBus daha iyi olur.
+    private async Task<bool> WaitForResultAsync(Guid executionId, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var status = await _dbContext.Executions
+                .Where(e => e.Id == executionId)
+                .Select(e => e.Status)
+                .FirstOrDefaultAsync(cancellationToken);
+                
+            if (status == SonOfAnton.Shared.Enums.ExecutionStatus.Completed || 
+                status == SonOfAnton.Shared.Enums.ExecutionStatus.Failed || 
+                status == SonOfAnton.Shared.Enums.ExecutionStatus.Cancelled)
+            {
+                return true;
+            }
+            
+            await Task.Delay(500, cancellationToken);
+        }
+        return false;
     }
     
     /// <summary>
@@ -138,7 +206,11 @@ public class WebhookController : ControllerBase
             Description = request.Description,
             Secret = secret,
             IsActive = true,
-            MinIntervalSeconds = request.MinIntervalSeconds ?? 1
+            MinIntervalSeconds = request.MinIntervalSeconds ?? 1,
+            ResponseTemplate = request.ResponseTemplate,
+            ResponseContentType = request.ResponseContentType ?? "application/json",
+            WaitForResult = request.WaitForResult ?? false,
+            WaitTimeoutSeconds = request.WaitTimeoutSeconds ?? 30
         };
         
         _dbContext.Webhooks.Add(webhook);
@@ -256,18 +328,6 @@ public class WebhookController : ControllerBase
 }
 
 /// <summary>
-/// Webhook oluşturma isteği
-/// </summary>
-public class CreateWebhookRequest
-{
-    public Guid WorkflowId { get; set; }
-    public string? Name { get; set; }
-    public string? Description { get; set; }
-    public bool GenerateSecret { get; set; } = true;
-    public int? MinIntervalSeconds { get; set; }
-}
-
-/// <summary>
 /// Webhook entity
 /// </summary>
 public class WebhookEntity
@@ -283,6 +343,12 @@ public class WebhookEntity
     public int TriggerCount { get; set; }
     public DateTime? LastTriggeredAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Response Template alanları
+    public string? ResponseTemplate { get; set; }
+    public string ResponseContentType { get; set; } = "application/json";
+    public bool WaitForResult { get; set; } = false;
+    public int WaitTimeoutSeconds { get; set; } = 30;
     
     // Navigation
     public SonOfAnton.Shared.Entities.WorkflowEntity? Workflow { get; set; }

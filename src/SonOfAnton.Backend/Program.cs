@@ -1,3 +1,4 @@
+using Scalar.AspNetCore;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -69,6 +70,9 @@ builder.Services.AddOpenApi(options =>
         };
         return Task.CompletedTask;
     });
+
+    // Dinamik endpointleri dokümante eden transformer
+    options.AddDocumentTransformer<SonOfAnton.Backend.Services.WorkflowApiDocsTransformer>();
 });
 builder.Services.AddHttpClient();
 
@@ -99,6 +103,34 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 5
             }));
+            
+    // API Key bazlı dinamik rate limit
+    options.AddPolicy("apikey", context =>
+    {
+        var apiKeyId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        
+        if (string.IsNullOrEmpty(apiKeyId))
+        {
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 100,
+                    Window = TimeSpan.FromMinutes(1)
+                });
+        }
+        
+        var limitStr = context.User.FindFirst("RateLimit")?.Value;
+        int limit = int.TryParse(limitStr, out var l) && l > 0 ? l : 60;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: apiKeyId,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limit,
+                Window = TimeSpan.FromMinutes(1)
+            });
+    });
 });
 
 // Health Checks
@@ -209,11 +241,18 @@ builder.Services.AddAuthentication(options =>
         RoleClaimType = "roles"
     };
 })
+.AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationOptions.DefaultScheme, options => { })
 .AddPolicyScheme("MultiScheme", "Multi-Auth Scheme Selector", options =>
 {
     options.ForwardDefaultSelector = context =>
     {
-        // Authorization header'ında Bearer token varsa → ExternalBearer
+        // 1. ApiKey Header varsa
+        if (context.Request.Headers.ContainsKey("X-Api-Key"))
+        {
+            return ApiKeyAuthenticationOptions.DefaultScheme;
+        }
+
+        // 2. Authorization header'ında Bearer token varsa → ExternalBearer
         var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
         if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
@@ -385,6 +424,10 @@ builder.Services.AddScoped<CustomNodeService>();
 builder.Services.AddScoped<MarketplaceService>();
 builder.Services.AddSingleton<PluginLoaderService>();
 
+// Workflow API Publishing Service
+builder.Services.AddScoped<WorkflowApiService>();
+builder.Services.AddTransient<SonOfAnton.Backend.Services.WorkflowApiDocsTransformer>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)
@@ -420,6 +463,16 @@ app.UseResponseCompression();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.Title = "SonOfAnton Workflow Engine API";
+        options.Theme = ScalarTheme.Purple;
+        options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
+        options.Authentication = new ScalarAuthenticationOptions
+        {
+            PreferredSecurityScheme = "ApiKey"
+        };
+    });
 }
 
 // Global exception handler
@@ -455,6 +508,11 @@ app.UseTenantResolution();
 // Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Dinamik Endpoint Routing Middleware
+// (Auth'dan sonra, Controller'lardan önce çalışmalı ki [Authorize] endpointleri engellenmesin
+// ama kendi auth mantığını da yapabilsin)
+app.UseMiddleware<SonOfAnton.Backend.Infrastructure.DynamicWorkflowEndpointMiddleware>();
 
 // Health Check Endpoints
 app.MapHealthChecks("/health/live", new HealthCheckOptions

@@ -1,0 +1,134 @@
+@page "/apikeys"
+@using SonOfAnton.Frontend.Components
+@inject ApiKeyService ApiKeyService
+@inject IJSRuntime JS
+
+<div class="apikeys-page">
+    <header class="page-header">
+        <div class="header-title">
+            <h2><Icon Name="key" Size="24" /> API Anahtarları</h2>
+            <p>Dış sistemlerin platforma güvenli erişimi için API anahtarı yönetimi.</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" @onclick="OpenCreateDialog">
+                <Icon Name="plus" Size="14" /> Yeni Anahtar
+            </button>
+            <a href="/" class="btn btn-secondary">
+                <Icon Name="arrow-left" Size="14" /> Editöre Dön
+            </a>
+        </div>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>API Anahtarları yükleniyor...</span>
+        </div>
+    }
+    else if (_apiKeys.Count == 0)
+    {
+        <div class="empty-state">
+            <Icon Name="key" Size="48" />
+            <p>Henüz bir API anahtarı oluşturmadınız.</p>
+            <button class="btn btn-primary mt-3" @onclick="OpenCreateDialog">İlk Anahtarı Oluştur</button>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>İsim</th>
+                        <th>Önizleme</th>
+                        <th>Limit (istek/dk)</th>
+                        <th>Durum</th>
+                        <th>Son Kullanım</th>
+                        <th>Yetkiler</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var key in _apiKeys)
+                    {
+                        <tr>
+                            <td><strong>@key.Name</strong></td>
+                            <td class="font-mono text-muted">@key.KeyPrefix</td>
+                            <td>@key.RateLimitPerMinute</td>
+                            <td>
+                                <span class="badge @(key.IsActive ? "badge-success" : "badge-secondary")">
+                                    @(key.IsActive ? "Aktif" : "Pasif")
+                                </span>
+                            </td>
+                            <td>@(key.LastUsedAt?.ToString("dd MMM yyyy HH:mm") ?? "Hiç kullanılmadı")</td>
+                            <td>
+                                <div class="scopes">
+                                    @foreach (var scope in key.Scopes ?? new List<string>())
+                                    {
+                                        <span class="scope-tag">@scope</span>
+                                    }
+                                </div>
+                            </td>
+                            <td class="actions-cell">
+                                <button class="btn btn-icon" title="@(key.IsActive ? "Pasife Al" : "Aktifleştir")" @onclick="() => ToggleKeyAsync(key)">
+                                    <Icon Name="@(key.IsActive ? "toggle-right" : "toggle-left")" Size="16" />
+                                </button>
+                                <button class="btn btn-icon btn-danger" title="Sil" @onclick="() => DeleteKeyAsync(key)">
+                                    <Icon Name="trash-2" Size="16" />
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<CreateApiKeyDialog IsVisible="_isCreateDialogOpen" IsVisibleChanged="v => _isCreateDialogOpen = v" OnKeyCreated="LoadKeysAsync" />
+
+@code {
+    private List<ApiKeyDto> _apiKeys = new();
+    private bool _isLoading = true;
+    private bool _isCreateDialogOpen = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadKeysAsync();
+    }
+
+    private async Task LoadKeysAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _apiKeys = await ApiKeyService.GetApiKeysAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCreateDialog()
+    {
+        _isCreateDialogOpen = true;
+    }
+
+    private async Task ToggleKeyAsync(ApiKeyDto key)
+    {
+        var newState = await ApiKeyService.ToggleApiKeyAsync(key.Id);
+        key.IsActive = newState;
+    }
+
+    private async Task DeleteKeyAsync(ApiKeyDto key)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"'{key.Name}' isimli API anahtarını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.");
+        if (confirmed)
+        {
+            await ApiKeyService.DeleteApiKeyAsync(key.Id);
+            _apiKeys.Remove(key);
+        }
+    }
+}

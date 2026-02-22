@@ -1,0 +1,294 @@
+@using SonOfAnton.Shared.DTOs
+@using SonOfAnton.Shared.Enums
+@using System.Text.Json
+@using SonOfAnton.Frontend.Services
+@inject WorkflowApiService ApiService
+@inject IJSRuntime JS
+
+<div class="dialog-overlay @(IsVisible ? "" : "hidden")">
+    <div class="dialog @(_showCreateForm ? "dialog-large" : "")">
+        <header class="dialog-header">
+            <h3><Icon Name="webhook" Size="18" /> Webhook Yönetimi</h3>
+            <button class="btn-icon" @onclick="CloseAsync"><Icon Name="x" Size="16" /></button>
+        </header>
+
+        <div class="dialog-body">
+            @if (_isLoading)
+            {
+                <div class="loading-state">
+                    <span class="spinner"></span> Yükleniyor...
+                </div>
+            }
+            else if (_showCreateForm)
+            {
+                <EditForm Model="_request" OnValidSubmit="CreateWebhookAsync">
+                    <h4 class="form-title">Yeni Webhook Oluştur</h4>
+                    
+                    <div class="form-group">
+                        <label>Özel İsim (Opsiyonel)</label>
+                        <InputText @bind-Value="_request.Name" class="form-control" placeholder="Örn: Github Push Trigger" />
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1">
+                            <label>Rate Limit (Minimum bekleme süresi sn)</label>
+                            <InputNumber @bind-Value="_request.MinIntervalSeconds" class="form-control" min="0" />
+                        </div>
+                        <div class="form-group" style="flex: 1; align-self: flex-end; padding-bottom: 0.5rem;">
+                            <label class="checkbox-label">
+                                <InputCheckbox @bind-Value="_request.GenerateSecret" /> Secret Key Oluştur (HMAC SHA256)
+                            </label>
+                        </div>
+                    </div>
+
+                    <hr class="section-divider" />
+                    <h4 class="form-title">Senkron Yanıt (Response Template)</h4>
+                    <p class="text-muted text-sm mb-3">
+                        Eğer "İşlem Sonucunu Bekle" işaretliyse, webhook çağrıldığında tetiklenen flow'un bitmesi beklenir
+                        ve flow bittikten sonra belirlediğiniz şablona göre HTTP yanıtı (response) döndürülür.
+                    </p>
+
+                    <div class="form-group">
+                        <label class="checkbox-label text-primary">
+                            <InputCheckbox @bind-Value="_waitForResult" /> İşlem Sonucunu Bekle
+                        </label>
+                    </div>
+
+                    @if (_waitForResult)
+                    {
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1">
+                                <label>Zaman Aşımı (Timeout) Saniye</label>
+                                <InputNumber @bind-Value="_request.WaitTimeoutSeconds" class="form-control" min="1" max="120" />
+                            </div>
+                            <div class="form-group" style="flex: 1">
+                                <label>Yanıt İçerik Tipi (Content-Type)</label>
+                                <InputText @bind-Value="_request.ResponseContentType" class="form-control" placeholder="application/json" />
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Yanıt Şablonu (Response Template)</label>
+                            <InputTextArea @bind-Value="_request.ResponseTemplate" class="form-control font-mono" rows="5" 
+                                           placeholder="Örn: { &quot;status&quot;: &quot;{{status}}&quot;, &quot;result&quot;: &quot;{{memory.myVariable}}&quot; }" />
+                            <small class="text-muted">Kullanılabilir değişkenler: {{status}}, {{executionId}}, {{error}}, {{memory.X}}</small>
+                        </div>
+                    }
+
+                    <div class="dialog-actions">
+                        <button type="button" class="btn btn-secondary" disabled="@_isSubmitting" @onclick="() => _showCreateForm = false">Geri Gel</button>
+                        <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
+                            @if (_isSubmitting)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>Oluşturuluyor...</span>
+                            }
+                            else
+                            {
+                                <Icon Name="plus" Size="14" /> <span>Oluştur</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            }
+            else
+            {
+                <div class="list-header">
+                    <p class="text-muted">Bu workflow'u dış sistemlerden tetikleyebileceğiniz Webhook'lar.</p>
+                    <button class="btn btn-primary btn-sm" @onclick="() => _showCreateForm = true">
+                        <Icon Name="plus" Size="14" /> Yeni Webhook
+                    </button>
+                </div>
+
+                @if (_webhooks.Count == 0)
+                {
+                    <div class="empty-state-small">
+                        Henüz hiç webhook tanımlanmamış.
+                    </div>
+                }
+                else
+                {
+                    <div class="webhook-list">
+                        @foreach (var wh in _webhooks)
+                        {
+                            <div class="webhook-item @(!wh.IsActive ? "inactive" : "")">
+                                <div class="wh-details">
+                                    <div class="wh-name">@wh.Name</div>
+                                    <div class="wh-url">
+                                        <span class="method-badge">POST</span>
+                                        <code>@wh.Url</code>
+                                    </div>
+                                    <div class="wh-stats text-muted text-sm">
+                                        Toplam: <b>@wh.TriggerCount</b> tetiklenme | Son: <b>@(wh.LastTriggeredAt?.ToString("dd MMM HH:mm") ?? "-")</b>
+                                    </div>
+                                </div>
+                                <div class="wh-actions">
+                                    <button class="btn-icon" title="URL'yi Kopyala" @onclick="() => CopyText(wh.Url)">
+                                        <Icon Name="copy" Size="14" />
+                                    </button>
+                                    <button class="btn-icon" title="@(wh.IsActive ? "Durdur" : "Başlat")" @onclick="() => ToggleWebhookAsync(wh)">
+                                        <Icon Name="@(wh.IsActive ? "pause" : "play")" Size="14" />
+                                    </button>
+                                    <button class="btn-icon text-danger" title="Sil" @onclick="() => DeleteWebhookAsync(wh)">
+                                        <Icon Name="trash-2" Size="14" />
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+        
+        @if (!_showCreateForm)
+        {
+            <div class="dialog-footer">
+                <button class="btn btn-secondary" @onclick="CloseAsync">Kapat</button>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_newWebhookResult != null)
+{
+    <div class="dialog-overlay" style="z-index: 2010;">
+        <div class="dialog">
+            <header class="dialog-header">
+                <h3>Webhook Oluşturuldu!</h3>
+            </header>
+            <div class="dialog-body">
+                <div class="alert alert-success mb-3">
+                    Yeni webhook başarıyla oluşturuldu. Aşağıdaki URL'ye dış sistemlerden POST isteği atılarak flow başlatılabilir.
+                </div>
+                
+                <div class="form-group">
+                    <label>Webhook URL</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" readonly value="@_newWebhookResult.Url" />
+                        <button class="btn btn-secondary" @onclick="() => CopyText(_newWebhookResult.Url)">Kopyala</button>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_newWebhookResult.Secret))
+                {
+                    <div class="form-group mt-3">
+                        <label class="text-warning"><Icon Name="alert-triangle" Size="14" /> Secret Key (HMAC SHA256)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" readonly value="@_newWebhookResult.Secret" />
+                            <button class="btn btn-secondary" @onclick="() => CopyText(_newWebhookResult.Secret)">Kopyala</button>
+                        </div>
+                        <small class="text-warning d-block mt-1">Bu key bir daha gösterilmeyecektir. Lütfen güvenli bir yere kopyalayın. İstek atarken <code>X-Webhook-Signature</code> header'ı kullanmalısınız.</small>
+                    </div>
+                }
+            </div>
+            <div class="dialog-actions" style="padding: 1rem; border-top: 1px solid var(--border-color);">
+                <button class="btn btn-primary" @onclick="() => _newWebhookResult = null">Anladım, Kapat</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+    [Parameter] public Guid WorkflowId { get; set; }
+
+    private List<WebhookDto> _webhooks = new();
+    private bool _isLoading = false;
+    private bool _showCreateForm = false;
+    private bool _isSubmitting = false;
+
+    private CreateWebhookRequest _request = new() { GenerateSecret = false, WaitTimeoutSeconds = 30, ResponseContentType = "application/json" };
+    private bool _waitForResult 
+    {
+        get => _request.WaitForResult ?? false;
+        set => _request.WaitForResult = value;
+    }
+
+    private NewWebhookResult? _newWebhookResult;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && WorkflowId != Guid.Empty)
+        {
+            await LoadWebhooksAsync();
+        }
+    }
+
+    private async Task LoadWebhooksAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _webhooks = await ApiService.GetWebhooksAsync(WorkflowId);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateWebhookAsync()
+    {
+        _isSubmitting = true;
+        try
+        {
+            _request.WorkflowId = WorkflowId;
+            var created = await ApiService.CreateWebhookAsync(_request);
+            if (created != null)
+            {
+                // To show modal with secret and URL
+                var responseJson = JsonSerializer.Serialize(created);
+                _newWebhookResult = JsonSerializer.Deserialize<NewWebhookResult>(responseJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                _showCreateForm = false;
+                _request = new() { GenerateSecret = false, WaitTimeoutSeconds = 30, ResponseContentType = "application/json" };
+                await LoadWebhooksAsync();
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task ToggleWebhookAsync(WebhookDto wh)
+    {
+        var newState = await ApiService.ToggleWebhookAsync(wh.Id);
+        wh.IsActive = newState;
+    }
+
+    private async Task DeleteWebhookAsync(WebhookDto wh)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Bu webhook'u silmek istediğinize emin misiniz? Dış sistemler bu URL'den istek atamayacaktır.");
+        if (confirmed)
+        {
+            await ApiService.DeleteWebhookAsync(wh.Id);
+            _webhooks.Remove(wh);
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        IsVisible = false;
+        _showCreateForm = false;
+        await IsVisibleChanged.InvokeAsync(false);
+    }
+
+    private async Task CopyText(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+    }
+
+    public class NewWebhookResult
+    {
+        public Guid Id { get; set; }
+        public string WebhookId { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string? Secret { get; set; }
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; }
+    }
+}
