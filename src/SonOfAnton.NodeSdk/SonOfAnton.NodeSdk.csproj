@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <Description>SonOfAnton Node Development SDK — Attribute-based node tanımı için gerekli tüm araçlar</Description>
+    <PackageId>SonOfAnton.NodeSdk</PackageId>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

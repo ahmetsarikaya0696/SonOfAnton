@@ -379,6 +379,12 @@ builder.Services.AddScoped<INodeHandler, BreakHandler>();
 builder.Services.AddScoped<INodeHandler, ContinueHandler>();
 builder.Services.AddScoped<INodeHandler, TryCatchHandler>();
 
+// Custom Node & Marketplace Services
+builder.Services.AddScoped<INodeHandler, CustomNodeHandler>();
+builder.Services.AddScoped<CustomNodeService>();
+builder.Services.AddScoped<MarketplaceService>();
+builder.Services.AddSingleton<PluginLoaderService>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)
@@ -401,6 +407,10 @@ using (var scope = app.Services.CreateScope())
     registry.Register(new AuditorA2AAgent(agentService));
     registry.Register(new VisualizerA2AAgent(agentService));
 }
+
+// Plugin node'larını tara (startup)
+var pluginLoader = app.Services.GetRequiredService<PluginLoaderService>();
+pluginLoader.ScanPlugins();
 
 // Configure the HTTP request pipeline
 

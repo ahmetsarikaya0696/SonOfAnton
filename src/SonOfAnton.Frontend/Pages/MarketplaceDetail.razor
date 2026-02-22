@@ -1,0 +1,232 @@
+@page "/marketplace/{Id:guid}"
+@inject HttpClient Http
+
+<div class="marketplace-detail">
+    <header class="detail-header">
+        <a href="/marketplace" class="back-link">
+            <Icon Name="arrow-left" Size="14" /> Marketplace'e Dön
+        </a>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Yükleniyor...</span>
+        </div>
+    }
+    else if (_item == null)
+    {
+        <div class="empty-state">
+            <Icon Name="alert-triangle" Size="48" />
+            <p>Öğe bulunamadı.</p>
+        </div>
+    }
+    else
+    {
+        <div class="detail-content">
+            <!-- Sol Panel — Bilgi -->
+            <div class="detail-info">
+                <div class="detail-title-row">
+                    <div class="detail-icon">
+                        <Icon Name="@_item.Icon" Size="32" />
+                    </div>
+                    <div>
+                        <h2>@_item.Name</h2>
+                        <span class="detail-type badge-@(_item.ItemType.ToLower())">
+                            @(_item.ItemType == "CustomNode" ? "Custom Node" : "Workflow Şablonu")
+                        </span>
+                        <span class="detail-version">v@_item.Version</span>
+                    </div>
+                </div>
+
+                <p class="detail-desc">@(_item.Description ?? "Açıklama yok")</p>
+
+                <div class="detail-stats">
+                    <div class="stat-box">
+                        <Icon Name="download" Size="16" />
+                        <span class="stat-value">@_item.DownloadCount</span>
+                        <span class="stat-label">İndirme</span>
+                    </div>
+                    <div class="stat-box">
+                        <Icon Name="star" Size="16" />
+                        <span class="stat-value">@_item.AverageRating.ToString("F1")</span>
+                        <span class="stat-label">Puan</span>
+                    </div>
+                    <div class="stat-box">
+                        <Icon Name="message-square" Size="16" />
+                        <span class="stat-value">@_item.ReviewCount</span>
+                        <span class="stat-label">Yorum</span>
+                    </div>
+                </div>
+
+                <div class="detail-meta">
+                    <div class="meta-row">
+                        <span class="meta-label">Yayıncı</span>
+                        <span class="meta-value">@_item.PublishedByUserName</span>
+                    </div>
+                    <div class="meta-row">
+                        <span class="meta-label">Kategori</span>
+                        <span class="meta-value">@_item.Category</span>
+                    </div>
+                    <div class="meta-row">
+                        <span class="meta-label">Tarih</span>
+                        <span class="meta-value">@_item.CreatedAt.ToString("dd MMM yyyy")</span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_item.Tags))
+                {
+                    <div class="detail-tags">
+                        @foreach (var tag in _item.Tags.Split(','))
+                        {
+                            <span class="tag">@tag.Trim()</span>
+                        }
+                    </div>
+                }
+
+                <div class="detail-actions">
+                    @if (_item.IsInstalled)
+                    {
+                        <button class="btn btn-uninstall" @onclick="UninstallAsync">
+                            <Icon Name="trash-2" Size="14" /> Kaldır
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-install" @onclick="InstallAsync">
+                            <Icon Name="download" Size="14" /> Kur
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Sağ Panel — Değerlendirmeler -->
+            <div class="detail-reviews">
+                <h3>Değerlendirmeler</h3>
+
+                <div class="review-form">
+                    <div class="rating-input">
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                            var star = i;
+                            <button class="star-btn @(star <= _newRating ? "active" : "")"
+                                    @onclick="() => _newRating = star">★</button>
+                        }
+                    </div>
+                    <textarea @bind="_newComment" placeholder="Yorumunuz..." rows="2"></textarea>
+                    <button class="btn btn-review" @onclick="AddReviewAsync" disabled="@(_newRating == 0)">
+                        <Icon Name="send" Size="14" /> Gönder
+                    </button>
+                </div>
+
+                @if (_reviews.Count == 0)
+                {
+                    <p class="no-reviews">Henüz değerlendirme yok.</p>
+                }
+                else
+                {
+                    <div class="reviews-list">
+                        @foreach (var review in _reviews)
+                        {
+                            <div class="review-item">
+                                <div class="review-header">
+                                    <span class="reviewer">@review.UserName</span>
+                                    <span class="review-stars">
+                                        @for (int i = 0; i < review.Rating; i++) { <span>★</span> }
+                                    </span>
+                                    <span class="review-date">@review.CreatedAt.ToString("dd MMM yyyy")</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(review.Comment))
+                                {
+                                    <p class="review-comment">@review.Comment</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private DetailDto? _item;
+    private List<ReviewDto> _reviews = [];
+    private bool _isLoading = true;
+    private int _newRating;
+    private string _newComment = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadItem();
+        await LoadReviews();
+        _isLoading = false;
+    }
+
+    private async Task LoadItem()
+    {
+        try { _item = await Http.GetFromJsonAsync<DetailDto>($"api/marketplace/{Id}"); }
+        catch { _item = null; }
+    }
+
+    private async Task LoadReviews()
+    {
+        try { _reviews = await Http.GetFromJsonAsync<List<ReviewDto>>($"api/marketplace/{Id}/reviews") ?? []; }
+        catch { _reviews = []; }
+    }
+
+    private async Task InstallAsync()
+    {
+        await Http.PostAsync($"api/marketplace/{Id}/install", null);
+        await LoadItem();
+    }
+
+    private async Task UninstallAsync()
+    {
+        await Http.DeleteAsync($"api/marketplace/{Id}/install");
+        await LoadItem();
+    }
+
+    private async Task AddReviewAsync()
+    {
+        if (_newRating == 0) return;
+        var dto = new { rating = _newRating, comment = _newComment };
+        await Http.PostAsJsonAsync($"api/marketplace/{Id}/reviews", dto);
+        _newRating = 0;
+        _newComment = "";
+        await LoadReviews();
+        await LoadItem();
+    }
+
+    // ─── DTOs ───────────────────────────────────────────────────
+
+    private record DetailDto
+    {
+        public Guid Id { get; init; }
+        public string Name { get; init; } = "";
+        public string? Description { get; init; }
+        public string Icon { get; init; } = "package";
+        public string Category { get; init; } = "";
+        public string ItemType { get; init; } = "";
+        public string PublishedByUserName { get; init; } = "";
+        public string Version { get; init; } = "1.0.0";
+        public int DownloadCount { get; init; }
+        public double AverageRating { get; init; }
+        public int ReviewCount { get; init; }
+        public bool IsInstalled { get; init; }
+        public string Tags { get; init; } = "";
+        public DateTime CreatedAt { get; init; }
+    }
+
+    private record ReviewDto
+    {
+        public Guid Id { get; init; }
+        public string UserName { get; init; } = "";
+        public int Rating { get; init; }
+        public string? Comment { get; init; }
+        public DateTime CreatedAt { get; init; }
+    }
+}

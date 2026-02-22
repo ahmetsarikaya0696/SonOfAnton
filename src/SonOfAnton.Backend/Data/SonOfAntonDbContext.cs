@@ -31,6 +31,12 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<ChatHistoryEntity> ChatHistory => Set<ChatHistoryEntity>();
     public DbSet<WorkflowRevisionEntity> WorkflowRevisions => Set<WorkflowRevisionEntity>();
 
+    // ─── Custom Nodes & Marketplace ──────────────────────────────
+    public DbSet<CustomNodeDefinitionEntity> CustomNodeDefinitions => Set<CustomNodeDefinitionEntity>();
+    public DbSet<MarketplaceItemEntity> MarketplaceItems => Set<MarketplaceItemEntity>();
+    public DbSet<MarketplaceReviewEntity> MarketplaceReviews => Set<MarketplaceReviewEntity>();
+    public DbSet<MarketplaceInstallEntity> MarketplaceInstalls => Set<MarketplaceInstallEntity>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -347,6 +353,134 @@ public class SonOfAntonDbContext : DbContext
             entity.Property(e => e.Timestamp).HasColumnName("timestamp");
 
             entity.HasIndex(e => e.WorkflowId);
+        });
+
+        // ─── Custom Node Definitions ────────────────────────────────
+        modelBuilder.Entity<CustomNodeDefinitionEntity>(entity =>
+        {
+            entity.ToTable("custom_node_definitions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+            entity.Property(e => e.Type).HasColumnName("type").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Icon).HasColumnName("icon").HasMaxLength(50);
+            entity.Property(e => e.Category).HasColumnName("category").HasMaxLength(100);
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.Color).HasColumnName("color").HasMaxLength(20);
+            entity.Property(e => e.InputsJson).HasColumnName("inputs_json").HasColumnType("jsonb");
+            entity.Property(e => e.OutputsJson).HasColumnName("outputs_json").HasColumnType("jsonb");
+            entity.Property(e => e.ParametersJson).HasColumnName("parameters_json").HasColumnType("jsonb");
+            entity.Property(e => e.ScriptType).HasColumnName("script_type").HasConversion<string>();
+            entity.Property(e => e.ScriptCode).HasColumnName("script_code");
+            entity.Property(e => e.Version).HasColumnName("version");
+            entity.Property(e => e.IsPublished).HasColumnName("is_published");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            // Tenant içinde type benzersiz
+            entity.HasIndex(e => new { e.TenantId, e.Type }).IsUnique();
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ─── Marketplace Items ───────────────────────────────────────
+        modelBuilder.Entity<MarketplaceItemEntity>(entity =>
+        {
+            entity.ToTable("marketplace_items");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.PublishedByUserId).HasColumnName("published_by_user_id");
+            entity.Property(e => e.ItemType).HasColumnName("item_type").HasConversion<string>();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(4000);
+            entity.Property(e => e.Icon).HasColumnName("icon").HasMaxLength(50);
+            entity.Property(e => e.Category).HasColumnName("category").HasMaxLength(100);
+            entity.Property(e => e.Tags).HasColumnName("tags").HasColumnType("jsonb");
+            entity.Property(e => e.ContentJson).HasColumnName("content_json").HasColumnType("jsonb");
+            entity.Property(e => e.Version).HasColumnName("version").HasMaxLength(20);
+            entity.Property(e => e.DownloadCount).HasColumnName("download_count").HasDefaultValue(0);
+            entity.Property(e => e.AverageRating).HasColumnName("average_rating").HasDefaultValue(0.0);
+            entity.Property(e => e.IsPublished).HasColumnName("is_published");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.ItemType);
+            entity.HasIndex(e => e.Category);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.PublishedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.PublishedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ─── Marketplace Reviews ─────────────────────────────────────
+        modelBuilder.Entity<MarketplaceReviewEntity>(entity =>
+        {
+            entity.ToTable("marketplace_reviews");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ItemId).HasColumnName("item_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Rating).HasColumnName("rating");
+            entity.Property(e => e.Comment).HasColumnName("comment").HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            // Bir kullanıcı bir öğeye sadece bir review yapabilir
+            entity.HasIndex(e => new { e.ItemId, e.UserId }).IsUnique();
+
+            entity.HasOne(e => e.Item)
+                .WithMany(i => i.Reviews)
+                .HasForeignKey(e => e.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Marketplace Installs ────────────────────────────────────
+        modelBuilder.Entity<MarketplaceInstallEntity>(entity =>
+        {
+            entity.ToTable("marketplace_installs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ItemId).HasColumnName("item_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.InstalledVersion).HasColumnName("installed_version").HasMaxLength(20);
+            entity.Property(e => e.InstalledAt).HasColumnName("installed_at");
+
+            entity.HasIndex(e => new { e.ItemId, e.UserId }).IsUnique();
+
+            entity.HasOne(e => e.Item)
+                .WithMany(i => i.Installs)
+                .HasForeignKey(e => e.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

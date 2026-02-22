@@ -256,10 +256,18 @@ public class WorkflowRunner
             // Handler'ı bul
             if (!_handlers.TryGetValue(node.Type, out var handler))
             {
-                _logger.LogWarning("Handler bulunamadı: {NodeType}, veri geçiriliyor", node.Type);
-                await ExecuteNextNodes(dbContext, execution, graph, node, inputData, "output", 
-                    memory, visitedNodes, cancellationToken);
-                return;
+                // Custom node fallback — custom.* veya DB'de tanımlı olanlar
+                if (_handlers.TryGetValue("custom.*", out var customHandler))
+                {
+                    handler = customHandler;
+                }
+                else
+                {
+                    _logger.LogWarning("Handler bulunamadı: {NodeType}, veri geçiriliyor", node.Type);
+                    await ExecuteNextNodes(dbContext, execution, graph, node, inputData, "output", 
+                        memory, visitedNodes, cancellationToken);
+                    return;
+                }
             }
 
             // Retry mekanizması ile node çalıştır

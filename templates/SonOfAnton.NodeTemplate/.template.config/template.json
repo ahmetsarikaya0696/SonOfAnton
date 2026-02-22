@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "SonOfAnton Team",
+  "classifications": ["SonOfAnton", "Node", "Plugin"],
+  "identity": "SonOfAnton.NodeTemplate",
+  "name": "SonOfAnton Custom Node",
+  "shortName": "sonofanton-node",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "SonOfAnton.CustomNode",
+  "preferNameDirectory": true,
+  "symbols": {
+    "nodeType": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "custom.mynode",
+      "description": "Node tipi (örn: math.add, text.format)"
+    },
+    "nodeDisplayName": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "Özel Node",
+      "description": "Kullanıcıya gösterilecek ad"
+    }
+  }
+}

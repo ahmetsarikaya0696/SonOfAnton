@@ -1,0 +1,223 @@
+@page "/marketplace"
+@inject HttpClient Http
+
+<div class="marketplace">
+    <header class="marketplace-header">
+        <h2><Icon Name="store" Size="20" /> Marketplace</h2>
+        <a href="/" class="back-link">
+            <Icon Name="arrow-left" Size="14" /> Editöre Dön
+        </a>
+    </header>
+
+    <!-- Arama ve Filtreler -->
+    <div class="marketplace-filters">
+        <div class="search-box">
+            <Icon Name="search" Size="16" />
+            <input type="text" placeholder="Node veya şablon ara..."
+                   @bind="_searchQuery" @bind:after="SearchAsync" />
+        </div>
+
+        <div class="filter-group">
+            <select @bind="_filterType" @bind:after="SearchAsync">
+                <option value="">Tümü</option>
+                <option value="CustomNode">Node'lar</option>
+                <option value="WorkflowTemplate">Şablonlar</option>
+            </select>
+
+            <select @bind="_filterCategory" @bind:after="SearchAsync">
+                <option value="">Tüm Kategoriler</option>
+                @foreach (var cat in _categories)
+                {
+                    <option value="@cat">@cat</option>
+                }
+            </select>
+
+            <select @bind="_sortBy" @bind:after="SearchAsync">
+                <option value="newest">En Yeni</option>
+                <option value="popular">En Popüler</option>
+                <option value="rating">En Yüksek Puan</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- İçerik -->
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Marketplace yükleniyor...</span>
+        </div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="empty-state">
+            <Icon Name="package" Size="48" />
+            <p>Henüz yayınlanmış öğe yok.</p>
+            <p class="hint">Custom node oluşturup marketplace'e yayınlayabilirsiniz.</p>
+        </div>
+    }
+    else
+    {
+        <div class="marketplace-grid">
+            @foreach (var item in _items)
+            {
+                <div class="marketplace-card" @onclick="() => NavigateToDetail(item.Id)">
+                    <div class="card-header" style="border-left: 3px solid @GetItemColor(item)">
+                        <div class="card-icon">
+                            <Icon Name="@item.Icon" Size="24" />
+                        </div>
+                        <div class="card-meta">
+                            <h3>@item.Name</h3>
+                            <span class="card-type badge-@(item.ItemType.ToLower())">
+                                @(item.ItemType == "CustomNode" ? "Node" : "Şablon")
+                            </span>
+                        </div>
+                    </div>
+                    <p class="card-desc">@(item.Description ?? "Açıklama yok")</p>
+                    <div class="card-footer">
+                        <div class="card-stats">
+                            <span class="stat">
+                                <Icon Name="download" Size="12" /> @item.DownloadCount
+                            </span>
+                            <span class="stat">
+                                <Icon Name="star" Size="12" /> @item.AverageRating.ToString("F1")
+                            </span>
+                            <span class="stat">
+                                <Icon Name="message-square" Size="12" /> @item.ReviewCount
+                            </span>
+                        </div>
+                        <div class="card-actions">
+                            @if (item.IsInstalled)
+                            {
+                                <span class="installed-badge">
+                                    <Icon Name="check" Size="12" /> Kurulu
+                                </span>
+                            }
+                            else
+                            {
+                                <button class="btn-install" @onclick:stopPropagation="true"
+                                        @onclick="() => InstallAsync(item.Id)">
+                                    <Icon Name="download" Size="12" /> Kur
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (_totalPages > 1)
+        {
+            <div class="pagination">
+                <button disabled="@(_page <= 1)" @onclick="PrevPage">
+                    <Icon Name="chevron-left" Size="14" />
+                </button>
+                <span>@_page / @_totalPages</span>
+                <button disabled="@(_page >= _totalPages)" @onclick="NextPage">
+                    <Icon Name="chevron-right" Size="14" />
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Inject] NavigationManager Navigation { get; set; } = null!;
+
+    private List<MarketplaceItemDto> _items = [];
+    private List<string> _categories = [];
+    private string _searchQuery = "";
+    private string _filterType = "";
+    private string _filterCategory = "";
+    private string _sortBy = "newest";
+    private int _page = 1;
+    private int _totalPages = 1;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+        await SearchAsync();
+    }
+
+    private async Task LoadCategories()
+    {
+        try
+        {
+            _categories = await Http.GetFromJsonAsync<List<string>>("api/marketplace/categories") ?? [];
+        }
+        catch { /* ignore */ }
+    }
+
+    private async Task SearchAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = $"api/marketplace?page={_page}&pageSize=12&sortBy={_sortBy}";
+            if (!string.IsNullOrEmpty(_searchQuery)) url += $"&query={Uri.EscapeDataString(_searchQuery)}";
+            if (!string.IsNullOrEmpty(_filterType)) url += $"&itemType={_filterType}";
+            if (!string.IsNullOrEmpty(_filterCategory)) url += $"&category={Uri.EscapeDataString(_filterCategory)}";
+
+            var result = await Http.GetFromJsonAsync<MarketplaceSearchResultDto>(url);
+            if (result != null)
+            {
+                _items = result.Items;
+                _totalPages = result.TotalPages;
+            }
+        }
+        catch
+        {
+            _items = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task InstallAsync(Guid itemId)
+    {
+        try
+        {
+            await Http.PostAsync($"api/marketplace/{itemId}/install", null);
+            await SearchAsync();
+        }
+        catch { /* ignore */ }
+    }
+
+    private void NavigateToDetail(Guid id) => Navigation.NavigateTo($"/marketplace/{id}");
+    private async Task PrevPage() { _page--; await SearchAsync(); }
+    private async Task NextPage() { _page++; await SearchAsync(); }
+
+    private static string GetItemColor(MarketplaceItemDto item) =>
+        item.ItemType == "CustomNode" ? "#89b4fa" : "#a6e3a1";
+
+    // ─── DTO records (inline — API'den gelen yapı) ──────────────
+
+    private record MarketplaceItemDto
+    {
+        public Guid Id { get; init; }
+        public string Name { get; init; } = "";
+        public string? Description { get; init; }
+        public string Icon { get; init; } = "package";
+        public string Category { get; init; } = "";
+        public string ItemType { get; init; } = "";
+        public int DownloadCount { get; init; }
+        public double AverageRating { get; init; }
+        public int ReviewCount { get; init; }
+        public bool IsInstalled { get; init; }
+    }
+
+    private record MarketplaceSearchResultDto
+    {
+        public List<MarketplaceItemDto> Items { get; init; } = [];
+        public int TotalCount { get; init; }
+        public int Page { get; init; }
+        public int PageSize { get; init; }
+        public int TotalPages { get; init; }
+    }
+}

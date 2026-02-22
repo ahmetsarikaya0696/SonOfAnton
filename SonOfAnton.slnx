@@ -3,5 +3,6 @@
     <Project Path="src/SonOfAnton.Backend/SonOfAnton.Backend.csproj" />
     <Project Path="src/SonOfAnton.Frontend/SonOfAnton.Frontend.csproj" />
     <Project Path="src/SonOfAnton.Shared/SonOfAnton.Shared.csproj" />
+    <Project Path="src/SonOfAnton.NodeSdk/SonOfAnton.NodeSdk.csproj" />
   </Folder>
 </Solution>
