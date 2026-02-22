@@ -201,3 +201,26 @@
 .workflow-node.completed-failure .node-content {
     border-color: #f38ba8;
 }
+
+/* Suspended state */
+.workflow-node.suspended .node-content {
+    border-color: #f9e2af;
+    animation: nodePulse 2s ease-in-out infinite;
+}
+
+@keyframes nodePulse {
+    0%, 100% { box-shadow: 0 0 5px rgba(249, 226, 175, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(249, 226, 175, 0.6); }
+}
+
+.execution-indicator.suspended {
+    background: #f9e2af;
+    border-color: #f9e2af;
+    color: #1e1e2e;
+}
+
+/* Disabled state */
+.workflow-node.disabled .node-content {
+    border-color: #6c7086;
+    opacity: 0.6;
+}

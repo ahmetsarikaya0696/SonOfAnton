@@ -10,6 +10,8 @@ using SonOfAnton.Shared.DTOs;
 using SonOfAnton.Shared.Entities;
 using SonOfAnton.Shared.Enums;
 using LogLevel = SonOfAnton.Shared.Enums.LogLevel;
+using SonOfAnton.Shared.Exceptions;
+using SonOfAnton.Backend.Services.State;
 
 namespace SonOfAnton.Backend.Engine;
 
@@ -27,6 +29,7 @@ public class WorkflowRunner
     private readonly PauseTokenRegistry _pauseTokens;
     private readonly Dictionary<string, INodeHandler> _handlers;
     private readonly SemaphoreSlim _dbLock = new(1, 1);
+    private readonly IStateRepository _stateRepository;
 
     /// <summary>
     /// Node bazında varsayılan timeout (30 saniye)
@@ -44,7 +47,8 @@ public class WorkflowRunner
         LogStreamService logStream,
         PerformanceMetricsService metrics,
         PauseTokenRegistry pauseTokens,
-        IEnumerable<INodeHandler> handlers)
+        IEnumerable<INodeHandler> handlers,
+        IStateRepository stateRepository)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
@@ -52,6 +56,7 @@ public class WorkflowRunner
         _metrics = metrics;
         _pauseTokens = pauseTokens;
         _handlers = handlers.ToDictionary(h => h.NodeType, h => h);
+        _stateRepository = stateRepository;
     }
 
     /// <summary>
@@ -176,12 +181,33 @@ public class WorkflowRunner
             await FailExecution(dbContext, execution, $"İptal edildi ({sw.ElapsedMilliseconds}ms)");
             _logStream.Complete(executionId);
         }
+        catch (SuspendExecutionException ex)
+        {
+            sw.Stop();
+            using var repoScope = _serviceProvider.CreateScope();
+            var stateRepo = repoScope.ServiceProvider.GetRequiredService<IStateRepository>();
+            await stateRepo.SaveCheckpointAsync(
+                execution.Id, 
+                ex.NodeId, 
+                null, 
+                JsonDocument.Parse(JsonSerializer.Serialize(memory)), 
+                "Suspended"
+            );
+            
+            await UpdateExecutionStatusAsync(dbContext, execution, ExecutionStatus.Paused, cancellationToken);
+            await WriteLog(dbContext, execution, ex.NodeId, LogLevel.Info, $"Workflow duraklatıldı: {ex.Message}");
+            _logStream.Complete(executionId);
+        }
         catch (Exception ex)
         {
             sw.Stop();
             _metrics.RecordWorkflowFailed(execution.WorkflowId, ex.Message, sw.ElapsedMilliseconds);
             var statsUpdater = scope.ServiceProvider.GetRequiredService<WorkflowStatsUpdater>();
             await statsUpdater.RecordExecutionAsync(execution.WorkflowId, false, sw.ElapsedMilliseconds);
+            
+            // Rollback/Saga pattern tetikle
+            await ExecuteRollbackAsync(dbContext, execution, memory, cancellationToken);
+            
             // Otomatik snapshot al
             var snapshotSvc = scope.ServiceProvider.GetRequiredService<SnapshotService>();
             await snapshotSvc.TakeAutomaticAsync(executionId, execution.CurrentNodeId, memory);
@@ -211,6 +237,98 @@ public class WorkflowRunner
                     _logger.LogError(handlerEx, "Global Error Workflow tetiklenirken hata oluştu.");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Duraklatılmış bir Execution'ı (veya hata almış) bir Checkpoint noktasından itibaren devam ettirir.
+    /// </summary>
+    public async Task ResumeAsync(Guid executionId, Guid nodeId, CancellationToken cancellationToken = default)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
+        var stateRepo = scope.ServiceProvider.GetRequiredService<IStateRepository>();
+
+        var execution = await dbContext.Executions
+            .Include(e => e.Workflow)
+            .FirstOrDefaultAsync(e => e.Id == executionId, cancellationToken);
+            
+        if (execution == null || (execution.Status != ExecutionStatus.Paused && execution.Status != ExecutionStatus.Failed))
+        {
+            _logger.LogWarning("Execution ({ExecutionId}) devam ettirilemez durumda: {Status}", executionId, execution?.Status);
+            return;
+        }
+
+        var checkpoint = await stateRepo.GetCheckpointAsync(executionId, nodeId) ?? await stateRepo.GetLatestCheckpointAsync(executionId);
+        if (checkpoint == null) 
+        {
+            _logger.LogError("Checkpoint bulunamadı: {ExecutionId}", executionId);
+            return;
+        }
+
+        var workflow = execution.Workflow;
+        var graph = JsonSerializer.Deserialize<WorkflowGraphDto>(workflow.GraphData!.RootElement.GetRawText());
+        var node = graph?.Nodes.FirstOrDefault(n => n.Id == checkpoint.NodeId);
+        if (node == null)
+            return;
+
+        var memory = checkpoint.ExecutionMemory != null 
+            ? JsonSerializer.Deserialize<Dictionary<string, object?>>(checkpoint.ExecutionMemory.RootElement.GetRawText()) ?? []
+            : new Dictionary<string, object?>();
+
+        var visitedNodes = new HashSet<Guid>();
+        
+        await UpdateExecutionStatusAsync(dbContext, execution, ExecutionStatus.Running, cancellationToken);
+        await WriteLog(dbContext, execution, node.Id, LogLevel.Info, $"Workflow devam ettiriliyor: {workflow.Name} ({node.Name})");
+        
+        var sw = Stopwatch.StartNew();
+        try 
+        {
+            // Belirtilen node'dan tekrar başlat
+            await ExecuteNodeChainAsync(dbContext, execution, graph!, node, null, memory, visitedNodes, cancellationToken);
+            
+            sw.Stop();
+            await _dbLock.WaitAsync(cancellationToken);
+            try
+            {
+                execution.Status = ExecutionStatus.Completed;
+                execution.CompletedAt = DateTime.UtcNow;
+                execution.Memory = JsonDocument.Parse(JsonSerializer.Serialize(memory));
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            finally
+            {
+                _dbLock.Release();
+            }
+
+            _metrics.RecordWorkflowCompleted(execution.WorkflowId, sw.ElapsedMilliseconds);
+            await WriteLog(dbContext, execution, null, LogLevel.Info, $"Workflow tamamlandı ({sw.ElapsedMilliseconds}ms)");
+            _logStream.Complete(executionId);
+        }
+        catch (SuspendExecutionException ex)
+        {
+            sw.Stop();
+            await stateRepo.SaveCheckpointAsync(
+                execution.Id, 
+                ex.NodeId, 
+                null, 
+                JsonDocument.Parse(JsonSerializer.Serialize(memory)), 
+                "Suspended"
+            );
+            
+            await UpdateExecutionStatusAsync(dbContext, execution, ExecutionStatus.Paused, cancellationToken);
+            await WriteLog(dbContext, execution, ex.NodeId, LogLevel.Info, $"Workflow duraklatıldı: {ex.Message}");
+            _logStream.Complete(executionId);
+        }
+        catch(Exception ex)
+        {
+            sw.Stop();
+            
+            // Rollback/Saga pattern tetikle
+            await ExecuteRollbackAsync(dbContext, execution, memory, cancellationToken);
+            
+            await FailExecution(dbContext, execution, ex.Message);
+            _logStream.Complete(executionId);
         }
     }
 
@@ -395,6 +513,16 @@ public class WorkflowRunner
                     Log = (msg, level, data) =>
                     {
                         pendingLogs.Add((msg, level, data));
+                    },
+                    RegisterCompensation = (compensation) =>
+                    {
+                        var compListStr = memory.TryGetValue("__compensating_actions", out var cl) ? cl?.ToString() : null;
+                        var compList = string.IsNullOrEmpty(compListStr) 
+                            ? new List<CompensatingAction>() 
+                            : JsonSerializer.Deserialize<List<CompensatingAction>>(compListStr) ?? new List<CompensatingAction>();
+                        
+                        compList.Add(compensation);
+                        memory["__compensating_actions"] = JsonSerializer.Serialize(compList);
                     }
                 };
 
@@ -564,6 +692,78 @@ public class WorkflowRunner
         }
 
         await WriteLog(dbContext, execution, null, LogLevel.Error, $"Workflow başarısız: {error}");
+    }
+
+    private async Task ExecuteRollbackAsync(
+        SonOfAntonDbContext dbContext,
+        ExecutionEntity execution,
+        Dictionary<string, object?> memory,
+        CancellationToken cancellationToken)
+    {
+        if (!memory.TryGetValue("__compensating_actions", out var actionsObj)) return;
+        
+        var compListStr = actionsObj?.ToString();
+        if (string.IsNullOrEmpty(compListStr)) return;
+        
+        var actions = JsonSerializer.Deserialize<List<CompensatingAction>>(compListStr);
+        if (actions == null || actions.Count == 0) return;
+        
+        actions.Reverse(); // LIFO Order
+        
+        await WriteLog(dbContext, execution, null, LogLevel.Warning, "Saga Rollback başlatıldı. Telafi adımları çalıştırılıyor.");
+        
+        foreach (var action in actions)
+        {
+            if (!_handlers.TryGetValue(action.TargetNodeType, out var handler)) continue;
+            
+            await WriteLog(dbContext, execution, action.OriginalNodeId, LogLevel.Info, 
+                $"Geri alma işlemi (Rollback) çalıştırılıyor: {action.TargetNodeType}");
+                
+            var mockNode = new WorkflowNodeDto 
+            { 
+               Id = Guid.NewGuid(), 
+               Type = action.TargetNodeType, 
+               Name = "Rollback",
+               Parameters = action.Parameters
+            };
+            
+            var pendingLogs = new List<(string msg, LogLevel level, object? data)>();
+            var context = new NodeExecutionContext
+            {
+                ExecutionId = execution.Id,
+                Node = mockNode,
+                InputData = null,
+                Memory = memory,
+                CancellationToken = cancellationToken,
+                Log = (msg, level, data) => pendingLogs.Add((msg, level, data))
+            };
+            
+            try 
+            {
+                var result = await handler.ExecuteAsync(context);
+                
+                foreach (var (msg, level, data) in pendingLogs)
+                    await WriteLog(dbContext, execution, action.OriginalNodeId, level, msg, data);
+
+                if (!result.Success) 
+                {
+                   await WriteLog(dbContext, execution, action.OriginalNodeId, LogLevel.Error, $"Rollback adımında hata: {result.Error}");
+                }
+                else
+                {
+                   await WriteLog(dbContext, execution, action.OriginalNodeId, LogLevel.Info, "Rollback adımı başarıyla tamamlandı.");
+                }
+            } 
+            catch (Exception ex) 
+            {
+                foreach (var (msg, level, data) in pendingLogs)
+                    await WriteLog(dbContext, execution, action.OriginalNodeId, level, msg, data);
+
+                await WriteLog(dbContext, execution, action.OriginalNodeId, LogLevel.Error, $"Rollback adımında istisna: {ex.Message}");
+            }
+        }
+        
+        await WriteLog(dbContext, execution, null, LogLevel.Warning, "Saga Rollback tamamlandı.");
     }
 }
 

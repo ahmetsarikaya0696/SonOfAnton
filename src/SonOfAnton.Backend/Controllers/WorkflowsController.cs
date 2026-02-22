@@ -532,6 +532,23 @@ public class WorkflowsController : ControllerBase
     }
 
     /// <summary>
+    /// Execution'ı kaldığı Node'dan devam ettir (Saga/Checkpoint)
+    /// </summary>
+    [HttpPost("execution/{executionId:guid}/resume-from-node/{nodeId:guid}")]
+    public async Task<IActionResult> ResumeExecutionFromNode(Guid executionId, Guid nodeId, [FromServices] WorkflowJobService jobService)
+    {
+        var execution = await _dbContext.Executions.FindAsync(executionId);
+        if (execution == null) return NotFound();
+
+        if (execution.Status != ExecutionStatus.Failed && execution.Status != ExecutionStatus.Paused)
+            return BadRequest(new { error = "Sadece Failed veya Paused durumundaki execution'lar bu noktadan devam ettirilebilir." });
+
+        jobService.ResumeWorkflow(execution.WorkflowId, executionId, nodeId);
+
+        return Ok(new { message = "Execution resumption enqueued" });
+    }
+
+    /// <summary>
     /// Execution snapshot al
     /// </summary>
     [HttpPost("execution/{executionId:guid}/snapshot")]

@@ -28,6 +28,7 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<WebhookEntity> Webhooks => Set<WebhookEntity>();
     public DbSet<FolderEntity> Folders => Set<FolderEntity>();
     public DbSet<ExecutionSnapshotEntity> ExecutionSnapshots => Set<ExecutionSnapshotEntity>();
+    public DbSet<ExecutionCheckpointEntity> ExecutionCheckpoints => Set<ExecutionCheckpointEntity>();
     public DbSet<ChatHistoryEntity> ChatHistory => Set<ChatHistoryEntity>();
     public DbSet<WorkflowRevisionEntity> WorkflowRevisions => Set<WorkflowRevisionEntity>();
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
@@ -406,6 +407,29 @@ public class SonOfAntonDbContext : DbContext
 
             entity.HasOne(e => e.Execution)
                 .WithMany(e => e.Snapshots)
+                .HasForeignKey(e => e.ExecutionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Execution Checkpoints
+        modelBuilder.Entity<ExecutionCheckpointEntity>(entity =>
+        {
+            entity.ToTable("execution_checkpoints");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ExecutionId).HasColumnName("execution_id");
+            entity.Property(e => e.NodeId).HasColumnName("node_id");
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(50);
+            entity.Property(e => e.VariablesJson).HasColumnName("variables_json").HasColumnType("jsonb");
+            entity.Property(e => e.ExecutionMemory).HasColumnName("execution_memory").HasColumnType("jsonb");
+            entity.Property(e => e.RetryCount).HasColumnName("retry_count").HasDefaultValue(0);
+            entity.Property(e => e.Timestamp).HasColumnName("timestamp");
+
+            entity.HasIndex(e => e.ExecutionId);
+            entity.HasIndex(e => e.NodeId);
+
+            entity.HasOne(e => e.Execution)
+                .WithMany(e => e.Checkpoints)
                 .HasForeignKey(e => e.ExecutionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

@@ -466,6 +466,97 @@ public partial class WorkflowJobService
         }
         return result;
     }
+
+    /// <summary>
+    /// Workflow'u duraklatıldığı yerden (checkpoint) devam ettirir
+    /// </summary>
+    public string ResumeWorkflow(Guid workflowId, Guid executionId, Guid nodeId)
+    {
+        _sseEventService.CreateChannel(executionId);
+        
+        var jobId = BackgroundJob.Enqueue(() => ResumeWorkflowJobAsync(
+            workflowId, 
+            executionId,
+            nodeId,
+            CancellationToken.None));
+        
+        _logger.LogInformation(
+            "Workflow resume enqueue edildi: {WorkflowId}, ExecutionId: {ExecutionId}, NodeId: {NodeId}, JobId: {JobId}", 
+            workflowId, executionId, nodeId, jobId);
+        
+        return executionId.ToString();
+    }
+
+    /// <summary>
+    /// Workflow resume işlemi (Hangfire tarafından çağrılır)
+    /// </summary>
+    [AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 30, 60, 300 })]
+    [Queue("workflows")]
+    public async Task ResumeWorkflowJobAsync(
+        Guid workflowId,
+        Guid executionId,
+        Guid nodeId,
+        CancellationToken cancellationToken)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var nodesExecuted = 0;
+        
+        try
+        {
+            _sseEventService.CreateChannel(executionId);
+            
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
+            var workflowRunner = scope.ServiceProvider.GetRequiredService<WorkflowRunner>();
+            
+            await _sseEventService.PublishLogAsync(
+                executionId, null, "info",
+                $"Workflow resume başlıyor: {workflowId}");
+            
+            await workflowRunner.ResumeAsync(executionId, nodeId, cancellationToken);
+            
+            sw.Stop();
+            
+            var completedExecution = await dbContext.Executions.FindAsync([executionId], cancellationToken);
+            var success = completedExecution?.Status == SonOfAnton.Shared.Enums.ExecutionStatus.Completed;
+            var error = completedExecution?.ErrorMessage;
+            
+            nodesExecuted = await dbContext.ExecutionLogs
+                .CountAsync(l => l.ExecutionId == executionId 
+                    && l.Message.Contains("Node çalıştırılıyor"), cancellationToken);
+            
+            await _sseEventService.PublishWorkflowCompletedAsync(
+                executionId,
+                success,
+                error,
+                sw.Elapsed,
+                nodesExecuted);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            
+            _logger.LogError(ex,
+                "Workflow resume hatası: {WorkflowId}, ExecutionId: {ExecutionId}", 
+                workflowId, executionId);
+            
+            await _sseEventService.PublishWorkflowCompletedAsync(
+                executionId,
+                false,
+                ex.Message,
+                sw.Elapsed,
+                nodesExecuted);
+            
+            throw;
+        }
+        finally
+        {
+            _ = Task.Delay(5000, CancellationToken.None).ContinueWith(_ => 
+            {
+                _sseEventService.CompleteChannel(executionId);
+            });
+        }
+    }
 }
 
 /// <summary>

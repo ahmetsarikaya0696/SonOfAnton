@@ -400,6 +400,9 @@ builder.Services.AddScoped<HybridSearchService>();
 // Snapshot Service
 builder.Services.AddScoped<SnapshotService>();
 
+// State Recovery Repository
+builder.Services.AddScoped<SonOfAnton.Backend.Services.State.IStateRepository, SonOfAnton.Backend.Services.State.WorkflowStateRepository>();
+
 // Pause/Resume Registry (Singleton)
 builder.Services.AddSingleton<PauseTokenRegistry>();
 

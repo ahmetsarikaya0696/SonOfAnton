@@ -96,6 +96,7 @@ public class ExecutionEntity
 
     public ICollection<ExecutionLogEntity> Logs { get; set; } = [];
     public ICollection<ExecutionSnapshotEntity> Snapshots { get; set; } = [];
+    public ICollection<ExecutionCheckpointEntity> Checkpoints { get; set; } = [];
 }
 
 /// <summary>
@@ -230,5 +231,39 @@ public class WorkflowRevisionEntity
     
     // Navigation
     public WorkflowEntity Workflow { get; set; } = null!;
+}
+
+/// <summary>
+/// Execution Checkpoint — for resuming an execution after suspension or failure
+/// </summary>
+public class ExecutionCheckpointEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    
+    public Guid ExecutionId { get; set; }
+    
+    public Guid NodeId { get; set; }
+    
+    /// <summary>
+    /// Durum (Suspended, Failed, vs)
+    /// </summary>
+    public string Status { get; set; } = "Suspended";
+    
+    /// <summary>
+    /// O anki node'a ait lokal scope değişkenleri veya JSON state
+    /// </summary>
+    public JsonDocument? VariablesJson { get; set; }
+    
+    /// <summary>
+    /// O anki Execution belleği (tüm payload)
+    /// </summary>
+    public JsonDocument? ExecutionMemory { get; set; }
+    
+    public int RetryCount { get; set; } = 0;
+    
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    
+    // Navigation
+    public ExecutionEntity Execution { get; set; } = null!;
 }
 

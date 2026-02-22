@@ -5,8 +5,10 @@ namespace SonOfAnton.Shared.Models;
 /// </summary>
 public static class NodeRegistry
 {
-    public static List<NodeDefinition> GetAllNodes() =>
-    [
+    public static List<NodeDefinition> GetAllNodes()
+    {
+        var nodes = new List<NodeDefinition>
+        {
         // Tetikleyiciler
         new NodeDefinition
         {
@@ -645,7 +647,42 @@ public static class NodeRegistry
             Color = "#fab387",
             Inputs = [new NodePort { Name = "input", Type = "any" }]
         }
-    ];
+        };
+
+        // Standart hata yönetimi (Retry, Timeout) parametrelerini tüm nodelara ekle
+        foreach (var node in nodes)
+        {
+            if (node.Category == "Tetikleyiciler" || node.Type.StartsWith("trigger.")) continue;
+
+            node.Parameters.Add(new NodeParameter
+            {
+                Name = "retries",
+                DisplayName = "Tekrar Deneme Sınırı",
+                Type = "number",
+                DefaultValue = 0,
+                Placeholder = "Örn: 3"
+            });
+            
+            node.Parameters.Add(new NodeParameter
+            {
+                Name = "timeout",
+                DisplayName = "Zaman Aşımı (ms)",
+                Type = "number",
+                DefaultValue = 30000,
+                Placeholder = "Örn: 30000"
+            });
+
+            node.Parameters.Add(new NodeParameter
+            {
+                Name = "continueOnError",
+                DisplayName = "Hatada Devam Et",
+                Type = "boolean",
+                DefaultValue = false
+            });
+        }
+
+        return nodes;
+    }
 
     public static Dictionary<string, List<NodeDefinition>> GetNodesByCategory()
     {

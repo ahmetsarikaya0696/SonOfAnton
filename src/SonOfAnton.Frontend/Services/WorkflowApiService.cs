@@ -191,6 +191,12 @@ public class WorkflowApiService
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task ResumeExecutionFromNodeAsync(Guid executionId, Guid nodeId)
+    {
+        var response = await _httpClient.PostAsync($"api/workflows/execution/{executionId}/resume-from-node/{nodeId}", null);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task StepExecutionAsync(Guid executionId)
     {
         var response = await _httpClient.PostAsync($"api/workflows/execution/{executionId}/step", null);

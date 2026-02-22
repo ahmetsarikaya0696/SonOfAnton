@@ -33,9 +33,14 @@ public class NodeExecutionContext
     public CancellationToken CancellationToken { get; set; }
     
     /// <summary>
-    /// Log yazmak i�in callback
+    /// Log yazmak iin callback
     /// </summary>
     public required Action<string, Shared.Enums.LogLevel, object?> Log { get; init; }
+    
+    /// <summary>
+    /// Saga / Compensating action kaydetmek için delegate
+    /// </summary>
+    public Action<CompensatingAction>? RegisterCompensation { get; init; }
 }
 
 /// <summary>
@@ -48,7 +53,7 @@ public class NodeExecutionResult
     public string? Error { get; init; }
     
     /// <summary>
-    /// Hangi port'tan ��k�� yap�lacak (if/switch gibi node'lar i�in)
+    /// Hangi port'tan k yaplacak (if/switch gibi node'lar iin)
     /// </summary>
     public string OutputPort { get; init; } = "output";
     
@@ -60,13 +65,23 @@ public class NodeExecutionResult
 }
 
 /// <summary>
-/// Node handler aray�z� - Strategy Pattern
-/// Her node tipi i�in bir implementasyon
+/// Saga pattern için telafi işlemi (Compensating action) tanımı
+/// </summary>
+public class CompensatingAction
+{
+    public Guid OriginalNodeId { get; set; }
+    public string TargetNodeType { get; set; } = string.Empty;
+    public Dictionary<string, object?> Parameters { get; set; } = [];
+}
+
+/// <summary>
+/// Node handler arayz - Strategy Pattern
+/// Her node tipi iin bir implementasyon
 /// </summary>
 public interface INodeHandler
 {
     /// <summary>
-    /// Bu handler'�n i�leyece�i node tipi
+    /// Bu handler'n ileyecei node tipi
     /// </summary>
     string NodeType { get; }
     

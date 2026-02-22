@@ -26,6 +26,12 @@
                         <Icon Name="play" Size="14" /> Devam Et
                     </button>
                 }
+                @if (_execution.Status == ExecutionStatus.Failed && _execution.CurrentNodeId.HasValue)
+                {
+                    <button class="btn-action primary" @onclick="ResumeFromFailedNode">
+                        <Icon Name="rotate-cw" Size="14" /> Kaldığı Yerden Devam Et
+                    </button>
+                }
             </div>
         }
     </header>
@@ -180,6 +186,22 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Devam hatası: {ex.Message}");
+        }
+    }
+
+    private async Task ResumeFromFailedNode()
+    {
+        if (!_execution?.CurrentNodeId.HasValue ?? true) return;
+        
+        try
+        {
+            await ApiService.ResumeExecutionFromNodeAsync(ExecutionIdParam, _execution!.CurrentNodeId!.Value);
+            await Task.Delay(500); // Give Hangfire a moment
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Kaldığı yerden devam hatası: {ex.Message}");
         }
     }
 

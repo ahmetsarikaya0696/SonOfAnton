@@ -52,8 +52,15 @@
         }
         else if (Node.IsCompleted)
         {
-            <div class="execution-indicator @(Node.IsSuccess ? "success" : "failure")">
-                <Icon Name="@(Node.IsSuccess ? "check" : "x")" Size="12" />
+            var isSuccess = Node.IsSuccess;
+            <div class="execution-indicator @(isSuccess ? "success" : "failure")">
+                <Icon Name="@(isSuccess ? "check" : "x")" Size="12" />
+            </div>
+        }
+        else if (Node.IsSuspended)
+        {
+            <div class="execution-indicator suspended">
+                <Icon Name="pause-circle" Size="12" />
             </div>
         }
         
@@ -82,6 +89,8 @@
     {
         if (Node.IsExecuting) return "executing";
         if (Node.IsCompleted) return Node.IsSuccess ? "completed-success" : "completed-failure";
+        if (Node.IsSuspended) return "suspended";
+        if (Node.IsDisabled) return "disabled";
         return "";
     }
 

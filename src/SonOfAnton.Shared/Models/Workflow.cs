@@ -85,6 +85,7 @@ public enum NodeStatus
     Running,
     Success,
     Error,
+    Suspended,
     Disabled
 }
 

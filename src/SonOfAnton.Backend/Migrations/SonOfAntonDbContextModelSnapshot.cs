@@ -236,6 +236,54 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("custom_node_definitions", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionCheckpointEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ExecutionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_id");
+
+                    b.Property<JsonDocument>("ExecutionMemory")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("execution_memory");
+
+                    b.Property<Guid>("NodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("node_id");
+
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("retry_count");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<JsonDocument>("VariablesJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("variables_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId");
+
+                    b.HasIndex("NodeId");
+
+                    b.ToTable("execution_checkpoints", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1148,6 +1196,17 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionCheckpointEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.ExecutionEntity", "Execution")
+                        .WithMany("Checkpoints")
+                        .HasForeignKey("ExecutionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Execution");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
@@ -1361,6 +1420,8 @@ namespace SonOfAnton.Backend.Migrations
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionEntity", b =>
                 {
+                    b.Navigation("Checkpoints");
+
                     b.Navigation("Logs");
 
                     b.Navigation("Snapshots");

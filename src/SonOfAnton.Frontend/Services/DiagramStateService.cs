@@ -444,6 +444,8 @@ public class WorkflowNodeModel : NodeModel
     public bool IsExecuting { get; set; }
     public bool IsCompleted { get; set; }
     public bool IsSuccess { get; set; }
+    public bool IsSuspended { get; set; }
+    public bool IsDisabled { get; set; }
     public string? InlineOutput { get; set; }
     public string? ErrorMessage { get; set; }
 
