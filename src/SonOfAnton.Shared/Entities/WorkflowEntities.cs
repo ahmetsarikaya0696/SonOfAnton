@@ -267,3 +267,46 @@ public class ExecutionCheckpointEntity
     public ExecutionEntity Execution { get; set; } = null!;
 }
 
+/// <summary>
+/// Data Store — workflow'lar arası paylaşılan Key-Value/JSON depolama alanı
+/// Make.com benzeri, SQL bilgisi gerektirmeden durum (state) tutma
+/// </summary>
+public class DataStoreEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "Yeni Depo";
+    public string? Description { get; set; }
+    
+    /// <summary>Ait olduğu tenant</summary>
+    public string? TenantId { get; set; }
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation
+    public TenantEntity? Tenant { get; set; }
+    public ICollection<DataStoreEntryEntity> Entries { get; set; } = [];
+}
+
+/// <summary>
+/// Data Store Entry — tek bir Key-Value kaydı (JSON değer)
+/// </summary>
+public class DataStoreEntryEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    
+    public Guid DataStoreId { get; set; }
+    
+    /// <summary>Benzersiz anahtar (store içinde)</summary>
+    public string Key { get; set; } = string.Empty;
+    
+    /// <summary>JSON değer</summary>
+    public JsonDocument? Value { get; set; }
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation
+    public DataStoreEntity DataStore { get; set; } = null!;
+}
+

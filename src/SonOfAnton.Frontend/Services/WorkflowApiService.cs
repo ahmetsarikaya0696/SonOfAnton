@@ -351,5 +351,50 @@ public class WorkflowApiService
     }
 
     #endregion
+
+    #region Data Stores
+
+    public async Task<List<DataStoreDto>> GetDataStoresAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<DataStoreDto>>("api/datastores") ?? [];
+    }
+
+    public async Task<DataStoreDto?> GetDataStoreAsync(Guid id)
+    {
+        return await _httpClient.GetFromJsonAsync<DataStoreDto>($"api/datastores/{id}");
+    }
+
+    public async Task<DataStoreDto?> CreateDataStoreAsync(CreateDataStoreRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/datastores", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<DataStoreDto>();
+    }
+
+    public async Task DeleteDataStoreAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"api/datastores/{id}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<DataStoreEntryDto>> GetDataStoreEntriesAsync(Guid storeId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<DataStoreEntryDto>>($"api/datastores/{storeId}/entries") ?? [];
+    }
+
+    public async Task<DataStoreEntryDto?> SetDataStoreEntryAsync(Guid storeId, SetDataStoreEntryRequest request)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/datastores/{storeId}/entries", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<DataStoreEntryDto>();
+    }
+
+    public async Task DeleteDataStoreEntryAsync(Guid storeId, string key)
+    {
+        var response = await _httpClient.DeleteAsync($"api/datastores/{storeId}/entries/{Uri.EscapeDataString(key)}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    #endregion
 }
 

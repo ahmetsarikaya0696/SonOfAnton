@@ -16,6 +16,7 @@ using SonOfAnton.Backend.Infrastructure.Embeddings;
 using SonOfAnton.Backend.Infrastructure.VectorDatabase;
 using SonOfAnton.Backend.Orchestrator;
 using SonOfAnton.Backend.Services;
+using SonOfAnton.Backend.Services.DataStore;
 using SonOfAnton.Backend.Services.Search;
 using SonOfAnton.Backend.Services.Snapshots;
 using SonOfAnton.Shared.Core.GraphEngine;
@@ -426,6 +427,15 @@ builder.Services.AddScoped<INodeHandler, CustomNodeHandler>();
 builder.Services.AddScoped<CustomNodeService>();
 builder.Services.AddScoped<MarketplaceService>();
 builder.Services.AddSingleton<PluginLoaderService>();
+
+// Data Store Service
+builder.Services.AddScoped<IDataStoreService, DataStoreService>();
+
+// Data Store Node Handlers
+builder.Services.AddScoped<INodeHandler, StateSetHandler>();
+builder.Services.AddScoped<INodeHandler, StateGetHandler>();
+builder.Services.AddScoped<INodeHandler, StateDeleteHandler>();
+builder.Services.AddScoped<INodeHandler, StateGetAllHandler>();
 
 // Workflow API Publishing Service
 builder.Services.AddScoped<WorkflowApiService>();

@@ -646,6 +646,72 @@ public static class NodeRegistry
             Description = "Sonraki iterasyona atla",
             Color = "#fab387",
             Inputs = [new NodePort { Name = "input", Type = "any" }]
+        },
+
+        // Veri Deposu (Data Store — SQL-free Key-Value/JSON)
+        new NodeDefinition
+        {
+            Type = "state.set",
+            Name = "State Kaydet",
+            Icon = "save",
+            Category = "Veri Deposu",
+            Description = "Key-Value çifti kaydet (upsert)",
+            Color = "#a6e3a1",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "storeName", DisplayName = "Depo Adı", Type = "string", Required = true, Placeholder = "my-store" },
+                new NodeParameter { Name = "key", DisplayName = "Anahtar", Type = "string", Required = true, Placeholder = "user_count" },
+                new NodeParameter { Name = "value", DisplayName = "Değer (JSON)", Type = "json", Placeholder = "{}" }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "state.get",
+            Name = "State Oku",
+            Icon = "download",
+            Category = "Veri Deposu",
+            Description = "Key'e göre değer oku",
+            Color = "#89b4fa",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "storeName", DisplayName = "Depo Adı", Type = "string", Required = true, Placeholder = "my-store" },
+                new NodeParameter { Name = "key", DisplayName = "Anahtar", Type = "string", Required = true, Placeholder = "user_count" }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "state.delete",
+            Name = "State Sil",
+            Icon = "trash-2",
+            Category = "Veri Deposu",
+            Description = "Key'e göre değer sil",
+            Color = "#f38ba8",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "storeName", DisplayName = "Depo Adı", Type = "string", Required = true, Placeholder = "my-store" },
+                new NodeParameter { Name = "key", DisplayName = "Anahtar", Type = "string", Required = true, Placeholder = "user_count" }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "state.getall",
+            Name = "Tüm State'leri Oku",
+            Icon = "list",
+            Category = "Veri Deposu",
+            Description = "Depo'daki tüm Key-Value çiftlerini getir",
+            Color = "#cba6f7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "storeName", DisplayName = "Depo Adı", Type = "string", Required = true, Placeholder = "my-store" }
+            ]
         }
         };
 

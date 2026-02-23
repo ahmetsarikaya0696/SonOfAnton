@@ -34,6 +34,10 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     public DbSet<WorkflowApiEndpointEntity> WorkflowApiEndpoints => Set<WorkflowApiEndpointEntity>();
 
+    // ─── Data Stores ─────────────────────────────────────────────
+    public DbSet<DataStoreEntity> DataStores => Set<DataStoreEntity>();
+    public DbSet<DataStoreEntryEntity> DataStoreEntries => Set<DataStoreEntryEntity>();
+
     // ─── Custom Nodes & Marketplace ──────────────────────────────
     public DbSet<CustomNodeDefinitionEntity> CustomNodeDefinitions => Set<CustomNodeDefinitionEntity>();
     public DbSet<MarketplaceItemEntity> MarketplaceItems => Set<MarketplaceItemEntity>();
@@ -574,6 +578,46 @@ public class SonOfAntonDbContext : DbContext
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Data Stores ─────────────────────────────────────────────
+        modelBuilder.Entity<DataStoreEntity>(entity =>
+        {
+            entity.ToTable("data_stores");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DataStoreEntryEntity>(entity =>
+        {
+            entity.ToTable("data_store_entries");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DataStoreId).HasColumnName("data_store_id");
+            entity.Property(e => e.Key).HasColumnName("key").HasMaxLength(500).IsRequired();
+            entity.Property(e => e.Value).HasColumnName("value").HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => new { e.DataStoreId, e.Key }).IsUnique();
+
+            entity.HasOne(e => e.DataStore)
+                .WithMany(s => s.Entries)
+                .HasForeignKey(e => e.DataStoreId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

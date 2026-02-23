@@ -396,3 +396,37 @@ public class WorkflowRevisionDto
     public WorkflowGraphDto? Graph { get; set; }
 }
 
+// ─── Data Store DTOs ───────────────────────────────────────────
+
+public class DataStoreDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? TenantId { get; set; }
+    public int EntryCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class DataStoreEntryDto
+{
+    public Guid Id { get; set; }
+    public string Key { get; set; } = string.Empty;
+    public object? Value { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class CreateDataStoreRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+
+public class SetDataStoreEntryRequest
+{
+    public string Key { get; set; } = string.Empty;
+    public object? Value { get; set; }
+}
+
