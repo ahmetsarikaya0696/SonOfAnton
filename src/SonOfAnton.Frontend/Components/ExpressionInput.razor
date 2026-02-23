@@ -1,0 +1,320 @@
+@using SonOfAnton.Shared.Models
+@inject IJSRuntime JS
+@inject WorkflowApiService ApiService
+@implements IAsyncDisposable
+
+<div class="expression-input-wrapper">
+    <div class="expression-editor @(_isExprMode ? "expr-mode" : "") @(_validationState)"
+         @ref="_editorRef"
+         contenteditable="true"
+         spellcheck="false"
+         data-placeholder="@Placeholder"></div>
+
+    @if (_showTooltip && _currentFunction != null)
+    {
+        <div class="expr-tooltip" style="left: @(_popupX)px; top: @(_popupY)px;">
+            <div class="tooltip-name">@_currentFunction.Name</div>
+            <div class="tooltip-sig">
+                @{ var sigParams = string.Join("; ", _currentFunction.Parameters.Select(p => p.Required ? p.Name : $"[{p.Name}]")); }
+                @(_currentFunction.Name)(@sigParams)
+            </div>
+            <div class="tooltip-desc">@_currentFunction.Description</div>
+        </div>
+    }
+
+    @if (_showAutocomplete && _filteredFunctions.Count > 0)
+    {
+        <div class="expr-autocomplete" style="left: @(_popupX)px; top: @(_popupY)px;">
+            @{ var grouped = _filteredFunctions.GroupBy(f => f.Category); }
+            @foreach (var group in grouped)
+            {
+                <div class="ac-category">@group.Key</div>
+                @foreach (var func in group)
+                {
+                    var isSelected = func == _selectedSuggestion;
+                    <div class="ac-item @(isSelected ? "selected" : "")"
+                         @onclick="() => SelectFunction(func)"
+                         @onmouseenter="() => _selectedSuggestion = func">
+                        <span class="ac-name">@func.Name</span>
+                        <span class="ac-hint">@func.ReturnType</span>
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_validationError))
+    {
+        <div class="expr-validation-error">
+            ⚠ @_validationError
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public EventCallback<string> OnValueChanged { get; set; }
+
+    private ElementReference _editorRef;
+    private DotNetObjectReference<ExpressionInput>? _dotnetRef;
+    private bool _isExprMode;
+    private string _currentText = "";
+    private int _caretPos;
+
+    // Autocomplete state
+    private bool _showAutocomplete;
+    private bool _showTooltip;
+    private List<InlineFunction> _allFunctions = [];
+    private List<InlineFunction> _filteredFunctions = [];
+    private InlineFunction? _selectedSuggestion;
+    private InlineFunction? _currentFunction;
+    private double _popupX;
+    private double _popupY;
+
+    // Validation state
+    private string _validationState = ""; // "valid", "invalid", ""
+    private string _validationError = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotnetRef = DotNetObjectReference.Create(this);
+
+            // Load functions from API
+            try
+            {
+                _allFunctions = await ApiService.GetExpressionFunctionsAsync();
+            }
+            catch
+            {
+                _allFunctions = [];
+            }
+
+            // Set initial value
+            if (!string.IsNullOrEmpty(Value))
+            {
+                await JS.InvokeVoidAsync("ExpressionInputInterop.setText", _editorRef, Value);
+            }
+
+            // Setup JS event handlers
+            await JS.InvokeVoidAsync("ExpressionInputInterop.setupInputHandler", _editorRef, _dotnetRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnJsInput(string text, int caretPos)
+    {
+        _currentText = text;
+        _caretPos = caretPos;
+        _isExprMode = IsInsideExpression(text, caretPos);
+
+        if (_isExprMode)
+        {
+            var partial = GetPartialFunctionName(text, caretPos);
+            if (partial != null)
+            {
+                _filteredFunctions = _allFunctions
+                    .Where(f => f.Name.StartsWith(partial, StringComparison.OrdinalIgnoreCase))
+                    .Take(12)
+                    .ToList();
+                _showAutocomplete = _filteredFunctions.Count > 0 && partial.Length > 0;
+                _selectedSuggestion = _filteredFunctions.FirstOrDefault();
+
+                // Tooltip: eğer tam fonksiyon adı yazılmışsa imza göster
+                _currentFunction = _allFunctions.FirstOrDefault(f => f.Name.Equals(partial, StringComparison.OrdinalIgnoreCase));
+                _showTooltip = _currentFunction != null && !_showAutocomplete;
+
+                // Popup konumu
+                try
+                {
+                    var pos = await JS.InvokeAsync<PopupPosition>("ExpressionInputInterop.getPopupPosition", _editorRef);
+                    _popupX = pos.X;
+                    _popupY = pos.Y;
+                }
+                catch { }
+            }
+            else
+            {
+                _showAutocomplete = false;
+                _showTooltip = false;
+            }
+
+            // İfade doğrulama
+            await ValidateCurrentExpression(text, caretPos);
+        }
+        else
+        {
+            _showAutocomplete = false;
+            _showTooltip = false;
+            _validationState = "";
+            _validationError = "";
+        }
+
+        // Değeri bildir
+        if (_currentText != Value)
+        {
+            await OnValueChanged.InvokeAsync(_currentText);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task OnJsKeyDown(string key, bool ctrl, bool shift)
+    {
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnJsTab()
+    {
+        if (_showAutocomplete && _selectedSuggestion != null)
+        {
+            await SelectFunction(_selectedSuggestion);
+        }
+    }
+
+    [JSInvokable]
+    public Task OnJsEscape()
+    {
+        _showAutocomplete = false;
+        _showTooltip = false;
+        InvokeAsync(StateHasChanged);
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task<bool> OnJsArrow(int direction)
+    {
+        if (!_showAutocomplete || _filteredFunctions.Count == 0)
+            return Task.FromResult(false);
+
+        var idx = _selectedSuggestion != null ? _filteredFunctions.IndexOf(_selectedSuggestion) : -1;
+        idx += direction;
+        if (idx < 0) idx = _filteredFunctions.Count - 1;
+        if (idx >= _filteredFunctions.Count) idx = 0;
+        _selectedSuggestion = _filteredFunctions[idx];
+        InvokeAsync(StateHasChanged);
+        return Task.FromResult(true);
+    }
+
+    [JSInvokable]
+    public async Task<bool> OnJsEnter()
+    {
+        if (_showAutocomplete && _selectedSuggestion != null)
+        {
+            await SelectFunction(_selectedSuggestion);
+            return true;
+        }
+        return false;
+    }
+
+    private async Task SelectFunction(InlineFunction func)
+    {
+        // Kısmi fonksiyon adını tamamla
+        var partial = GetPartialFunctionName(_currentText, _caretPos);
+        if (partial != null)
+        {
+            var completion = func.Name[partial.Length..] + "(";
+            // Parametre yoksa parantezi kapat
+            if (func.Parameters.Count == 0)
+                completion += ")";
+            await JS.InvokeVoidAsync("ExpressionInputInterop.insertAtCaret", _editorRef, completion);
+        }
+
+        _showAutocomplete = false;
+        _currentFunction = func;
+        _showTooltip = true;
+
+        // Güncel metni al
+        _currentText = await JS.InvokeAsync<string>("ExpressionInputInterop.getText", _editorRef);
+        await OnValueChanged.InvokeAsync(_currentText);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ─── Helpers ───────────────────────────────────────────
+
+    private static bool IsInsideExpression(string text, int caretPos)
+    {
+        // Caret'in {{...}} bloğu içinde olup olmadığını kontrol et
+        var lastOpen = text.LastIndexOf("{{", Math.Min(caretPos, text.Length - 1), StringComparison.Ordinal);
+        if (lastOpen < 0) return false;
+        var closeAfterOpen = text.IndexOf("}}", lastOpen, StringComparison.Ordinal);
+        // Kapanmamış veya caret kapanmadan önce
+        return closeAfterOpen < 0 || closeAfterOpen >= caretPos;
+    }
+
+    private static string? GetPartialFunctionName(string text, int caretPos)
+    {
+        // {{ sonrasından caret'e kadar olan metinden son identifier'ı çıkar
+        var lastOpen = text.LastIndexOf("{{", Math.Min(caretPos, text.Length - 1), StringComparison.Ordinal);
+        if (lastOpen < 0) return null;
+
+        var exprStart = lastOpen + 2;
+        var exprContent = text[exprStart..Math.Min(caretPos, text.Length)];
+
+        // En son yazılan kelimeyi bul
+        var identifier = "";
+        for (int i = exprContent.Length - 1; i >= 0; i--)
+        {
+            var c = exprContent[i];
+            if (char.IsLetterOrDigit(c) || c == '_')
+                identifier = c + identifier;
+            else
+                break;
+        }
+
+        return identifier.Length > 0 ? identifier : null;
+    }
+
+    private async Task ValidateCurrentExpression(string text, int caretPos)
+    {
+        // Tamamlanmış {{...}} blokları bul ve doğrula
+        var start = text.LastIndexOf("{{", Math.Min(caretPos, text.Length - 1), StringComparison.Ordinal);
+        if (start < 0) return;
+
+        var end = text.IndexOf("}}", start, StringComparison.Ordinal);
+        if (end < 0)
+        {
+            _validationState = ""; // Henüz kapatılmamış, doğrulama yapma
+            return;
+        }
+
+        var expr = text[(start + 2)..end].Trim();
+        if (string.IsNullOrEmpty(expr))
+        {
+            _validationState = "";
+            return;
+        }
+
+        try
+        {
+            var result = await ApiService.ValidateExpressionAsync(expr);
+            if (result != null)
+            {
+                _validationState = result.IsValid ? "valid" : "invalid";
+                _validationError = result.Error ?? "";
+            }
+        }
+        catch
+        {
+            _validationState = "";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotnetRef?.Dispose();
+    }
+
+    private record PopupPosition(double X, double Y, double Width);
+
+    // Expression validation sonucu
+    public class ExpressionValidationResult
+    {
+        public bool IsValid { get; set; }
+        public string? Error { get; set; }
+    }
+}

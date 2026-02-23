@@ -51,11 +51,9 @@
                             @switch (param.Type)
                             {
                                 case "string":
-                                    <input type="text" 
-                                           class="param-input"
-                                           placeholder="@param.Placeholder"
-                                           value="@GetParamValue(param.Name)"
-                                           @onchange="(e) => SetParamValue(param.Name, e.Value)" />
+                                    <ExpressionInput Value="@GetParamValue(param.Name)?.ToString()"
+                                                     Placeholder="@param.Placeholder"
+                                                     OnValueChanged="(v) => SetParamValue(param.Name, v)" />
                                     break;
                                     
                                 case "number":

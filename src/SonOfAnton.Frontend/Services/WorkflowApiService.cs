@@ -396,5 +396,27 @@ public class WorkflowApiService
     }
 
     #endregion
+
+    #region Expressions
+
+    public async Task<List<SonOfAnton.Shared.Models.InlineFunction>> GetExpressionFunctionsAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<SonOfAnton.Shared.Models.InlineFunction>>("api/expression/functions") ?? [];
+    }
+
+    public async Task<ExpressionValidationResultDto?> ValidateExpressionAsync(string expression)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/expression/validate", new { Expression = expression });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ExpressionValidationResultDto>();
+    }
+
+    #endregion
+}
+
+public class ExpressionValidationResultDto
+{
+    public bool IsValid { get; set; }
+    public string? Error { get; set; }
 }
 

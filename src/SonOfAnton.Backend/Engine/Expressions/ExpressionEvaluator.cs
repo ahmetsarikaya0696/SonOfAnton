@@ -3,12 +3,16 @@ using System.Text.RegularExpressions;
 namespace SonOfAnton.Backend.Engine.Expressions;
 
 /// <summary>
-/// Template expression evaluator — {{variable}} kalıplarını çözer
+/// Template expression evaluator — {{expression}} kalıplarını çözer
+/// Artık fonksiyon çağrıları, operatörler ve karşılaştırmalar desteklenir:
+///   {{formatDate(now(); "yyyy-MM-dd")}}
+///   {{if(score > 50; "Başarılı"; "Başarısız")}}
+///   {{toUpper(name)}}
 /// </summary>
 public partial class ExpressionEvaluator
 {
     /// <summary>
-    /// Metin içindeki {{...}} ifadelerini VariableStore'dan resolve eder
+    /// Metin içindeki {{...}} ifadelerini parse ederek değerlendirir
     /// </summary>
     public static string Evaluate(string template, VariableStore store)
     {
@@ -17,7 +21,15 @@ public partial class ExpressionEvaluator
         return TemplatePattern().Replace(template, match =>
         {
             var expression = match.Groups[1].Value.Trim();
-            return ResolveExpression(expression, store)?.ToString() ?? match.Value;
+            try
+            {
+                return ResolveExpression(expression, store)?.ToString() ?? match.Value;
+            }
+            catch
+            {
+                // Parse hatası durumunda orijinal ifadeyi koru
+                return match.Value;
+            }
         });
     }
 
@@ -38,41 +50,38 @@ public partial class ExpressionEvaluator
         return resolved;
     }
 
+    /// <summary>
+    /// İfadeyi parse ve evaluate eder (yeni motor)
+    /// </summary>
     private static object? ResolveExpression(string expression, VariableStore store)
     {
-        // $env.KEY — ortam değişkeni
-        if (expression.StartsWith("$env."))
-        {
-            var envKey = expression[5..];
-            return Environment.GetEnvironmentVariable(envKey);
-        }
-
-        // $node.{nodeId}.output.{field} — başka node'un çıktısı
-        if (expression.StartsWith("$node."))
-        {
-            var parts = expression.Split('.');
-            if (parts.Length >= 3)
-            {
-                var nodeKey = $"__node_{parts[1]}_output";
-                var nodeOutput = store.Get(nodeKey);
-                if (parts.Length > 3 && nodeOutput is IDictionary<string, object?> dict)
-                {
-                    return dict.TryGetValue(parts[3], out var fieldValue) ? fieldValue : null;
-                }
-                return nodeOutput;
-            }
-        }
-
-        // $index, $item — loop değişkenleri
-        if (expression.StartsWith('$'))
-        {
-            return store.Get(expression);
-        }
-
-        // Normal değişken
-        return store.Get(expression);
+        var lexer = new ExpressionLexer(expression);
+        var tokens = lexer.Tokenize();
+        var parser = new ExpressionParser(tokens);
+        var ast = parser.Parse();
+        var interpreter = new ExpressionInterpreter(store, FunctionRegistry.Instance);
+        return interpreter.Evaluate(ast);
     }
 
-    [GeneratedRegex(@"\{\{(.+?)\}\}")]
+    /// <summary>
+    /// İfadeyi doğrular — geçersizse hata döner
+    /// </summary>
+    public static (bool IsValid, string? Error) Validate(string expression)
+    {
+        try
+        {
+            var lexer = new ExpressionLexer(expression);
+            var tokens = lexer.Tokenize();
+            var parser = new ExpressionParser(tokens);
+            parser.Parse();
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    [GeneratedRegex(@"\{\{(.+?)\}\}", RegexOptions.Singleline)]
     private static partial Regex TemplatePattern();
 }

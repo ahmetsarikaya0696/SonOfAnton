@@ -1,0 +1,199 @@
+/* ═══════════════════════════════════════════════════════════════
+   Expression Input Component Styles
+   ═══════════════════════════════════════════════════════════════ */
+
+.expression-input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+/* ─── Editor ──────────────────────────────────────────────── */
+
+.expression-editor {
+    width: 100%;
+    min-height: 36px;
+    max-height: 120px;
+    padding: 0.625rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    line-height: 1.5;
+    overflow-y: auto;
+    overflow-x: hidden;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.expression-editor:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.15);
+}
+
+.expression-editor.expr-mode {
+    border-color: var(--accent-color);
+}
+
+.expression-editor.valid {
+    border-color: var(--success-color, #a6e3a1);
+    box-shadow: 0 0 0 2px rgba(166, 227, 161, 0.1);
+}
+
+.expression-editor.invalid {
+    border-color: var(--error-color, #f38ba8);
+    box-shadow: 0 0 0 2px rgba(243, 139, 168, 0.1);
+}
+
+/* Placeholder */
+.expression-editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* ─── Syntax Highlighting Colors ──────────────────────────── */
+
+::deep .expr-bracket {
+    color: #cba6f7; /* Mauve — parantezler */
+    font-weight: 700;
+}
+
+
+::deep .expr-body {
+    color: var(--text-primary);
+}
+
+::deep .expr-func {
+    color: #89b4fa; /* Blue — fonksiyon adları */
+    font-weight: 600;
+}
+
+::deep .expr-string {
+    color: #a6e3a1; /* Green — string literaller */
+}
+
+::deep .expr-number {
+    color: #fab387; /* Peach — sayılar */
+}
+
+::deep .expr-var {
+    color: #f9e2af; /* Yellow — $ değişkenler */
+}
+
+/* ─── Autocomplete Popup ──────────────────────────────────── */
+
+.expr-autocomplete {
+    position: absolute;
+    z-index: 1000;
+    min-width: 220px;
+    max-width: 360px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--bg-secondary, #1e1e2e);
+    border: 1px solid var(--border-color, #45475a);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+    padding: 4px 0;
+    animation: acFadeIn 0.12s ease-out;
+}
+
+@keyframes acFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ac-category {
+    padding: 6px 12px 3px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #6c7086);
+    user-select: none;
+}
+
+.ac-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+    gap: 8px;
+}
+
+.ac-item:hover,
+.ac-item.selected {
+    background: var(--accent-color, #89b4fa);
+    color: var(--bg-primary, #1e1e2e);
+}
+
+.ac-item.selected .ac-hint {
+    color: var(--bg-secondary, #1e1e2e);
+    opacity: 0.7;
+}
+
+.ac-name {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.ac-hint {
+    font-size: 0.6875rem;
+    color: var(--text-muted, #6c7086);
+    flex-shrink: 0;
+}
+
+/* ─── Tooltip (Function Signature) ────────────────────────── */
+
+.expr-tooltip {
+    position: absolute;
+    z-index: 1001;
+    min-width: 200px;
+    max-width: 360px;
+    background: var(--bg-secondary, #1e1e2e);
+    border: 1px solid var(--accent-color, #89b4fa);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    padding: 8px 12px;
+    animation: acFadeIn 0.12s ease-out;
+}
+
+.tooltip-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #89b4fa;
+    margin-bottom: 2px;
+}
+
+.tooltip-sig {
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: #cdd6f4;
+    margin-bottom: 4px;
+    padding: 3px 6px;
+    background: var(--bg-primary, #11111b);
+    border-radius: 4px;
+}
+
+.tooltip-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6c7086);
+}
+
+/* ─── Validation Error ────────────────────────────────────── */
+
+.expr-validation-error {
+    font-size: 0.6875rem;
+    color: var(--error-color, #f38ba8);
+    margin-top: 4px;
+    padding: 3px 6px;
+    background: rgba(243, 139, 168, 0.08);
+    border-radius: 4px;
+    animation: acFadeIn 0.15s ease-out;
+}
