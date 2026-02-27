@@ -441,6 +441,9 @@ builder.Services.AddScoped<INodeHandler, StateGetAllHandler>();
 builder.Services.AddScoped<WorkflowApiService>();
 builder.Services.AddTransient<SonOfAnton.Backend.Services.WorkflowApiDocsTransformer>();
 
+// Workspace Service
+builder.Services.AddScoped<WorkspaceService>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)

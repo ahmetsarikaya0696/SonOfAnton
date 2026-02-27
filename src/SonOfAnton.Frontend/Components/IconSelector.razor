@@ -1,0 +1,71 @@
+<div class="icon-selector @(IsOpen ? "open" : "")" @onclick:stopPropagation="true">
+    <button type="button" class="is-trigger input" @onclick="ToggleDropdown" style="color: var(--text-primary, currentColor); display: inline-flex; width: auto; min-width: 60px;">
+        <div class="is-trigger-content">
+            <Icon Name="@Value" Size="16" />
+        </div>
+        <Icon Name="chevron-down" Size="14" class="is-chevron" />
+    </button>
+
+    @if (IsOpen)
+    {
+        <div class="is-dropdown">
+            <div class="is-search">
+                <input type="text" @bind="SearchQuery" @bind:event="oninput" placeholder="İkon ara..." class="input input-sm" @onclick:stopPropagation="true" />
+            </div>
+            <div class="is-grid">
+                @foreach (var icon in FilteredIcons)
+                {
+                    <div class="is-option @(icon == Value ? "active" : "")" @onclick="() => SelectIcon(icon)">
+                        <Icon Name="@icon" Size="16" />
+                        <span class="is-option-name" title="@icon">@icon</span>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="is-backdrop" @onclick="CloseDropdown"></div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "circle";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    public bool IsOpen { get; set; }
+    public string SearchQuery { get; set; } = "";
+
+    private readonly string[] _icons = [
+        "activity", "alert-circle", "alert-triangle", "arrow-left", "arrow-right", "bar-chart-2",
+        "bot", "box", "box-select", "briefcase", "camera", "check", "check-circle", "chevron-down",
+        "chevron-left", "chevron-right", "circle", "clock", "code", "copy", "corner-up-left",
+        "corner-up-right", "cpu", "database", "download", "edit", "edit-2", "file", "file-text",
+        "filter", "folder", "folder-plus", "git-branch", "git-commit", "git-compare", "git-merge",
+        "git-pull-request", "globe", "help-circle", "history", "inbox", "info", "layers", "link",
+        "list", "mail", "maximize", "message-circle", "message-square", "minus", "minus-circle",
+        "moon", "package", "pause", "play", "play-circle", "plus", "plus-circle", "refresh-cw",
+        "rotate-ccw", "save", "scissors", "search", "send", "settings", "shuffle", "skip-forward",
+        "square", "star", "sticky-note", "store", "sun", "target", "terminal", "trash", "trash-2",
+        "upload", "variable", "webhook", "x", "zap", "zoom-in", "zoom-out"
+    ];
+
+    private IEnumerable<string> FilteredIcons => string.IsNullOrWhiteSpace(SearchQuery) 
+        ? _icons 
+        : _icons.Where(i => i.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleDropdown()
+    {
+        IsOpen = !IsOpen;
+        if (IsOpen) SearchQuery = "";
+    }
+
+    private void CloseDropdown()
+    {
+        IsOpen = false;
+    }
+
+    private async Task SelectIcon(string icon)
+    {
+        Value = icon;
+        IsOpen = false;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

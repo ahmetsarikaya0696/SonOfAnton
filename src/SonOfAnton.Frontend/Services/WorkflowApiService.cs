@@ -412,6 +412,74 @@ public class WorkflowApiService
     }
 
     #endregion
+
+    #region Workspaces
+
+    public async Task<List<WorkspaceDto>> GetWorkspacesAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<WorkspaceDto>>("api/workspaces") ?? [];
+    }
+
+    public async Task<WorkspaceDto?> GetWorkspaceAsync(Guid id)
+    {
+        return await _httpClient.GetFromJsonAsync<WorkspaceDto>($"api/workspaces/{id}");
+    }
+
+    public async Task<WorkspaceDto?> CreateWorkspaceAsync(CreateWorkspaceRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/workspaces", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WorkspaceDto>();
+    }
+
+    public async Task<WorkspaceDto?> UpdateWorkspaceAsync(Guid id, UpdateWorkspaceRequest request)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/workspaces/{id}", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WorkspaceDto>();
+    }
+
+    public async Task DeleteWorkspaceAsync(Guid id)
+    {
+        var response = await _httpClient.DeleteAsync($"api/workspaces/{id}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<WorkspaceMemberDto>> GetWorkspaceMembersAsync(Guid workspaceId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<WorkspaceMemberDto>>($"api/workspaces/{workspaceId}/members") ?? [];
+    }
+
+    public async Task<WorkspaceMemberDto?> AddWorkspaceMemberAsync(Guid workspaceId, AddWorkspaceMemberRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"api/workspaces/{workspaceId}/members", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<WorkspaceMemberDto>();
+    }
+
+    public async Task UpdateWorkspaceMemberRoleAsync(Guid workspaceId, Guid userId, UpdateWorkspaceMemberRequest request)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/workspaces/{workspaceId}/members/{userId}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task RemoveWorkspaceMemberAsync(Guid workspaceId, Guid userId)
+    {
+        var response = await _httpClient.DeleteAsync($"api/workspaces/{workspaceId}/members/{userId}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<FolderTreeDto>> GetWorkspaceFolderTreeAsync(Guid workspaceId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<FolderTreeDto>>($"api/workspaces/{workspaceId}/folders") ?? [];
+    }
+
+    public async Task<List<WorkflowDto>> GetWorkspaceWorkflowsAsync(Guid workspaceId)
+    {
+        return await _httpClient.GetFromJsonAsync<List<WorkflowDto>>($"api/workspaces/{workspaceId}/workflows") ?? [];
+    }
+
+    #endregion
 }
 
 public class ExpressionValidationResultDto

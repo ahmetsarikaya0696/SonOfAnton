@@ -390,3 +390,81 @@
 .stats-floating:hover {
     opacity: 1;
 }
+
+/* Metronic-like Dropdown Style */
+::deep .toolbar-dropdown-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+::deep .ks-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 250px;
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 0.475rem;
+    box-shadow: 0 0 50px 0 rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 0;
+}
+
+::deep .ks-menu-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0 0.5rem;
+}
+
+::deep .ks-menu-content {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+::deep .ks-menu-link {
+    display: flex;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.475rem;
+    color: var(--text-primary);
+    background-color: transparent;
+    border: none;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.2s, background-color 0.2s;
+    gap: 0.75rem;
+    outline: none;
+}
+
+::deep .ks-menu-link:hover, 
+::deep a.ks-menu-link:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--accent-blue);
+    text-decoration: none;
+}
+
+::deep .ks-menu-link svg {
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+::deep .ks-menu-link:hover svg {
+    color: var(--accent-blue);
+}
+
+::deep .ks-separator {
+    display: block;
+    height: 0;
+    border-bottom: 1px solid var(--border-color);
+    margin: 0.5rem 0;
+}

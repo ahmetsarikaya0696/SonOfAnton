@@ -48,8 +48,13 @@ public class WorkflowEntity
     // Folder
     public Guid? FolderId { get; set; }
 
+    // Workspace
+    /// <summary>Workflow'un ait olduğu workspace</summary>
+    public Guid? WorkspaceId { get; set; }
+
     // Navigation
     public FolderEntity? Folder { get; set; }
+    public WorkspaceEntity? Workspace { get; set; }
     public TenantEntity? Tenant { get; set; }
     public UserEntity? CreatedByUser { get; set; }
     public ICollection<ExecutionEntity> Executions { get; set; } = [];
@@ -164,6 +169,8 @@ public class FolderEntity
     public string? Color { get; set; }
     /// <summary>Klasörün ait olduğu tenant</summary>
     public string? TenantId { get; set; }
+    /// <summary>Klasörün ait olduğu workspace</summary>
+    public Guid? WorkspaceId { get; set; }
     public int SortOrder { get; set; }
     public Guid? ParentFolderId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -171,6 +178,7 @@ public class FolderEntity
     // Navigation
     public FolderEntity? ParentFolder { get; set; }
     public TenantEntity? Tenant { get; set; }
+    public WorkspaceEntity? Workspace { get; set; }
     public ICollection<FolderEntity> ChildFolders { get; set; } = [];
     public ICollection<WorkflowEntity> Workflows { get; set; } = [];
 }

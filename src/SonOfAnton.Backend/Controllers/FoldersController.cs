@@ -23,12 +23,17 @@ public class FoldersController : ControllerBase
     }
 
     /// <summary>
-    /// Tüm klasörleri düz liste olarak getir
+    /// Tüm klasörleri düz liste olarak getir (opsiyonel workspace filtresi)
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<List<FolderDto>>> GetAll()
+    public async Task<ActionResult<List<FolderDto>>> GetAll([FromQuery] Guid? workspaceId = null)
     {
-        var folders = await _dbContext.Folders
+        var query = _dbContext.Folders.AsQueryable();
+
+        if (workspaceId.HasValue)
+            query = query.Where(f => f.WorkspaceId == workspaceId.Value);
+
+        var folders = await query
             .OrderBy(f => f.SortOrder)
             .ThenBy(f => f.Name)
             .Select(f => new FolderDto
@@ -48,13 +53,19 @@ public class FoldersController : ControllerBase
     }
 
     /// <summary>
-    /// Klasör ağacını getir (recursive)
+    /// Klasör ağacını getir (recursive, opsiyonel workspace filtresi)
     /// </summary>
     [HttpGet("tree")]
-    public async Task<ActionResult<List<FolderTreeDto>>> GetTree()
+    public async Task<ActionResult<List<FolderTreeDto>>> GetTree([FromQuery] Guid? workspaceId = null)
     {
-        var allFolders = await _dbContext.Folders
+        var query = _dbContext.Folders
             .Include(f => f.Workflows)
+            .AsQueryable();
+
+        if (workspaceId.HasValue)
+            query = query.Where(f => f.WorkspaceId == workspaceId.Value);
+
+        var allFolders = await query
             .OrderBy(f => f.SortOrder)
             .ThenBy(f => f.Name)
             .ToListAsync();
@@ -77,7 +88,8 @@ public class FoldersController : ControllerBase
             Name = request.Name,
             Icon = request.Icon,
             Color = request.Color,
-            ParentFolderId = request.ParentFolderId
+            ParentFolderId = request.ParentFolderId,
+            WorkspaceId = request.WorkspaceId
         };
 
         _dbContext.Folders.Add(folder);

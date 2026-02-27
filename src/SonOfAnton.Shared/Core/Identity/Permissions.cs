@@ -56,6 +56,12 @@ public static class Permissions
     // ─── Chat ───────────────────────────────────────────────────
     public const string ChatUse = "Chat.Use";
 
+    // ─── Workspaces ─────────────────────────────────────────────
+    public const string WorkspacesRead = "Workspaces.Read";
+    public const string WorkspacesCreate = "Workspaces.Create";
+    public const string WorkspacesManage = "Workspaces.Manage";
+    public const string WorkspaceMembersManage = "WorkspaceMembers.Manage";
+
     /// <summary>
     /// Tüm tanımlı izinlerin listesi (policy registration için)
     /// </summary>
@@ -70,6 +76,7 @@ public static class Permissions
         AgentsRead, AgentsManage,
         ApiKeysRead, ApiKeysManage,
         ApiEndpointsRead, ApiEndpointsManage,
-        SearchExecute, ChatUse
+        SearchExecute, ChatUse,
+        WorkspacesRead, WorkspacesCreate, WorkspacesManage, WorkspaceMembersManage
     ];
 }

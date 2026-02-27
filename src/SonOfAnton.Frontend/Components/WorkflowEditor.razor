@@ -25,14 +25,12 @@
                 </svg>
                 <span class="brand-name" style="font-weight: 800; font-size: 14px; margin-left: 8px; color: var(--text-primary); letter-spacing: 1px;">SON OF ANTON</span>
             </div>
+            <WorkspaceSelector @bind-SelectedWorkspaceId="_selectedWorkspaceId" OnWorkspaceChanged="HandleWorkspaceChanged" />
             <button class="btn btn-ghost" @onclick="() => _isFolderTreeOpen = !_isFolderTreeOpen" title="Klasörler">
                 <Icon Name="folder" Size="14" />
             </button>
             <button class="btn btn-primary" @onclick="NewWorkflow">
                 <Icon Name="plus" Size="14" /> Yeni
-            </button>
-            <button class="btn btn-secondary" @onclick="OpenTemplates">
-                <Icon Name="layers" Size="14" /> Şablonlar
             </button>
             
             <span class="toolbar-divider" style="margin: 0 8px; border-left: 1px solid var(--border-color); height: 20px;"></span>
@@ -86,16 +84,8 @@
             <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isChatOpen))" title="AI Asistan">
                 <Icon Name="message-circle" Size="14" />
             </button>
-            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isYamlOpen))" title="YAML">
-                <Icon Name="file-text" Size="14" />
-            </button>
-            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isVariablesOpen))" title="Değişkenler">
-                <Icon Name="variable" Size="14" />
-            </button>
-            <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isRevisionsOpen))" title="Revizyon Geçmişi">
-                <Icon Name="history" Size="14" />
-            </button>
             <span class="toolbar-divider"></span>
+            
             @if (_isExecuting)
             {
                 if (_isTestMode)
@@ -113,9 +103,6 @@
                         <Icon Name="@(_isPaused ? "play" : "pause")" Size="14" /> @(_isPaused ? "Devam" : "Duraklat")
                     </button>
                 }
-                <button class="btn btn-ghost" @onclick="() => _isSnapshotOpen = !_isSnapshotOpen" title="Snapshot'lar">
-                    <Icon Name="camera" Size="14" />
-                </button>
                 <button class="btn btn-danger" @onclick="StopExecution">
                     <Icon Name="square" Size="14" /> Durdur
                 </button>
@@ -134,35 +121,103 @@
                     <Icon Name="play" Size="14" /> Çalıştır
                 </button>
             }
-            <button class="btn btn-info" @onclick="ToggleMonitor">
-                <Icon Name="activity" Size="14" /> Monitor
-            </button>
-            <a class="btn btn-ghost" href="/executions" title="Execution Geçmişi">
-                <Icon Name="list" Size="14" />
-            </a>
-            <a class="btn btn-ghost" href="/marketplace" title="Marketplace">
-                <Icon Name="store" Size="14" />
-            </a>
-            <a class="btn btn-ghost" href="/dashboard" title="Dashboard">
-                <Icon Name="bar-chart-2" Size="14" />
-            </a>
-            <a class="btn btn-ghost" href="/datastores" title="Veri Depoları">
-                <Icon Name="hard-drive" Size="14" />
-            </a>
+
             <span class="toolbar-divider"></span>
-            <span class="toolbar-divider"></span>
-            <button class="btn btn-ghost" @onclick="() => _isWebhooksDialogOpen = true" title="Webhook'lar (Dışarıdan Tetikleme)">
-                <Icon Name="webhook" Size="14" />
-            </button>
-            <button class="btn btn-ghost" @onclick="() => _isPublishDialogOpen = true" title="Workflow'u REST API Olarak Yayınla">
-                <Icon Name="globe" Size="14" />
-            </button>
-            <a class="btn btn-ghost" href="/published-endpoints" title="Yayınlanan API'ler">
-                <Icon Name="link" Size="14" />
-            </a>
-            <a class="btn btn-ghost" href="/apikeys" title="API Anahtarları">
-                <Icon Name="key" Size="14" />
-            </a>
+
+            <div class="toolbar-dropdown-wrapper" @onfocusout="HandleDropdownFocusOut" tabindex="-1">
+                <button class="btn btn-ghost toolbar-dropdown-trigger" @onclick="ToggleMoreDropdown" title="Daha Fazla">
+                    <Icon Name="more-vertical" Size="14" />
+                </button>
+
+                @if (_isMoreDropdownOpen)
+                {
+                    <div class="ks-menu">
+                        <!-- PANELLER -->
+                        <div class="ks-menu-item">
+                            <div class="ks-menu-content">PANELLER</div>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { TogglePanel(nameof(_isYamlOpen)); CloseMoreDropdown(); }">
+                                <Icon Name="file-text" Size="14" /> YAML
+                            </button>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { TogglePanel(nameof(_isVariablesOpen)); CloseMoreDropdown(); }">
+                                <Icon Name="variable" Size="14" /> Değişkenler
+                            </button>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { TogglePanel(nameof(_isRevisionsOpen)); CloseMoreDropdown(); }">
+                                <Icon Name="history" Size="14" /> Revizyon Geçmişi
+                            </button>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { _isSnapshotOpen = !_isSnapshotOpen; CloseMoreDropdown(); }">
+                                <Icon Name="camera" Size="14" /> Snapshot'lar
+                            </button>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { ToggleMonitor(); CloseMoreDropdown(); }">
+                                <Icon Name="activity" Size="14" /> Monitor
+                            </button>
+                        </div>
+
+                        <div class="ks-separator"></div>
+
+                        <!-- GLOBAL -->
+                        <div class="ks-menu-item">
+                            <div class="ks-menu-content">GLOBAL</div>
+                        </div>
+                        <div class="ks-menu-item">
+                            <a class="ks-menu-link" href="/executions" @onclick="CloseMoreDropdown">
+                                <Icon Name="list" Size="14" /> Execution Geçmişi
+                            </a>
+                        </div>
+                        <div class="ks-menu-item">
+                            <a class="ks-menu-link" href="/marketplace" @onclick="CloseMoreDropdown">
+                                <Icon Name="store" Size="14" /> Marketplace
+                            </a>
+                        </div>
+                        <div class="ks-menu-item">
+                            <a class="ks-menu-link" href="/dashboard" @onclick="CloseMoreDropdown">
+                                <Icon Name="bar-chart-2" Size="14" /> Dashboard
+                            </a>
+                        </div>
+                        <div class="ks-menu-item">
+                            <a class="ks-menu-link" href="/datastores" @onclick="CloseMoreDropdown">
+                                <Icon Name="hard-drive" Size="14" /> Veri Depoları
+                            </a>
+                        </div>
+
+                        <div class="ks-separator"></div>
+
+                        <!-- ENTEGRASYON -->
+                        <div class="ks-menu-item">
+                            <div class="ks-menu-content">ENTEGRASYON</div>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { _isWebhooksDialogOpen = true; CloseMoreDropdown(); }">
+                                <Icon Name="webhook" Size="14" /> Webhook'lar
+                            </button>
+                        </div>
+                        <div class="ks-menu-item">
+                            <button class="ks-menu-link" @onclick="() => { _isPublishDialogOpen = true; CloseMoreDropdown(); }">
+                                <Icon Name="globe" Size="14" /> REST API Yayınla
+                            </button>
+                        </div>
+                        <div class="ks-menu-item">
+                            <a class="ks-menu-link" href="/published-endpoints" @onclick="CloseMoreDropdown">
+                                <Icon Name="link" Size="14" /> Yayınlanan API'ler
+                            </a>
+                        </div>
+                        <div class="ks-menu-item">
+                            <a class="ks-menu-link" href="/apikeys" @onclick="CloseMoreDropdown">
+                                <Icon Name="key" Size="14" /> API Anahtarları
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
@@ -170,7 +225,7 @@
         @if (_isFolderTreeOpen)
         {
             <div class="folder-sidebar">
-                <FolderTree OnFolderSelected="HandleFolderSelected" />
+                <FolderTree OnFolderSelected="HandleFolderSelected" WorkspaceId="@_selectedWorkspaceId" />
             </div>
         }
 
@@ -191,13 +246,13 @@
                     Bağlantı oluşturmak için bir çıkış portunu tutup bir giriş portuna sürükleyin
                 </div>
             }
+
+            <LogConsole ExecutionId="@_currentExecutionId" />
         </div>
         
         <NodePropertiesPanel />
     </div>
 
-    <LogConsole ExecutionId="@_currentExecutionId" />
-    
     <ExecutionMonitor @ref="_executionMonitor"
                       ExecutionId="@_currentExecutionId"
                       IsVisible="@_isMonitorVisible"
@@ -205,13 +260,6 @@
                       OnNodeExecuting="HandleNodeExecuting"
                       OnNodeCompleted="HandleNodeCompleted" />
 </div>
-
-<TemplatesPanel IsOpen="_isTemplatesPanelOpen" 
-                OnClose="CloseTemplates" 
-                OnTemplateSelected="LoadTemplate" />
-
-<GlobalSearch IsOpen="_isSearchOpen" OnClose="() => _isSearchOpen = false" />
-
 <WorkflowChatPanel IsOpen="_isChatOpen" IsOpenChanged="v => { _isChatOpen = v; if (!v) StateHasChanged(); }"
                    WorkflowId="DiagramState.CurrentWorkflow?.Id" />
 
@@ -247,10 +295,10 @@
     private bool _isExecuting;
     private bool _isTestMode;
     private Guid? _currentExecutionId;
-    private bool _isTemplatesPanelOpen;
     private bool _isMonitorVisible;
     private bool _showConnectionHint = true;
     private string _workflowName = "Yeni İş Akışı";
+    private bool _isMoreDropdownOpen;
     private ExecutionMonitor? _executionMonitor;
 
     // New panel states
@@ -262,6 +310,7 @@
     private bool _isSnapshotOpen;
     private bool _isPaused;
     private bool _isFolderTreeOpen;
+    private Guid? _selectedWorkspaceId;
     private string _currentTheme = "dark";
     private bool _isPublishDialogOpen;
     private bool _isWebhooksDialogOpen;
@@ -316,18 +365,46 @@
         }
     }
 
+    private void HandleWorkspaceChanged(WorkspaceDto? workspace)
+    {
+        if (DiagramState.CurrentWorkflow != null && DiagramState.CurrentWorkflow.Id == Guid.Empty)
+        {
+            DiagramState.CurrentWorkflow.WorkspaceId = _selectedWorkspaceId;
+        }
+    }
+
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Template { get; set; }
+
     protected override void OnInitialized()
     {
         DiagramState.OnStateChanged += HandleStateChanged;
-        DiagramState.CreateNewWorkflow();
         
         // Timer
         _autoSaveTimer = new System.Timers.Timer(3000);
         _autoSaveTimer.Elapsed += async (sender, e) => await HandleAutoSaveTimerAsync();
         _autoSaveTimer.AutoReset = false;
         
-        // İlk workflow adını ayarla
-        _workflowName = DiagramState.CurrentWorkflow?.Name ?? "Yeni İş Akışı";
+        if (!string.IsNullOrEmpty(Template))
+        {
+            var template = WorkflowTemplates.GetTemplateById(Template);
+            if (template != null)
+            {
+                DiagramState.LoadFromTemplate(template);
+                _workflowName = template.Name;
+            }
+            else
+            {
+                DiagramState.CreateNewWorkflow();
+                _workflowName = "Yeni İş Akışı";
+            }
+        }
+        else
+        {
+            DiagramState.CreateNewWorkflow();
+            _workflowName = DiagramState.CurrentWorkflow?.Name ?? "Yeni İş Akışı";
+        }
     }
     
     private void HandleStateChanged()
@@ -408,7 +485,8 @@
                 Description = DiagramState.CurrentWorkflow?.Description,
                 TriggerType = DiagramState.CurrentWorkflow?.TriggerType ?? SonOfAnton.Shared.Enums.TriggerType.Manual,
                 IsActive = DiagramState.CurrentWorkflow?.IsActive ?? false,
-                Graph = DiagramState.GetCurrentGraph()
+                Graph = DiagramState.GetCurrentGraph(),
+                WorkspaceId = _selectedWorkspaceId
             };
 
             var saved = await ApiService.SaveWorkflowAsync(request);
@@ -602,23 +680,6 @@
         }
     }
 
-    private void OpenTemplates()
-    {
-        _isTemplatesPanelOpen = true;
-    }
-
-    private void CloseTemplates()
-    {
-        _isTemplatesPanelOpen = false;
-    }
-
-    private void LoadTemplate(WorkflowTemplate template)
-    {
-        DiagramState.LoadFromTemplate(template);
-        _workflowName = template.Name;
-        _isTemplatesPanelOpen = false;
-    }
-
     private async Task PauseResumeExecution()
     {
         if (!_currentExecutionId.HasValue) return;
@@ -650,6 +711,25 @@
         {
             Console.WriteLine($"Pause/Resume hatası: {ex.Message}");
         }
+    }
+
+    private void ToggleMoreDropdown()
+    {
+        _isMoreDropdownOpen = !_isMoreDropdownOpen;
+    }
+
+    private void CloseMoreDropdown()
+    {
+        _isMoreDropdownOpen = false;
+    }
+    
+    // Focus kaybında (dışarı tıklanınca) menüyü kapatmak için
+    private async Task HandleDropdownFocusOut(FocusEventArgs e)
+    {
+        // focusout tetiklendiğinde tıklanan butonun event'inin çalışması için küçük bir gecikme ekliyoruz
+        await Task.Delay(150);
+        CloseMoreDropdown();
+        StateHasChanged();
     }
 
     private async Task StepExecution()

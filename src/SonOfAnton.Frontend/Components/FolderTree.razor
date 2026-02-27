@@ -52,6 +52,7 @@
 @code {
     [Parameter] public EventCallback<Guid?> OnFolderSelected { get; set; }
     [Parameter] public EventCallback<WorkflowDto> OnWorkflowSelected { get; set; }
+    [Parameter] public Guid? WorkspaceId { get; set; }
 
     private List<FolderTreeDto> _tree = [];
     private Guid? _selectedFolderId;
@@ -64,12 +65,30 @@
         await LoadTreeAsync();
     }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        if (WorkspaceId != _lastWorkspaceId)
+        {
+            _lastWorkspaceId = WorkspaceId;
+            await LoadTreeAsync();
+        }
+    }
+
+    private Guid? _lastWorkspaceId;
+
     private async Task LoadTreeAsync()
     {
+        if (WorkspaceId == null)
+        {
+            _tree = [];
+            _isLoading = false;
+            return;
+        }
+
         _isLoading = true;
         try
         {
-            _tree = await ApiService.GetFolderTreeAsync();
+            _tree = await ApiService.GetWorkspaceFolderTreeAsync(WorkspaceId.Value);
         }
         catch
         {
@@ -100,7 +119,8 @@
         await ApiService.CreateFolderAsync(new CreateFolderRequest
         {
             Name = _newFolderName,
-            ParentFolderId = _selectedFolderId
+            ParentFolderId = _selectedFolderId,
+            WorkspaceId = WorkspaceId
         });
 
         _showCreateDialog = false;

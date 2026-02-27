@@ -44,6 +44,10 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<MarketplaceReviewEntity> MarketplaceReviews => Set<MarketplaceReviewEntity>();
     public DbSet<MarketplaceInstallEntity> MarketplaceInstalls => Set<MarketplaceInstallEntity>();
 
+    // ─── Workspaces ───────────────────────────────────────────────
+    public DbSet<WorkspaceEntity> Workspaces => Set<WorkspaceEntity>();
+    public DbSet<WorkspaceMemberEntity> WorkspaceMembers => Set<WorkspaceMemberEntity>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -363,6 +367,15 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.CreatedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Workspace FK
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.HasIndex(e => e.WorkspaceId);
+
+            entity.HasOne(e => e.Workspace)
+                .WithMany(w => w.Workflows)
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Folders
@@ -391,6 +404,15 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Workspace FK
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.HasIndex(e => e.WorkspaceId);
+
+            entity.HasOne(e => e.Workspace)
+                .WithMany(w => w.Folders)
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Execution Snapshots
@@ -618,6 +640,62 @@ public class SonOfAntonDbContext : DbContext
             entity.HasOne(e => e.DataStore)
                 .WithMany(s => s.Entries)
                 .HasForeignKey(e => e.DataStoreId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Workspaces ───────────────────────────────────────────────
+        modelBuilder.Entity<WorkspaceEntity>(entity =>
+        {
+            entity.ToTable("workspaces");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.OwnerUserId).HasColumnName("owner_user_id");
+            entity.Property(e => e.Icon).HasColumnName("icon").HasMaxLength(50);
+            entity.Property(e => e.Color).HasColumnName("color").HasMaxLength(20);
+            entity.Property(e => e.IsDefault).HasColumnName("is_default");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.OwnerUserId);
+            entity.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.OwnerUser)
+                .WithMany()
+                .HasForeignKey(e => e.OwnerUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Workspace Members
+        modelBuilder.Entity<WorkspaceMemberEntity>(entity =>
+        {
+            entity.ToTable("workspace_members");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Role).HasColumnName("role").HasConversion<string>();
+            entity.Property(e => e.JoinedAt).HasColumnName("joined_at");
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.UserId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+
+            entity.HasOne(e => e.Workspace)
+                .WithMany(w => w.Members)
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

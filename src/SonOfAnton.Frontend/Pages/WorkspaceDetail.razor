@@ -1,0 +1,347 @@
+@page "/workspaces/{WorkspaceId:guid}"
+@inject WorkflowApiService ApiService
+
+<div class="workspace-detail-page">
+    <header class="page-header">
+        <div class="header-left">
+            <a href="/workspaces" class="back-link">
+                <Icon Name="arrow-left" Size="14" /> Çalışma Alanları
+            </a>
+            @if (_workspace != null)
+            {
+                <h2>
+                    <Icon Name="@(_workspace.Icon ?? "briefcase")" Size="20" />
+                    @_workspace.Name
+                </h2>
+            }
+        </div>
+        <a href="/" class="back-link">
+            <Icon Name="arrow-left" Size="14" /> Editöre Dön
+        </a>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Yükleniyor...</span>
+        </div>
+    }
+    else if (_workspace == null)
+    {
+        <div class="empty-state">
+            <Icon Name="alert-circle" Size="48" />
+            <p>Çalışma alanı bulunamadı.</p>
+        </div>
+    }
+    else
+    {
+        <div class="tab-bar">
+            <button class="tab @(_activeTab == "info" ? "active" : "")" @onclick='() => _activeTab = "info"'>
+                <Icon Name="info" Size="14" /> Genel Bilgi
+            </button>
+            <button class="tab @(_activeTab == "members" ? "active" : "")" @onclick='() => _activeTab = "members"'>
+                <Icon Name="users" Size="14" /> Üyeler (@_members.Count)
+            </button>
+            <button class="tab @(_activeTab == "content" ? "active" : "")" @onclick='() => _activeTab = "content"'>
+                <Icon Name="git-branch" Size="14" /> İçerik
+            </button>
+        </div>
+
+        <div class="tab-content">
+            @if (_activeTab == "info")
+            {
+                <div class="info-section">
+                    <div class="info-card">
+                        <h3>Çalışma Alanı Bilgileri</h3>
+                        <div class="form-group">
+                            <label>Ad</label>
+                            <input type="text" @bind="_editName" class="input" />
+                        </div>
+                        <div class="form-group">
+                            <label>Açıklama</label>
+                            <textarea @bind="_editDescription" class="input input-textarea" rows="3"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>İkon</label>
+                                <IconSelector @bind-Value="_editIcon" />
+                            </div>
+                            <div class="form-group">
+                                <label>Renk</label>
+                                <input type="color" @bind="_editColor" class="input input-color" />
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" @onclick="UpdateWorkspace" disabled="@string.IsNullOrWhiteSpace(_editName)">
+                                <Icon Name="save" Size="14" /> Kaydet
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon blue"><Icon Name="users" Size="20" /></div>
+                            <div class="stat-body">
+                                <span class="stat-value">@_workspace.MemberCount</span>
+                                <span class="stat-label">Üye</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green"><Icon Name="git-branch" Size="20" /></div>
+                            <div class="stat-body">
+                                <span class="stat-value">@_workspace.WorkflowCount</span>
+                                <span class="stat-label">Workflow</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon purple"><Icon Name="folder" Size="20" /></div>
+                            <div class="stat-body">
+                                <span class="stat-value">@_workspace.FolderCount</span>
+                                <span class="stat-label">Klasör</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_activeTab == "members")
+            {
+                <div class="members-section">
+                    <div class="section-header">
+                        <h3>Üyeler</h3>
+                        <button class="btn btn-primary btn-sm" @onclick="() => _isAddMemberOpen = true">
+                            <Icon Name="user-plus" Size="14" /> Üye Ekle
+                        </button>
+                    </div>
+
+                    @if (_isAddMemberOpen)
+                    {
+                        <div class="add-member-form">
+                            <input type="email" @bind="_newMemberEmail" placeholder="E-posta adresi..." class="input" />
+                            <select @bind="_newMemberRole" class="input">
+                                <option value="Viewer">Görüntüleyici</option>
+                                <option value="Editor">Düzenleyici</option>
+                                <option value="Admin">Yönetici</option>
+                            </select>
+                            <div class="form-actions-inline">
+                                <button class="btn btn-success btn-sm" @onclick="AddMember" disabled="@string.IsNullOrWhiteSpace(_newMemberEmail)">Ekle</button>
+                                <button class="btn btn-ghost btn-sm" @onclick="() => _isAddMemberOpen = false">İptal</button>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="member-list">
+                        @foreach (var member in _members)
+                        {
+                            <div class="member-item">
+                                <div class="member-avatar">
+                                    @(member.DisplayName?[..1].ToUpperInvariant() ?? member.Email[..1].ToUpperInvariant())
+                                </div>
+                                <div class="member-info">
+                                    <span class="member-name">@(member.DisplayName ?? member.Email)</span>
+                                    <span class="member-email">@member.Email</span>
+                                </div>
+                                <div class="member-role">
+                                    @if (member.Role == "Owner")
+                                    {
+                                        <span class="role-badge owner">Sahip</span>
+                                    }
+                                    else
+                                    {
+                                        <select class="input input-sm" value="@member.Role"
+                                                @onchange='e => UpdateMemberRole(member.UserId, e.Value?.ToString() ?? "Viewer")'>
+                                            <option value="Viewer">Görüntüleyici</option>
+                                            <option value="Editor">Düzenleyici</option>
+                                            <option value="Admin">Yönetici</option>
+                                        </select>
+                                    }
+                                </div>
+                                <div class="member-actions">
+                                    @if (member.Role != "Owner")
+                                    {
+                                        <button class="btn-icon" @onclick="() => RemoveMember(member.UserId)" title="Çıkar">
+                                            <Icon Name="user-minus" Size="14" />
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (_activeTab == "content")
+            {
+                <div class="content-section">
+                    <div class="content-dual">
+                        <div class="content-panel">
+                            <h3><Icon Name="folder" Size="16" /> Klasörler</h3>
+                            @if (_folders.Count == 0)
+                            {
+                                <div class="empty-state small">
+                                    <p>Henüz klasör yok.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var folder in _folders)
+                                {
+                                    <div class="content-item">
+                                        <Icon Name="folder" Size="14" />
+                                        <span>@folder.Name</span>
+                                        <span class="content-meta">@folder.Workflows.Count workflow</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                        <div class="content-panel">
+                            <h3><Icon Name="git-branch" Size="16" /> Workflow'lar</h3>
+                            @if (_workflows.Count == 0)
+                            {
+                                <div class="empty-state small">
+                                    <p>Henüz workflow yok.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var wf in _workflows)
+                                {
+                                    <div class="content-item">
+                                        <Icon Name="git-branch" Size="14" />
+                                        <span>@wf.Name</span>
+                                        <span class="content-meta @(wf.IsActive ? "active" : "")">
+                                            @(wf.IsActive ? "Aktif" : "Pasif")
+                                        </span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid WorkspaceId { get; set; }
+
+    private WorkspaceDto? _workspace;
+    private List<WorkspaceMemberDto> _members = [];
+    private List<FolderTreeDto> _folders = [];
+    private List<WorkflowDto> _workflows = [];
+    private bool _isLoading = true;
+    private string _activeTab = "info";
+    private bool _isAddMemberOpen;
+
+    // Edit form
+    private string _editName = "";
+    private string _editDescription = "";
+    private string _editIcon = "";
+    private string _editColor = "#89b4fa";
+
+    // Add member form
+    private string _newMemberEmail = "";
+    private string _newMemberRole = "Viewer";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkspace();
+    }
+
+    private async Task LoadWorkspace()
+    {
+        _isLoading = true;
+        try
+        {
+            _workspace = await ApiService.GetWorkspaceAsync(WorkspaceId);
+            if (_workspace != null)
+            {
+                _editName = _workspace.Name;
+                _editDescription = _workspace.Description ?? "";
+                _editIcon = _workspace.Icon ?? "briefcase";
+                _editColor = _workspace.Color ?? "#89b4fa";
+
+                _members = await ApiService.GetWorkspaceMembersAsync(WorkspaceId);
+                _folders = await ApiService.GetWorkspaceFolderTreeAsync(WorkspaceId);
+                _workflows = await ApiService.GetWorkspaceWorkflowsAsync(WorkspaceId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Workspace yükleme hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task UpdateWorkspace()
+    {
+        if (string.IsNullOrWhiteSpace(_editName)) return;
+
+        try
+        {
+            await ApiService.UpdateWorkspaceAsync(WorkspaceId, new UpdateWorkspaceRequest
+            {
+                Name = _editName,
+                Description = string.IsNullOrWhiteSpace(_editDescription) ? null : _editDescription,
+                Icon = _editIcon,
+                Color = _editColor
+            });
+            await LoadWorkspace();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Workspace güncelleme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task AddMember()
+    {
+        if (string.IsNullOrWhiteSpace(_newMemberEmail)) return;
+
+        try
+        {
+            await ApiService.AddWorkspaceMemberAsync(WorkspaceId, new AddWorkspaceMemberRequest
+            {
+                Email = _newMemberEmail,
+                Role = _newMemberRole
+            });
+            _newMemberEmail = "";
+            _newMemberRole = "Viewer";
+            _isAddMemberOpen = false;
+            _members = await ApiService.GetWorkspaceMembersAsync(WorkspaceId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Üye ekleme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task UpdateMemberRole(Guid userId, string role)
+    {
+        try
+        {
+            await ApiService.UpdateWorkspaceMemberRoleAsync(WorkspaceId, userId, new UpdateWorkspaceMemberRequest { Role = role });
+            _members = await ApiService.GetWorkspaceMembersAsync(WorkspaceId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Rol güncelleme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task RemoveMember(Guid userId)
+    {
+        try
+        {
+            await ApiService.RemoveWorkspaceMemberAsync(WorkspaceId, userId);
+            _members = await ApiService.GetWorkspaceMembersAsync(WorkspaceId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Üye çıkarma hatası: {ex.Message}");
+        }
+    }
+}

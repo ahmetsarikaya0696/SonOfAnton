@@ -98,7 +98,14 @@
                             </span>
                         </div>
                         <div class="card-actions">
-                            @if (item.IsInstalled)
+                            @if (item.ItemType == "WorkflowTemplate")
+                            {
+                                <button class="btn-install" style="background: var(--accent-color); color: var(--bg-card); border: none;" @onclick:stopPropagation="true"
+                                        @onclick="() => UseTemplate(item.TemplateId!)">
+                                    <Icon Name="play" Size="12" /> Kullan
+                                </button>
+                            }
+                            else if (item.IsInstalled)
                             {
                                 <span class="installed-badge">
                                     <Icon Name="check" Size="12" /> Kurulu
@@ -182,6 +189,49 @@
                 _items = result.Items;
                 _totalPages = result.TotalPages;
             }
+            else
+            {
+                _items = [];
+            }
+            
+            // Mix in static workflow templates
+            if (string.IsNullOrEmpty(_filterType) || _filterType == "WorkflowTemplate")
+            {
+                var staticTemplates = SonOfAnton.Shared.Models.WorkflowTemplates.GetAllTemplates();
+                
+                // Filter templates
+                if (!string.IsNullOrEmpty(_searchQuery))
+                {
+                    var q = _searchQuery.ToLowerInvariant();
+                    staticTemplates = staticTemplates.Where(t => t.Name.ToLowerInvariant().Contains(q) || t.Description.ToLowerInvariant().Contains(q)).ToList();
+                }
+                
+                if (!string.IsNullOrEmpty(_filterCategory))
+                {
+                    staticTemplates = staticTemplates.Where(t => t.Category == _filterCategory).ToList();
+                }
+
+                // If on first page (simplistic approach for static templates)
+                if (_page == 1)
+                {
+                    var templateDtos = staticTemplates.Select(t => new MarketplaceItemDto
+                    {
+                        Id = Guid.NewGuid(),
+                        TemplateId = t.Id,
+                        Name = t.Name,
+                        Description = t.Description,
+                        Icon = t.Icon,
+                        Category = t.Category,
+                        ItemType = "WorkflowTemplate",
+                        DownloadCount = 0,
+                        AverageRating = 5.0,
+                        ReviewCount = 0,
+                        IsInstalled = false
+                    }).ToList();
+                    
+                    _items.InsertRange(0, templateDtos);
+                }
+            }
         }
         catch
         {
@@ -206,6 +256,11 @@
     private void NavigateToDetail(Guid id) => Navigation.NavigateTo($"/marketplace/{id}");
     private async Task PrevPage() { _page--; await SearchAsync(); }
     private async Task NextPage() { _page++; await SearchAsync(); }
+    
+    private void UseTemplate(string templateId)
+    {
+        Navigation.NavigateTo($"/?template={templateId}");
+    }
 
     private static string GetItemColor(MarketplaceItemDto item) =>
         item.ItemType == "CustomNode" ? "#89b4fa" : "#a6e3a1";
@@ -215,6 +270,7 @@
     private record MarketplaceItemDto
     {
         public Guid Id { get; init; }
+        public string? TemplateId { get; init; } // Local template id
         public string Name { get; init; } = "";
         public string? Description { get; init; }
         public string Icon { get; init; } = "package";

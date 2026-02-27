@@ -1,0 +1,85 @@
+@inject WorkflowApiService ApiService
+
+<div class="workspace-selector">
+    <button class="ws-trigger" @onclick="ToggleDropdown">
+        <Icon Name="briefcase" Size="14" />
+        <span class="ws-name">@(_selectedWorkspace?.Name ?? "Çalışma Alanı")</span>
+        <Icon Name="chevron-down" Size="12" />
+    </button>
+
+    @if (_isOpen)
+    {
+        <div class="ws-dropdown">
+            <div class="ws-dropdown-header">
+                <span>Çalışma Alanları</span>
+                <a href="/workspaces" class="ws-manage-link">
+                    <Icon Name="settings" Size="12" /> Yönet
+                </a>
+            </div>
+            @foreach (var ws in _workspaces)
+            {
+                <div class="ws-option @(ws.Id == SelectedWorkspaceId ? "active" : "")"
+                     @onclick="() => SelectWorkspace(ws)">
+                    <div class="ws-option-icon" style="color: @(ws.Color ?? "var(--accent-color)")">
+                        <Icon Name="@(ws.Icon ?? "briefcase")" Size="14" />
+                    </div>
+                    <span class="ws-option-name">@ws.Name</span>
+                    @if (ws.IsDefault)
+                    {
+                        <span class="ws-default-dot"></span>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_isOpen)
+{
+    <div class="ws-backdrop" @onclick="() => _isOpen = false"></div>
+}
+
+@code {
+    [Parameter] public Guid? SelectedWorkspaceId { get; set; }
+    [Parameter] public EventCallback<Guid?> SelectedWorkspaceIdChanged { get; set; }
+    [Parameter] public EventCallback<WorkspaceDto?> OnWorkspaceChanged { get; set; }
+
+    private List<WorkspaceDto> _workspaces = [];
+    private WorkspaceDto? _selectedWorkspace;
+    private bool _isOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _workspaces = await ApiService.GetWorkspacesAsync();
+            if (SelectedWorkspaceId.HasValue)
+            {
+                _selectedWorkspace = _workspaces.FirstOrDefault(w => w.Id == SelectedWorkspaceId.Value);
+            }
+            else if (_workspaces.Count > 0)
+            {
+                _selectedWorkspace = _workspaces.FirstOrDefault(w => w.IsDefault) ?? _workspaces.First();
+                await SelectedWorkspaceIdChanged.InvokeAsync(_selectedWorkspace.Id);
+                await OnWorkspaceChanged.InvokeAsync(_selectedWorkspace);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Workspace listesi hatası: {ex.Message}");
+        }
+    }
+
+    private void ToggleDropdown()
+    {
+        _isOpen = !_isOpen;
+    }
+
+    private async Task SelectWorkspace(WorkspaceDto ws)
+    {
+        _selectedWorkspace = ws;
+        _isOpen = false;
+        await SelectedWorkspaceIdChanged.InvokeAsync(ws.Id);
+        await OnWorkspaceChanged.InvokeAsync(ws);
+    }
+}

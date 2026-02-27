@@ -28,6 +28,9 @@ public class WorkflowDto
     // Folder
     public Guid? FolderId { get; set; }
     public string? FolderName { get; set; }
+
+    // Workspace
+    public Guid? WorkspaceId { get; set; }
 }
 
 /// <summary>
@@ -84,6 +87,7 @@ public class SaveWorkflowRequest
     public bool IsActive { get; set; }
     public Guid? GlobalErrorWorkflowId { get; set; }
     public Guid? FolderId { get; set; }
+    public Guid? WorkspaceId { get; set; }
 }
 
 /// <summary>
@@ -203,6 +207,7 @@ public class CreateFolderRequest
     public string? Icon { get; set; }
     public string? Color { get; set; }
     public Guid? ParentFolderId { get; set; }
+    public Guid? WorkspaceId { get; set; }
 }
 
 public class MoveWorkflowRequest
@@ -428,5 +433,61 @@ public class SetDataStoreEntryRequest
 {
     public string Key { get; set; } = string.Empty;
     public object? Value { get; set; }
+}
+
+// ─── Workspace DTOs ────────────────────────────────────────────
+
+public class WorkspaceDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? TenantId { get; set; }
+    public Guid? OwnerUserId { get; set; }
+    public string? OwnerDisplayName { get; set; }
+    public string? Icon { get; set; }
+    public string? Color { get; set; }
+    public bool IsDefault { get; set; }
+    public int MemberCount { get; set; }
+    public int WorkflowCount { get; set; }
+    public int FolderCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class WorkspaceMemberDto
+{
+    public Guid UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
+    public string Role { get; set; } = "Viewer";
+    public DateTime JoinedAt { get; set; }
+}
+
+public class CreateWorkspaceRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Icon { get; set; }
+    public string? Color { get; set; }
+}
+
+public class UpdateWorkspaceRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Icon { get; set; }
+    public string? Color { get; set; }
+}
+
+public class AddWorkspaceMemberRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = "Viewer";
+}
+
+public class UpdateWorkspaceMemberRequest
+{
+    public string Role { get; set; } = "Viewer";
 }
 

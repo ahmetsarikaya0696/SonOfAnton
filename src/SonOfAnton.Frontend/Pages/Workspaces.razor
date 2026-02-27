@@ -1,0 +1,197 @@
+@page "/workspaces"
+@inject WorkflowApiService ApiService
+
+<div class="workspaces-page">
+    <header class="page-header">
+        <h2><Icon Name="briefcase" Size="20" /> Çalışma Alanları</h2>
+        <a href="/" class="back-link">
+            <Icon Name="arrow-left" Size="14" /> Editöre Dön
+        </a>
+    </header>
+
+    <div class="page-toolbar">
+        <button class="btn btn-primary" @onclick="() => _isCreateOpen = true">
+            <Icon Name="plus" Size="14" /> Yeni Çalışma Alanı
+        </button>
+    </div>
+
+    @if (_isCreateOpen)
+    {
+        <div class="modal-overlay" @onclick="() => _isCreateOpen = false">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <h3>Yeni Çalışma Alanı</h3>
+                <div class="form-group">
+                    <label>Ad</label>
+                    <input type="text" @bind="_newName" placeholder="Çalışma alanı adı..." class="input" />
+                </div>
+                <div class="form-group">
+                    <label>Açıklama</label>
+                    <textarea @bind="_newDescription" placeholder="Açıklama (opsiyonel)" class="input input-textarea" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>İkon</label>
+                        <IconSelector @bind-Value="_newIcon" />
+                    </div>
+                    <div class="form-group">
+                        <label>Renk</label>
+                        <input type="color" @bind="_newColor" class="input input-color" />
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-ghost" @onclick="() => _isCreateOpen = false">İptal</button>
+                    <button class="btn btn-primary" @onclick="CreateWorkspace" disabled="@string.IsNullOrWhiteSpace(_newName)">Oluştur</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="workspace-grid">
+        @if (_isLoading)
+        {
+            <div class="loading-state">
+                <span class="spinner"></span>
+                <span>Yükleniyor...</span>
+            </div>
+        }
+        else if (_workspaces.Count == 0)
+        {
+            <div class="empty-state">
+                <Icon Name="briefcase" Size="48" />
+                <p>Henüz çalışma alanı yok.</p>
+                <p class="subtitle">Ekibiniz için bir çalışma alanı oluşturun!</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var ws in _workspaces)
+            {
+                <div class="workspace-card" @onclick="() => NavigateToWorkspace(ws.Id)">
+                    <div class="card-header">
+                        <div class="card-icon" style="background: @(ws.Color ?? "var(--accent-color)")20; color: @(ws.Color ?? "var(--accent-color)")">
+                            <Icon Name="@(ws.Icon ?? "briefcase")" Size="24" />
+                        </div>
+                        @if (ws.IsDefault)
+                        {
+                            <span class="default-badge">Varsayılan</span>
+                        }
+                        <div class="card-menu">
+                            <button class="btn-icon" @onclick:stopPropagation="true" @onclick="() => DeleteWorkspace(ws.Id)" title="Sil"
+                                    disabled="@ws.IsDefault">
+                                <Icon Name="trash-2" Size="14" />
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">@ws.Name</h3>
+                        @if (!string.IsNullOrEmpty(ws.Description))
+                        {
+                            <p class="card-desc">@ws.Description</p>
+                        }
+                    </div>
+                    <div class="card-footer">
+                        <div class="card-stat">
+                            <Icon Name="users" Size="12" />
+                            <span>@ws.MemberCount üye</span>
+                        </div>
+                        <div class="card-stat">
+                            <Icon Name="git-branch" Size="12" />
+                            <span>@ws.WorkflowCount workflow</span>
+                        </div>
+                        <div class="card-stat">
+                            <Icon Name="folder" Size="12" />
+                            <span>@ws.FolderCount klasör</span>
+                        </div>
+                    </div>
+                    <div class="card-meta">
+                        @if (ws.OwnerDisplayName != null)
+                        {
+                            <span>Sahip: @ws.OwnerDisplayName</span>
+                        }
+                        <span>@ws.CreatedAt.ToString("dd.MM.yyyy")</span>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    private List<WorkspaceDto> _workspaces = [];
+    private bool _isLoading = true;
+    private bool _isCreateOpen;
+
+    // Create form
+    private string _newName = "";
+    private string _newDescription = "";
+    private string _newIcon = "briefcase";
+    private string _newColor = "#89b4fa";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkspaces();
+    }
+
+    private async Task LoadWorkspaces()
+    {
+        _isLoading = true;
+        try
+        {
+            _workspaces = await ApiService.GetWorkspacesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Workspace listesi hatası: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateWorkspace()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+
+        try
+        {
+            await ApiService.CreateWorkspaceAsync(new CreateWorkspaceRequest
+            {
+                Name = _newName,
+                Description = string.IsNullOrWhiteSpace(_newDescription) ? null : _newDescription,
+                Icon = _newIcon,
+                Color = _newColor
+            });
+            _newName = "";
+            _newDescription = "";
+            _newIcon = "briefcase";
+            _newColor = "#89b4fa";
+            _isCreateOpen = false;
+            await LoadWorkspaces();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Workspace oluşturma hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteWorkspace(Guid id)
+    {
+        try
+        {
+            await ApiService.DeleteWorkspaceAsync(id);
+            await LoadWorkspaces();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Workspace silme hatası: {ex.Message}");
+        }
+    }
+
+    private void NavigateToWorkspace(Guid id)
+    {
+        Navigation.NavigateTo($"/workspaces/{id}");
+    }
+}
