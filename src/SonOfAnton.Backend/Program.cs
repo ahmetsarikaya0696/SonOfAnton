@@ -447,6 +447,9 @@ builder.Services.AddTransient<SonOfAnton.Backend.Services.WorkflowApiDocsTransfo
 // Workspace Service
 builder.Services.AddScoped<WorkspaceService>();
 
+// Chatbot Service
+builder.Services.AddScoped<ChatbotService>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)

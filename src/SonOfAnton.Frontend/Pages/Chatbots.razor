@@ -1,0 +1,215 @@
+@page "/chatbots"
+@inject ChatbotApiService ChatbotApi
+@inject NavigationManager Navigation
+
+<div class="chatbots-page">
+    <header class="page-header">
+        <h2><Icon Name="message-square" Size="20" /> AI Chatbotlar</h2>
+        <a href="/" class="back-link">
+            <Icon Name="arrow-left" Size="14" /> Editöre Dön
+        </a>
+    </header>
+
+    <div class="page-toolbar">
+        <button class="btn btn-primary" @onclick="OpenCreateDialog">
+            <Icon Name="plus" Size="14" /> Yeni Chatbot
+        </button>
+    </div>
+
+    @if (_isCreateOpen)
+    {
+        <div class="modal-overlay" @onclick="CloseCreateDialog">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <h3>Yeni Chatbot Oluştur</h3>
+                <div class="form-group">
+                    <label>Ad</label>
+                    <input type="text" @bind="_newName" placeholder="Müşteri Temsilcisi..." class="input" />
+                </div>
+                <div class="form-group">
+                    <label>Açıklama</label>
+                    <textarea @bind="_newDescription" placeholder="Chatbot açıklaması" class="input input-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Sistem İstemi (System Prompt)</label>
+                    <textarea @bind="_newSystemPrompt" placeholder="Sen nazik bir asistansın..." class="input input-textarea" rows="4"></textarea>
+                </div>
+                 <div class="form-group row-group">
+                    <label>Model</label>
+                    <select @bind="_newModel" class="input">
+                        <option value="gpt-4o">gpt-4o</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
+                        <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Local)</option>
+                    </select>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" @bind="_newIsPublic" />
+                        Herkese Açık (Public)
+                    </label>
+                    <small>Seçilirse public bir link ile herkes erişebilir.</small>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-ghost" @onclick="CloseCreateDialog">İptal</button>
+                    <button class="btn btn-primary" @onclick="CreateChatbot" disabled="@string.IsNullOrWhiteSpace(_newName)">Oluştur</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="chatbot-grid">
+        @if (_isLoading)
+        {
+            <div class="loading-state">
+                <span class="spinner"></span>
+                <span>Yükleniyor...</span>
+            </div>
+        }
+        else if (_chatbots.Count == 0)
+        {
+            <div class="empty-state">
+                <Icon Name="message-square" Size="48" />
+                <p>Henüz chatbot bulunmuyor.</p>
+                <p class="subtitle">İlk chatbot'unuzu oluşturarak başlayın.</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var bot in _chatbots)
+            {
+                 <div class="workspace-card" @onclick="() => NavigateToDesigner(bot.Id)">
+                    <div class="card-header">
+                        <div class="card-icon" style="background: var(--accent-color)20; color: var(--accent-color)">
+                            <Icon Name="bot" Size="24" />
+                        </div>
+                        @if (bot.IsPublic)
+                        {
+                            <span class="default-badge">Public</span>
+                        }
+                        <div class="card-menu">
+                            <button class="btn-icon" @onclick:stopPropagation="true" @onclick="() => PreviewChatbot(bot.Id)" title="Önizle">
+                                <Icon Name="external-link" Size="14" />
+                            </button>
+                            <button class="btn-icon" @onclick:stopPropagation="true" @onclick="() => DeleteChatbot(bot.Id)" title="Sil">
+                                <Icon Name="trash-2" Size="14" />
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">@bot.Name</h3>
+                        @if (!string.IsNullOrEmpty(bot.Description))
+                        {
+                            <p class="card-desc">@bot.Description</p>
+                        }
+                    </div>
+                    <div class="card-footer">
+                        <div class="card-stat">
+                            <Icon Name="cpu" Size="12" />
+                            <span>@bot.Model</span>
+                        </div>
+                    </div>
+                    <div class="card-meta">
+                        <span>@bot.UpdatedAt.ToString("dd.MM.yyyy")</span>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<ChatbotDto> _chatbots = [];
+    private bool _isLoading = true;
+    private bool _isCreateOpen = false;
+
+    private string _newName = "";
+    private string _newDescription = "";
+    private string _newSystemPrompt = "Sen yardımcı bir asistansın.";
+    private string _newModel = "gpt-4o";
+    private bool _newIsPublic = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChatbotsAsync();
+    }
+
+    private async Task LoadChatbotsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _chatbots = await ChatbotApi.GetChatbotsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chatbot listesi alınırken hata: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCreateDialog()
+    {
+        _newName = "";
+        _newDescription = "";
+        _newSystemPrompt = "Sen yardımcı bir asistansın.";
+        _newModel = "gpt-4o";
+        _newIsPublic = false;
+        _isCreateOpen = true;
+    }
+
+    private void CloseCreateDialog()
+    {
+        _isCreateOpen = false;
+    }
+
+    private async Task CreateChatbot()
+    {
+        if (string.IsNullOrWhiteSpace(_newName)) return;
+
+        try
+        {
+            await ChatbotApi.CreateChatbotAsync(new CreateChatbotRequest(
+                _newName,
+                string.IsNullOrWhiteSpace(_newDescription) ? null : _newDescription,
+                _newSystemPrompt,
+                _newModel,
+                _newIsPublic
+            ));
+            
+            _isCreateOpen = false;
+            await LoadChatbotsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chatbot oluşturma hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteChatbot(Guid id)
+    {
+        // TODO: confirm dialog
+        try
+        {
+            await ChatbotApi.DeleteChatbotAsync(id);
+            await LoadChatbotsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chatbot silinirken hata: {ex.Message}");
+        }
+    }
+
+    private void NavigateToDesigner(Guid id)
+    {
+        Navigation.NavigateTo($"/chatbots/{id}/edit");
+    }
+    
+    private void PreviewChatbot(Guid id)
+    {
+        Navigation.NavigateTo($"/chatbots/p/{id}");
+    }
+}

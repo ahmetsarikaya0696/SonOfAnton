@@ -352,6 +352,69 @@ public static class NodeRegistry
         },
         new NodeDefinition
         {
+            Type = "ai.sentiment",
+            Name = "Duygu Analizi",
+            Icon = "smile",
+            Category = "Yapay Zeka",
+            Description = "Metin duygu analizi yap (Positive, Negative, Neutral)",
+            Color = "#74c7ec",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "text", DisplayName = "Metin", Type = "string", Required = true, Placeholder = "{{input.text}}" }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "ai.classify",
+            Name = "Metin Sınıflandırma",
+            Icon = "tag",
+            Category = "Yapay Zeka",
+            Description = "Metni belirlenen kategorilere sınıflandır",
+            Color = "#74c7ec",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "text", DisplayName = "Metin", Type = "string", Required = true, Placeholder = "{{input.text}}" },
+                new NodeParameter { Name = "categories", DisplayName = "Kategoriler (Virgülle Ayrılmış)", Type = "string", Required = true, Placeholder = "Spor, Ekonomi, Siyaset, Teknoloji" }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "ai.vision",
+            Name = "Görüntü Analizi",
+            Icon = "image",
+            Category = "Yapay Zeka",
+            Description = "Görüntüyü analiz et",
+            Color = "#74c7ec",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "imageUrl", DisplayName = "Görüntü URL veya Base64", Type = "string", Required = true, Placeholder = "https://example.com/image.jpg" },
+                new NodeParameter { Name = "prompt", DisplayName = "Sorunuz", Type = "string", Required = true, Placeholder = "Bu resimde ne var?" }
+            ]
+        },
+        new NodeDefinition
+        {
+            Type = "ai.agent",
+            Name = "AI Agent (Otonom)",
+            Icon = "cpu",
+            Category = "Yapay Zeka",
+            Description = "Görevleri otonom olarak ve araçları (tools) kullanarak yerine getiren ajan",
+            Color = "#cba6f7",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "prompt", DisplayName = "Görev / Prompt", Type = "string", Required = true, Placeholder = "Size verilen görev nedir?" },
+                new NodeParameter { Name = "systemPrompt", DisplayName = "Ajan Karakteri (Sistem Promptu)", Type = "string", Placeholder = "Sen yardımcı bir asistansın." }
+            ]
+        },
+        new NodeDefinition
+        {
             Type = "ai.embed",
             Name = "Embedding",
             Icon = "layers",

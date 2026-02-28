@@ -64,6 +64,7 @@ builder.Services.AddScoped<ApiKeyService>();
 builder.Services.AddScoped<CredentialService>();
 builder.Services.AddScoped<LinkedAccountService>();
 builder.Services.AddScoped<LogStreamService>();
+builder.Services.AddScoped<ChatbotApiService>();
 builder.Services.AddSingleton<DiagramStateService>();
 builder.Services.AddSingleton<YamlSyncService>();
 builder.Services.AddSingleton<ChatDiagramBridge>();

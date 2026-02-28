@@ -46,6 +46,10 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<MarketplaceReviewEntity> MarketplaceReviews => Set<MarketplaceReviewEntity>();
     public DbSet<MarketplaceInstallEntity> MarketplaceInstalls => Set<MarketplaceInstallEntity>();
 
+    // ─── Chatbots ────────────────────────────────────────────────
+    public DbSet<ChatbotEntity> Chatbots => Set<ChatbotEntity>();
+    public DbSet<ChatbotSessionEntity> ChatbotSessions => Set<ChatbotSessionEntity>();
+
     // ─── Workspaces ───────────────────────────────────────────────
     public DbSet<WorkspaceEntity> Workspaces => Set<WorkspaceEntity>();
     public DbSet<WorkspaceMemberEntity> WorkspaceMembers => Set<WorkspaceMemberEntity>();
@@ -54,6 +58,50 @@ public class SonOfAntonDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // ─── Chatbots ────────────────────────────────────────────────
+        modelBuilder.Entity<ChatbotEntity>(entity =>
+        {
+            entity.ToTable("chatbots");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.SystemPrompt).HasColumnName("system_prompt").HasMaxLength(4000);
+            entity.Property(e => e.Model).HasColumnName("model").HasMaxLength(100);
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(e => e.IsPublic).HasColumnName("is_public").HasDefaultValue(false);
+            
+            entity.HasIndex(e => e.WorkspaceId);
+            entity.HasOne(e => e.Workspace)
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChatbotSessionEntity>(entity =>
+        {
+            entity.ToTable("chatbot_sessions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ChatbotId).HasColumnName("chatbot_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Title).HasColumnName("title").HasMaxLength(255);
+            entity.Property(e => e.HistoryJson).HasColumnName("history_json").HasColumnType("jsonb");
+            
+            entity.HasIndex(e => e.ChatbotId);
+            entity.HasIndex(e => e.UserId);
+            
+            entity.HasOne(e => e.Chatbot)
+                .WithMany(c => c.Sessions)
+                .HasForeignKey(e => e.ChatbotId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
 
         // pgvector extension
         modelBuilder.HasPostgresExtension("vector");

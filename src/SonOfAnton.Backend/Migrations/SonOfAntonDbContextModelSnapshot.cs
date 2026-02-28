@@ -134,6 +134,100 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("chat_history", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatbotEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsPublic")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_public");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("model");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SystemPrompt")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("system_prompt");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("chatbots", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatbotSessionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ChatbotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("chatbot_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HistoryJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("history_json");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChatbotId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("chatbot_sessions", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.CredentialEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1474,6 +1568,35 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("Workflow");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatbotEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.WorkspaceEntity", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatbotSessionEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.ChatbotEntity", "Chatbot")
+                        .WithMany("Sessions")
+                        .HasForeignKey("ChatbotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Chatbot");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.CredentialEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
@@ -1827,6 +1950,11 @@ namespace SonOfAnton.Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Workflow");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatbotEntity", b =>
+                {
+                    b.Navigation("Sessions");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.DataStoreEntity", b =>

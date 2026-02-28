@@ -1,0 +1,202 @@
+@page "/chatbots/p/{Id:guid}"
+@layout MainLayout // Veya public linkler için ayrı bir layout kullanılabilirdi
+@inject ChatbotApiService ChatbotApi
+@inject NavigationManager Navigation
+
+<div class="chatbot-view-container">
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Yükleniyor...</span>
+        </div>
+    }
+    else if (_chatbot == null)
+    {
+        <div class="error-state">
+            <Icon Name="alert-circle" Size="48" />
+            <h2>Bulunamadı</h2>
+            <p>Bu chatbot mevcut değil veya gizli olarak ayarlanmış olabilir.</p>
+        </div>
+    }
+    else
+    {
+        <div class="chat-window">
+            <div class="chat-header">
+                <div class="bot-info">
+                    <div class="bot-avatar">
+                        <Icon Name="bot" Size="20" />
+                    </div>
+                    <div>
+                        <h2>@_chatbot.Name</h2>
+                        @if (!string.IsNullOrEmpty(_chatbot.Description))
+                        {
+                            <span class="bot-desc">@_chatbot.Description</span>
+                        }
+                    </div>
+                </div>
+                <button class="btn-icon" @onclick="RestartSession" title="Sohbeti Temizle">
+                    <Icon Name="refresh-cw" Size="16" />
+                </button>
+            </div>
+
+            <div class="chat-messages" @ref="_chatContainer">
+                @if (_messages.Count == 0)
+                {
+                    <div class="empty-chat-state">
+                        <div class="bot-avatar-large">
+                            <Icon Name="bot" Size="48" />
+                        </div>
+                        <h3>Merhaba, ben @_chatbot.Name!</h3>
+                        <p>Size nasıl yardımcı olabilirim?</p>
+                    </div>
+                }
+                
+                @foreach (var msg in _messages)
+                {
+                    <div class="message @msg.Role">
+                        <div class="message-bubble">
+                            @if (msg.Role == "assistant")
+                            {
+                                <!-- Basit Markdown veya direkt metin. Gerçek projede Markdown component kullanılmalı -->
+                                <pre class="message-content">@msg.Content</pre>
+                            }
+                            else
+                            {
+                                <div class="message-content">@msg.Content</div>
+                            }
+                        </div>
+                        <div class="message-meta">
+                            @(msg.Role == "assistant" ? _chatbot.Name : "Siz")
+                        </div>
+                    </div>
+                }
+                
+                @if (_isSending)
+                {
+                     <div class="message assistant">
+                        <div class="message-bubble typing">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="chat-input-area">
+                <textarea @bind="_currentMessage" 
+                          @onkeyup="HandleKeyUp"
+                          disabled="@_isSending"
+                          placeholder="Mesajınızı yazın... (Göndermek için Enter, yeni satır için Shift+Enter)" 
+                          class="chat-input"></textarea>
+                <button class="btn-send primary-button" 
+                        @onclick="SendMessage" 
+                        disabled="@(string.IsNullOrWhiteSpace(_currentMessage) || _isSending)">
+                    <Icon Name="send" Size="18" />
+                </button>
+            </div>
+            <div class="watermark">Powered by SonOfAnton</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ChatbotDto? _chatbot;
+    private ChatbotSessionDto? _session;
+    private bool _isLoading = true;
+    private bool _isSending = false;
+    
+    private string _currentMessage = "";
+    private List<ChatbotMessageDto> _messages = [];
+    
+    private ElementReference _chatContainer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChatbotAsync();
+    }
+
+    private async Task LoadChatbotAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _chatbot = await ChatbotApi.GetPublicChatbotAsync(Id);
+            if (_chatbot != null)
+            {
+                await CreateNewSession();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateNewSession()
+    {
+        try
+        {
+            if (_chatbot != null)
+            {
+                _session = await ChatbotApi.CreateSessionAsync(_chatbot.Id);
+                _messages.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Session error: {ex.Message}");
+        }
+    }
+
+    private async Task RestartSession()
+    {
+        await CreateNewSession();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_currentMessage) || _session == null || _isSending) return;
+
+        var messageContent = _currentMessage.Trim();
+        _currentMessage = "";
+        
+        // Add user message to UI immediately
+        _messages.Add(new ChatbotMessageDto("user", messageContent));
+        _isSending = true;
+        StateHasChanged();
+        
+        // Scroll to bottom (pseudo code, usually requires JS interop)
+        // await JSRuntime.InvokeVoidAsync("scrollToBottom", _chatContainer);
+
+        try
+        {
+            var response = await ChatbotApi.SendMessageAsync(_session.Id, new ChatbotMessageDto("user", messageContent));
+            _messages.Add(new ChatbotMessageDto("assistant", response.Content));
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new ChatbotMessageDto("assistant", "Üzgünüm, bir hata oluştu: " + ex.Message));
+        }
+        finally
+        {
+            _isSending = false;
+            StateHasChanged();
+        }
+    }
+}

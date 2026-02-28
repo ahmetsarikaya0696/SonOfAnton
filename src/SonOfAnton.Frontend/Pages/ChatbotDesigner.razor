@@ -1,0 +1,203 @@
+@page "/chatbots/{Id:guid}/edit"
+@inject ChatbotApiService ChatbotApi
+@inject NavigationManager Navigation
+
+<div class="chatbot-designer-page">
+    <header class="page-header">
+        <div class="header-left">
+            <button class="btn-icon" @onclick="NavigateBack">
+                <Icon Name="arrow-left" Size="18" />
+            </button>
+            <h2>Chatbot Tasarımcısı</h2>
+        </div>
+        <div class="header-actions">
+            @if (_chatbot != null)
+            {
+                 <button class="btn btn-secondary" @onclick="PreviewChatbot">
+                    <Icon Name="play" Size="14" /> Önizle
+                </button>
+                <button class="btn btn-primary" @onclick="SaveChatbot" disabled="@_isSaving">
+                    @if (_isSaving)
+                    {
+                        <span class="spinner"></span>
+                        <span>Kaydediliyor...</span>
+                    }
+                    else
+                    {
+                        <Icon Name="save" Size="14" />
+                        <span>Kaydet</span>
+                    }
+                </button>
+            }
+        </div>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Chatbot yükleniyor...</span>
+        </div>
+    }
+    else if (_chatbot == null)
+    {
+        <div class="error-state">
+            <Icon Name="alert-triangle" Size="48" />
+            <p>Chatbot bulunamadı.</p>
+            <button class="btn btn-primary mt-4" @onclick="NavigateBack">Listeye Dön</button>
+        </div>
+    }
+    else
+    {
+        <div class="designer-content">
+            <div class="settings-panel">
+                <div class="form-group">
+                    <label>Chatbot Adı</label>
+                    <input type="text" @bind="_editName" class="input" />
+                </div>
+                
+                <div class="form-group">
+                    <label>Açıklama</label>
+                    <textarea @bind="_editDescription" class="input input-textarea" rows="2"></textarea>
+                </div>
+                
+                 <div class="form-group">
+                    <label>Model Seçimi</label>
+                    <select @bind="_editModel" class="input">
+                        <option value="gpt-4o">gpt-4o</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
+                        <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Local)</option>
+                    </select>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" @bind="_editIsPublic" />
+                        Herkese Açık (Public Link)
+                    </label>
+                    @if (_editIsPublic)
+                    {
+                        <div class="public-link-box">
+                            <span class="link-url">@GetPublicLink()</span>
+                            <button class="btn-icon" title="Kopyala" @onclick="CopyPublicLink">
+                                <Icon Name="copy" Size="14" />
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="prompt-panel">
+                <div class="panel-header">
+                    <h3>Sistem İstemi (System Prompt)</h3>
+                    <span class="badge">Yapay zekanın davranışı</span>
+                </div>
+                <div class="prompt-editor-container">
+                    <textarea @bind="_editSystemPrompt" 
+                              class="prompt-editor" 
+                              placeholder="Örn: Sen yardımsever bir müşteri temsilcisisin. Sadece iadeler ile ilgili bilgi ver."></textarea>
+                </div>
+                <div class="prompt-help">
+                    <Icon Name="info" Size="14" />
+                    <span>Sistem istemi, chatbotunuzun nasıl davranacağını, persona'sını, tonunu ve sınırlarını belirler.</span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ChatbotDto? _chatbot;
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    
+    // Binding fields
+    private string _editName = "";
+    private string _editDescription = "";
+    private string _editSystemPrompt = "";
+    private string _editModel = "gpt-4o";
+    private bool _editIsPublic = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChatbotAsync();
+    }
+
+    private async Task LoadChatbotAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _chatbot = await ChatbotApi.GetChatbotAsync(Id);
+            if (_chatbot != null)
+            {
+                _editName = _chatbot.Name;
+                _editDescription = _chatbot.Description ?? "";
+                _editSystemPrompt = _chatbot.SystemPrompt;
+                _editModel = _chatbot.Model;
+                _editIsPublic = _chatbot.IsPublic;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading chatbot: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveChatbot()
+    {
+        if (_chatbot == null) return;
+        
+        _isSaving = true;
+        try
+        {
+            var request = new UpdateChatbotRequest(
+                _editName,
+                _editDescription,
+                _editSystemPrompt,
+                _editModel,
+                _editIsPublic
+            );
+            
+            _chatbot = await ChatbotApi.UpdateChatbotAsync(Id, request);
+            
+            // TODO: Toast notification "Saved"
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving: {ex.Message}");
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        Navigation.NavigateTo("/chatbots");
+    }
+    
+    private void PreviewChatbot()
+    {
+        Navigation.NavigateTo($"/chatbots/p/{Id}");
+    }
+
+    private string GetPublicLink()
+    {
+        var uri = new Uri(Navigation.Uri);
+        return $"{uri.Scheme}://{uri.Authority}/chatbots/p/{Id}";
+    }
+
+    private async Task CopyPublicLink()
+    {
+        // TODO: JS Interop ile panoya kopyala
+    }
+}
