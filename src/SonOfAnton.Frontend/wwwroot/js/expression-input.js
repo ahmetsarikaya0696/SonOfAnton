@@ -161,6 +161,14 @@ window.ExpressionInputInterop = {
 
         let debounceTimer = null;
 
+        el.addEventListener('focus', () => {
+            dotnetRef.invokeMethodAsync('OnJsFocus');
+        });
+
+        el.addEventListener('blur', () => {
+            dotnetRef.invokeMethodAsync('OnJsBlur');
+        });
+
         el.addEventListener('input', () => {
             // Syntax highlight
             this.applySyntaxHighlight(el);

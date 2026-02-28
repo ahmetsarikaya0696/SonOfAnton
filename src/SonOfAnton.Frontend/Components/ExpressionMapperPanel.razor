@@ -1,0 +1,73 @@
+@using SonOfAnton.Shared.DTOs
+@using SonOfAnton.Shared.Models
+
+<div class="expression-mapper-panel @(IsVisible ? "visible" : "")">
+    <div class="mapper-header">
+        <span class="mapper-title">İfade Ekle</span>
+    </div>
+
+    <div class="mapper-section">
+        <div class="mapper-section-title">Değişkenler</div>
+        <div class="mapper-items">
+            @if (Variables.Count == 0)
+            {
+                <div class="mapper-empty">Değişken yok</div>
+            }
+            else
+            {
+                @foreach (var v in Variables)
+                {
+                    <button type="button" class="mapper-item" @onclick="() => OnInsertVariable(v.Name)">
+                        <span class="mapper-item-name">@v.Name</span>
+                        <span class="mapper-item-type">@v.Type</span>
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="mapper-section">
+        <div class="mapper-section-title">Fonksiyonlar</div>
+        <div class="mapper-items">
+            @foreach (var fn in _quickFunctions)
+            {
+                <button type="button" class="mapper-item mapper-func" @onclick="() => OnInsertFunction(fn.Template)">
+                    <span class="mapper-item-name">@fn.Name</span>
+                    <span class="mapper-item-hint">@fn.Hint</span>
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public IReadOnlyList<WorkflowVariableDto> Variables { get; set; } = [];
+    [Parameter] public EventCallback<string> OnInsert { get; set; }
+
+    private static readonly List<(string Name, string Template, string Hint)> _quickFunctions =
+    [
+        ("formatDate", "formatDate(x, 'yyyy-MM-dd')", "Tarih formatla"),
+        ("formatDate", "formatDate(x, 'yyyy-MM')", "Ay formatı"),
+        ("now+format", "formatDate(now(), 'yyyy-MM-dd')", "Bugünün tarihi"),
+        ("substring", "substring(x, 0, 10)", "Metin kes"),
+        ("toUpper", "toUpper(x)", "Büyük harf"),
+        ("toLower", "toLower(x)", "Küçük harf"),
+        ("trim", "trim(x)", "Boşluk sil"),
+        ("if", "if(x; 'evet'; 'hayır')", "Koşullu"),
+        ("ifEmpty", "ifEmpty(x, 'varsayılan')", "Boşsa varsayılan"),
+        ("length", "length(x)", "Uzunluk"),
+        ("replace", "replace(x, 'eski', 'yeni')", "Değiştir"),
+        ("now", "now()", "Şu an"),
+    ];
+
+    private async Task OnInsertVariable(string name)
+    {
+        await OnInsert.InvokeAsync(name);
+    }
+
+    private async Task OnInsertFunction(string template)
+    {
+        await OnInsert.InvokeAsync(template);
+    }
+}

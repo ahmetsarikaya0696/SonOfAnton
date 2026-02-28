@@ -51,9 +51,9 @@
                             @switch (param.Type)
                             {
                                 case "string":
-                                    <ExpressionInput Value="@GetParamValue(param.Name)?.ToString()"
-                                                     Placeholder="@param.Placeholder"
-                                                     OnValueChanged="(v) => SetParamValue(param.Name, v)" />
+                                    <ExpressionInputWithMapper Value="@GetParamValue(param.Name)?.ToString()"
+                                                                Placeholder="@param.Placeholder"
+                                                                OnValueChanged="(v) => SetParamValue(param.Name, v)" />
                                     break;
                                     
                                 case "number":

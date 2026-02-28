@@ -1,0 +1,85 @@
+@using SonOfAnton.Shared.DTOs
+@inject DiagramStateService DiagramState
+@implements IDisposable
+
+<div class="expression-input-with-mapper" tabindex="-1" @onfocusout="HandleFocusOut">
+    <ExpressionMapperPanel IsVisible="_mapperVisible"
+                           Variables="_variables"
+                           OnInsert="HandleInsert" />
+    <div class="expression-input-container">
+        <ExpressionInput @ref="_expressionInputRef"
+                        Value="@Value"
+                        Placeholder="@Placeholder"
+                        OnValueChanged="(v) => OnValueChanged.InvokeAsync(v)"
+                        OnFocus="ShowMapper"
+                        OnBlur="ScheduleHideMapper" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public EventCallback<string> OnValueChanged { get; set; }
+
+    private ExpressionInput? _expressionInputRef;
+    private bool _mapperVisible;
+    private CancellationTokenSource? _hideMapperCts;
+    private List<WorkflowVariableDto> _variables = [];
+
+    protected override void OnInitialized()
+    {
+        DiagramState.OnStateChanged += LoadVariables;
+        LoadVariables();
+    }
+
+    private void LoadVariables()
+    {
+        _variables = [.. DiagramState.GetVariables()];
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ShowMapper()
+    {
+        _mapperVisible = true;
+    }
+
+    private async Task ScheduleHideMapper()
+    {
+        _hideMapperCts?.Cancel();
+        _hideMapperCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(150, _hideMapperCts.Token);
+            _mapperVisible = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task HandleFocusOut(FocusEventArgs e)
+    {
+        _hideMapperCts?.Cancel();
+        _hideMapperCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(100, _hideMapperCts.Token);
+            _mapperVisible = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task HandleInsert(string text)
+    {
+        if (_expressionInputRef != null)
+        {
+            await _expressionInputRef.InsertTextAtCaretAsync(text);
+        }
+        _hideMapperCts?.Cancel();
+    }
+
+    public void Dispose()
+    {
+        DiagramState.OnStateChanged -= LoadVariables;
+    }
+}

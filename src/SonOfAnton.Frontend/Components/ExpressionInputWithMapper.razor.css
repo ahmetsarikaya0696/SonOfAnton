@@ -1,0 +1,20 @@
+/* ═══════════════════════════════════════════════════════════════
+   Expression Input With Mapper - Input + sol mapper panel
+   ═══════════════════════════════════════════════════════════════ */
+
+.expression-input-with-mapper {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    min-height: 36px;
+}
+
+.expression-input-with-mapper:focus {
+    outline: none;
+}
+
+.expression-input-container {
+    flex: 1;
+    min-width: 0;
+}

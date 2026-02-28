@@ -55,6 +55,8 @@
     [Parameter] public string? Value { get; set; }
     [Parameter] public string? Placeholder { get; set; }
     [Parameter] public EventCallback<string> OnValueChanged { get; set; }
+    [Parameter] public EventCallback OnFocus { get; set; }
+    [Parameter] public EventCallback OnBlur { get; set; }
 
     private ElementReference _editorRef;
     private DotNetObjectReference<ExpressionInput>? _dotnetRef;
@@ -186,6 +188,18 @@
     }
 
     [JSInvokable]
+    public Task OnJsFocus()
+    {
+        return OnFocus.InvokeAsync();
+    }
+
+    [JSInvokable]
+    public Task OnJsBlur()
+    {
+        return OnBlur.InvokeAsync();
+    }
+
+    [JSInvokable]
     public Task<bool> OnJsArrow(int direction)
     {
         if (!_showAutocomplete || _filteredFunctions.Count == 0)
@@ -302,6 +316,21 @@
         {
             _validationState = "";
         }
+    }
+
+    /// <summary>
+    /// Caret pozisyonuna metin ekler (Expression Mapper panelinden çağrılır)
+    /// </summary>
+    public async Task InsertTextAtCaretAsync(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("ExpressionInputInterop.insertAtCaret", _editorRef, text);
+            _currentText = await JS.InvokeAsync<string>("ExpressionInputInterop.getText", _editorRef);
+            await OnValueChanged.InvokeAsync(_currentText);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { /* JS henüz hazır olmayabilir */ }
     }
 
     public async ValueTask DisposeAsync()
