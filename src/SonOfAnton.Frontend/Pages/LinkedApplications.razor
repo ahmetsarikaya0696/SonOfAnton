@@ -1,0 +1,129 @@
+@page "/linked-applications"
+@using SonOfAnton.Frontend.Components
+@using SonOfAnton.Shared.DTOs
+@inject LinkedAccountService LinkedAccountService
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+
+<div class="apikeys-page">
+    <header class="page-header">
+        <div class="header-title">
+            <h2><Icon Name="link" Size="24" /> Bağlı Uygulamalar</h2>
+            <p>Platform üzerinden harici uygulamalara bağlanın (örn: Google, Slack).</p>
+        </div>
+        <div class="header-actions">
+            <!-- Normalde provider listesi backend'den gelebilir. Statik ekliyoruz -->
+            <button class="btn btn-primary" @onclick="@(() => StartConnect("google"))">
+                <Icon Name="plus" Size="14" /> Google'a Bağlan
+            </button>
+            <a href="/" class="btn btn-secondary">
+                <Icon Name="arrow-left" Size="14" /> Editöre Dön
+            </a>
+        </div>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <span class="spinner"></span>
+            <span>Bağlantılar yükleniyor...</span>
+        </div>
+    }
+    else if (_linkedAccounts.Count == 0)
+    {
+        <div class="empty-state">
+            <Icon Name="link" Size="48" />
+            <p>Hiçbir harici uygulama bağlantınız yok.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Kullanıcı ID</th>
+                        <th>Oluşturulma</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var acc in _linkedAccounts)
+                    {
+                        <tr>
+                            <td><strong>@acc.Provider</strong></td>
+                            <td class="font-mono text-muted">@acc.ProviderUserId</td>
+                            <td>@acc.CreatedAt.ToString("dd MMM yyyy HH:mm")</td>
+                            <td class="actions-cell">
+                                <button class="btn btn-icon btn-secondary" title="Yenile" @onclick="() => RefreshTokenAsync(acc)">
+                                    <Icon Name="refresh-cw" Size="16" />
+                                </button>
+                                <button class="btn btn-icon btn-danger" title="Bağlantıyı Kes" @onclick="() => DeleteAsync(acc)">
+                                    <Icon Name="trash-2" Size="16" />
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<LinkedAccountDto> _linkedAccounts = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _linkedAccounts = await LinkedAccountService.GetLinkedAccountsAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void StartConnect(string provider)
+    {
+        // Backend OAuth authorization başlatma endpointine yönlendir
+        // Bu endpoint doğrudan dış provider'a (e.g. Google) redirect edecek.
+        // RedirectURI callback endpointini gösterecek ve veritabanına token'ı yazdıktan sonra
+        // kullanıcıyı geri bu sayfaya yönderebilirse iyi olur (bunu state param ile handle etmek gerekir)
+        // Şimdilik sadece URL'yi tetikliyoruz.
+        string connectUrl = $"/api/linked-accounts/connect/{provider}";
+        NavigationManager.NavigateTo(connectUrl, true);
+    }
+
+    private async Task RefreshTokenAsync(LinkedAccountDto acc)
+    {
+        try
+        {
+             await LinkedAccountService.RefreshTokenAsync(acc.Id);
+             await JS.InvokeVoidAsync("alert", "Token başarıyla yenilendi.");
+        } 
+        catch (Exception ex)
+        {
+             await JS.InvokeVoidAsync("alert", $"Yenileme hatası: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteAsync(LinkedAccountDto acc)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"'{acc.Provider}' bağlantısını kesmek istediğinize emin misiniz?");
+        if (confirmed)
+        {
+            await LinkedAccountService.DeleteLinkedAccountAsync(acc.Id);
+            _linkedAccounts.Remove(acc);
+        }
+    }
+}

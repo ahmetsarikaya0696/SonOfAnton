@@ -401,6 +401,9 @@ builder.Services.AddScoped<HybridSearchService>();
 // Snapshot Service
 builder.Services.AddScoped<SnapshotService>();
 
+// Encryption Service
+builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
+
 // State Recovery Repository
 builder.Services.AddScoped<SonOfAnton.Backend.Services.State.IStateRepository, SonOfAnton.Backend.Services.State.WorkflowStateRepository>();
 

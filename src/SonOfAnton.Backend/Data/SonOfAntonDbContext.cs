@@ -33,6 +33,8 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<WorkflowRevisionEntity> WorkflowRevisions => Set<WorkflowRevisionEntity>();
     public DbSet<ApiKeyEntity> ApiKeys => Set<ApiKeyEntity>();
     public DbSet<WorkflowApiEndpointEntity> WorkflowApiEndpoints => Set<WorkflowApiEndpointEntity>();
+    public DbSet<CredentialEntity> Credentials => Set<CredentialEntity>();
+    public DbSet<LinkedAccountEntity> LinkedAccounts => Set<LinkedAccountEntity>();
 
     // ─── Data Stores ─────────────────────────────────────────────
     public DbSet<DataStoreEntity> DataStores => Set<DataStoreEntity>();
@@ -336,6 +338,69 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Credentials
+        modelBuilder.Entity<CredentialEntity>(entity =>
+        {
+            entity.ToTable("credentials");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.SystemName).HasColumnName("system_name").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.EncryptedData).HasColumnName("encrypted_data").IsRequired();
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.UserId);
+            
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // LinkedAccounts
+        modelBuilder.Entity<LinkedAccountEntity>(entity =>
+        {
+            entity.ToTable("linked_accounts");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Provider).HasColumnName("provider").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.ProviderUserId).HasColumnName("provider_user_id").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.CredentialId).HasColumnName("credential_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => new { e.Provider, e.ProviderUserId }).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Credential)
+                .WithMany()
+                .HasForeignKey(e => e.CredentialId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Workflow Statistics columns

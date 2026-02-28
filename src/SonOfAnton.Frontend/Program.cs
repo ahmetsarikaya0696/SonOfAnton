@@ -61,6 +61,8 @@ builder.Services.AddScoped(sp =>
 // Application Services
 builder.Services.AddScoped<WorkflowApiService>();
 builder.Services.AddScoped<ApiKeyService>();
+builder.Services.AddScoped<CredentialService>();
+builder.Services.AddScoped<LinkedAccountService>();
 builder.Services.AddScoped<LogStreamService>();
 builder.Services.AddSingleton<DiagramStateService>();
 builder.Services.AddSingleton<YamlSyncService>();
