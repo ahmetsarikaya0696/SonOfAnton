@@ -1,0 +1,227 @@
+@page "/p/{Slug}"
+@layout SonOfAnton.Frontend.Layout.MainLayout
+@using System.Text.Json
+@using SonOfAnton.Shared.Models
+@using SonOfAnton.Frontend.Services
+@inject DataFormClientService DataFormService
+
+<div class="public-form-container">
+    @if (_isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading form...</p>
+        </div>
+    }
+    else if (_form == null)
+    {
+        <div class="error-state">
+            <i class="fas fa-exclamation-circle text-danger"></i>
+            <h2>Form Not Found</h2>
+            <p>This form is either inactive or doesn't exist.</p>
+        </div>
+    }
+    else if (_isSubmitted)
+    {
+        <div class="success-state">
+            <i class="fas fa-check-circle text-success"></i>
+            <h2>Thank You!</h2>
+            <p>Your response has been recorded successfully.</p>
+            <button class="btn btn-outline mt-4" @onclick="ResetForm">Submit another response</button>
+        </div>
+    }
+    else
+    {
+        <div class="form-card">
+            <div class="form-header">
+                <h2>@_form.Name</h2>
+                @if (!string.IsNullOrWhiteSpace(_form.Description))
+                {
+                    <p class="description">@_form.Description</p>
+                }
+            </div>
+
+            <EditForm Model="_submitDto" OnValidSubmit="Submit">
+                <div class="form-body">
+                    @foreach (var field in _fields.Where(f => f.IsVisible))
+                    {
+                        var value = _submitDto.Values.GetValueOrDefault(field.ColumnId)?.ToString() ?? "";
+                        
+                        <div class="form-group">
+                            <label>@field.Label @if(field.IsRequired) { <span class="text-danger">*</span> }</label>
+                            
+                            @if (!string.IsNullOrWhiteSpace(field.Description))
+                            {
+                                <small class="field-desc">@field.Description</small>
+                            }
+                            
+                            <input type="text" 
+                                   class="form-control @(_showValidation && field.IsRequired && string.IsNullOrWhiteSpace(value) ? "is-invalid" : "")" 
+                                   value="@value" 
+                                   @onchange="(e) => UpdateValue(field.ColumnId, e.Value?.ToString())" />
+                                   
+                            @if (_showValidation && field.IsRequired && string.IsNullOrWhiteSpace(value))
+                            {
+                                <div class="invalid-feedback">This field is required.</div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="form-footer">
+                    <button type="submit" class="btn btn-primary btn-submit" disabled="@_isSubmitting">
+                        @if (_isSubmitting)
+                        {
+                            <span class="spinner-small"></span>
+                            <span>Submitting...</span>
+                        }
+                        else
+                        {
+                            <span>Submit Response</span>
+                        }
+                    </button>
+                    <div class="powered-by">Powered by SonOfAnton</div>
+                </div>
+            </EditForm>
+        </div>
+    }
+</div>
+
+<style>
+    body { background-color: #f4f6f8; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+    
+    .public-form-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; box-sizing: border-box; }
+    
+    .form-card { background: white; width: 100%; max-width: 600px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #e9ecef; }
+    
+    .form-header { padding: 40px 40px 20px; border-bottom: 1px solid #f1f3f5; }
+    .form-header h2 { margin: 0 0 10px; font-size: 2rem; color: #1a1d20; font-weight: 700; }
+    .description { margin: 0; color: #6c757d; line-height: 1.5; font-size: 1.05rem; }
+    
+    .form-body { padding: 30px 40px; display: flex; flex-direction: column; gap: 24px; }
+    
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group label { font-weight: 600; color: #343a40; font-size: 0.95rem; }
+    .field-desc { color: #6c757d; font-size: 0.85rem; margin-top: -4px; margin-bottom: 4px; }
+    
+    .form-control { padding: 12px 16px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; background: #f8f9fa; }
+    .form-control:focus { outline: none; border-color: #0d6efd; background: white; box-shadow: 0 0 0 4px rgba(13,110,253,0.1); }
+    .form-control.is-invalid { border-color: #dc3545; background: #fff8f8; }
+    
+    .invalid-feedback { color: #dc3545; font-size: 0.85rem; margin-top: 4px; }
+    
+    .form-footer { padding: 20px 40px 30px; display: flex; flex-direction: column; gap: 20px; }
+    
+    .btn { padding: 14px 24px; border-radius: 8px; font-weight: 600; font-size: 1.05rem; cursor: pointer; border: none; transition: transform 0.1s, opacity 0.2s; display: inline-flex; justify-content: center; align-items: center; gap: 10px; }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.95; }
+    .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+    
+    .btn-submit { background: #0d6efd; color: white; width: 100%; }
+    .btn-outline { background: white; border: 2px solid #dee2e6; color: #495057; }
+    .btn-outline:hover { background: #f8f9fa; border-color: #ced4da; }
+    
+    .powered-by { text-align: center; color: #adb5bd; font-size: 0.8rem; font-weight: 500; letter-spacing: 0.5px; }
+    
+    .text-danger { color: #dc3545; }
+    .text-success { color: #198754; }
+    
+    .loading-state, .error-state, .success-state { text-align: center; background: white; padding: 60px 40px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); max-width: 500px; width: 100%; }
+    .error-state i, .success-state i { font-size: 4rem; margin-bottom: 20px; }
+    .error-state h2, .success-state h2 { margin: 0 0 10px; color: #212529; }
+    .error-state p, .success-state p { margin: 0; color: #6c757d; }
+    
+    .spinner-small { width: 1rem; height: 1rem; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+    private bool _isSubmitted = false;
+    private bool _showValidation = false;
+    
+    private DataFormDto? _form;
+    private List<DataFormFieldDefinition> _fields = new();
+    
+    private DataFormSubmitDto _submitDto = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadForm();
+    }
+
+    private async Task LoadForm()
+    {
+        _isLoading = true;
+        try
+        {
+            _form = await DataFormService.GetPublicFormAsync(Slug);
+            if (_form != null && _form.FieldsJson != null)
+            {
+                _fields = JsonSerializer.Deserialize<List<DataFormFieldDefinition>>(_form.FieldsJson.RootElement.GetRawText()) ?? new();
+                
+                // Initialize values dictionary
+                _submitDto.Values = new Dictionary<string, object?>();
+                foreach (var f in _fields.Where(x => x.IsVisible))
+                {
+                    _submitDto.Values[f.ColumnId] = "";
+                }
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void UpdateValue(string columnId, string? value)
+    {
+        _submitDto.Values[columnId] = value;
+    }
+
+    private async Task Submit()
+    {
+        _showValidation = true;
+        
+        // Manual Validation
+        bool isValid = true;
+        foreach (var field in _fields.Where(f => f.IsVisible && f.IsRequired))
+        {
+            var valStr = _submitDto.Values.GetValueOrDefault(field.ColumnId)?.ToString();
+            if (string.IsNullOrWhiteSpace(valStr))
+            {
+                isValid = false;
+                break;
+            }
+        }
+        
+        if (!isValid) return;
+
+        _isSubmitting = true;
+        try
+        {
+            var result = await DataFormService.SubmitPublicFormAsync(Slug, _submitDto);
+            if (result)
+            {
+                _isSubmitted = true;
+            }
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+    
+    private void ResetForm()
+    {
+        _isSubmitted = false;
+        _showValidation = false;
+        _submitDto = new DataFormSubmitDto { Values = new Dictionary<string, object?>() };
+        foreach (var f in _fields.Where(x => x.IsVisible))
+        {
+            _submitDto.Values[f.ColumnId] = "";
+        }
+    }
+}

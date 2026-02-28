@@ -1,0 +1,194 @@
+@page "/datatables"
+@using SonOfAnton.Shared.Models
+@using SonOfAnton.Frontend.Services
+@inject DataTableClientService DataTableService
+@inject NavigationManager NavigationManager
+
+<div class="header">
+    <div class="title-container">
+        <h1><i class="fas fa-table"></i> Data Tables</h1>
+        <p>Manage your dynamic, relational data stores similar to Zapier Tables.</p>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="ShowCreateModal">
+            <i class="fas fa-plus"></i> New Table
+        </button>
+    </div>
+</div>
+
+<div class="content">
+    @if (_isLoading)
+    {
+        <div class="loading">Yükleniyor...</div>
+    }
+    else if (!_tables.Any())
+    {
+        <div class="empty-state">
+            <i class="fas fa-database"></i>
+            <h3>No Data Tables found</h3>
+            <p>Create a new table to start storing and managing your data.</p>
+            <button class="btn btn-primary mt-3" @onclick="ShowCreateModal">Create New Table</button>
+        </div>
+    }
+    else
+    {
+        <div class="table-grid">
+            @foreach (var table in _tables)
+            {
+                <div class="table-card" @onclick="() => GoToTable(table.Id)">
+                    <div class="table-card-header">
+                        <h3>@table.Name</h3>
+                        <span class="row-badge">@table.RowCount rows</span>
+                    </div>
+                    <p class="description">@(string.IsNullOrWhiteSpace(table.Description) ? "No description provided." : table.Description)</p>
+                    <div class="table-card-footer">
+                        <small>Last updated: @table.UpdatedAt.ToLocalTime().ToString("g")</small>
+                        <button class="btn btn-icon btn-danger" @onclick="() => DeleteTable(table.Id)" @onclick:stopPropagation="true" title="Delete Table">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_showCreateModal)
+{
+    <div class="modal-backdrop">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Data Table</h2>
+                <button class="btn-close" @onclick="CloseCreateModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" class="form-control" @bind="_newTable.Name" placeholder="E.g., Leads" />
+                </div>
+                <div class="form-group mt-3">
+                    <label>Description (Optional)</label>
+                    <textarea class="form-control" @bind="_newTable.Description" rows="3" placeholder="Description about the table..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="CreateTable" disabled="@string.IsNullOrWhiteSpace(_newTable.Name)">
+                    Create
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .title-container h1 { margin: 0; font-size: 1.8rem; display: flex; align-items: center; gap: 10px; }
+    .title-container p { color: var(--text-muted, #6c757d); margin: 5px 0 0 0; }
+    
+    .table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    .table-card { 
+        background: var(--surface-bg, #ffffff); 
+        border: 1px solid var(--border-color, #dee2e6); 
+        border-radius: 8px; 
+        padding: 20px; 
+        cursor: pointer; 
+        transition: transform 0.2s, box-shadow 0.2s; 
+        display: flex;
+        flex-direction: column;
+    }
+    .table-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-color: var(--primary-color, #0d6efd); }
+    .table-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .table-card-header h3 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+    .row-badge { background: var(--primary-light, #e7f1ff); color: var(--primary-color, #0d6efd); padding: 4px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+    .description { color: var(--text-muted, #6c757d); font-size: 0.95rem; margin-bottom: 20px; flex-grow: 1; }
+    .table-card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color, #dee2e6); padding-top: 15px; }
+    .table-card-footer small { color: var(--text-muted, #6c757d); }
+    
+    .empty-state { text-align: center; padding: 60px 20px; background: var(--surface-bg, #ffffff); border-radius: 12px; border: 1px dashed var(--border-color, #dee2e6); }
+    .empty-state i { font-size: 3rem; color: var(--text-muted, #dee2e6); margin-bottom: 15px; }
+    .empty-state h3 { margin: 0 0 10px 0; color: var(--text-color, #212529); }
+    .empty-state p { margin: 0; color: var(--text-muted, #6c757d); }
+
+    .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1050; }
+    .modal { background: var(--surface-bg, #ffffff); width: 100%; max-width: 500px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color, #dee2e6); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { margin: 0; font-size: 1.25rem; }
+    .btn-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-muted, #6c757d); }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 20px; border-top: 1px solid var(--border-color, #dee2e6); display: flex; justify-content: flex-end; gap: 10px; }
+    
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group label { font-weight: 500; font-size: 0.9rem; }
+    .form-control { padding: 10px 12px; border: 1px solid var(--border-color, #dee2e6); border-radius: 6px; font-size: 1rem; width: 100%; box-sizing: border-box; }
+    .form-control:focus { outline: none; border-color: var(--primary-color, #0d6efd); box-shadow: 0 0 0 2px rgba(13,110,253,0.25); }
+    
+    .mt-3 { margin-top: 16px; }
+    .btn { padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary-color, #0d6efd); color: white; }
+    .btn-secondary { background: var(--text-muted, #6c757d); color: white; }
+    .btn-danger { background: var(--danger-color, #dc3545); color: white; }
+    .btn-icon { padding: 6px 10px; }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private List<DataTableDto> _tables = new();
+    
+    private bool _showCreateModal = false;
+    private DataTableCreateDto _newTable = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTablesAsync();
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _tables = await DataTableService.GetTablesAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void GoToTable(Guid tableId)
+    {
+        NavigationManager.NavigateTo($"/datatables/{tableId}");
+    }
+
+    private async Task DeleteTable(Guid tableId)
+    {
+        if (await DataTableService.DeleteTableAsync(tableId))
+        {
+            await LoadTablesAsync();
+        }
+    }
+
+    private void ShowCreateModal()
+    {
+        _newTable = new DataTableCreateDto();
+        _showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        _showCreateModal = false;
+    }
+
+    private async Task CreateTable()
+    {
+        var result = await DataTableService.CreateTableAsync(_newTable);
+        if (result != null)
+        {
+            _showCreateModal = false;
+            await LoadTablesAsync();
+        }
+    }
+}

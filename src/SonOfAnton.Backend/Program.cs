@@ -433,6 +433,8 @@ builder.Services.AddSingleton<PluginLoaderService>();
 
 // Data Store Service
 builder.Services.AddScoped<IDataStoreService, DataStoreService>();
+builder.Services.AddScoped<IDataTableService, DataTableService>();
+builder.Services.AddScoped<IDataFormService, DataFormService>();
 
 // Data Store Node Handlers
 builder.Services.AddScoped<INodeHandler, StateSetHandler>();

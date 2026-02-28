@@ -386,6 +386,109 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("custom_node_definitions", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataFormEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DataTableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("data_table_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<JsonDocument>("FieldsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("fields_json");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("slug");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<JsonDocument>("ThemeJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("theme_json");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DataTableId");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("data_forms", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataRowEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DataTableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("data_table_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<JsonDocument>("ValuesJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("values_json");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DataTableId");
+
+                    b.ToTable("data_rows", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.DataStoreEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -462,6 +565,60 @@ namespace SonOfAnton.Backend.Migrations
                         .IsUnique();
 
                     b.ToTable("data_store_entries", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataTableEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<JsonDocument>("ColumnsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("columns_json");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("data_tables", (string)null);
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionCheckpointEntity", b =>
@@ -1633,6 +1790,42 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataFormEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.DataTableEntity", "DataTable")
+                        .WithMany("Forms")
+                        .HasForeignKey("DataTableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.WorkspaceEntity", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("DataTable");
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataRowEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.DataTableEntity", "DataTable")
+                        .WithMany("Rows")
+                        .HasForeignKey("DataTableId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DataTable");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.DataStoreEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
@@ -1652,6 +1845,30 @@ namespace SonOfAnton.Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("DataStore");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataTableEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.WorkspaceEntity", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionCheckpointEntity", b =>
@@ -1960,6 +2177,13 @@ namespace SonOfAnton.Backend.Migrations
             modelBuilder.Entity("SonOfAnton.Shared.Entities.DataStoreEntity", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.DataTableEntity", b =>
+                {
+                    b.Navigation("Forms");
+
+                    b.Navigation("Rows");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ExecutionEntity", b =>

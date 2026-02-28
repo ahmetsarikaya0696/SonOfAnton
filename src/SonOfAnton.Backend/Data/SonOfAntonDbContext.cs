@@ -40,6 +40,11 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<DataStoreEntity> DataStores => Set<DataStoreEntity>();
     public DbSet<DataStoreEntryEntity> DataStoreEntries => Set<DataStoreEntryEntity>();
 
+    // ─── Data Tables (Zapier-like) ───────────────────────────────
+    public DbSet<DataTableEntity> DataTables => Set<DataTableEntity>();
+    public DbSet<DataRowEntity> DataRows => Set<DataRowEntity>();
+    public DbSet<DataFormEntity> DataForms => Set<DataFormEntity>();
+
     // ─── Custom Nodes & Marketplace ──────────────────────────────
     public DbSet<CustomNodeDefinitionEntity> CustomNodeDefinitions => Set<CustomNodeDefinitionEntity>();
     public DbSet<MarketplaceItemEntity> MarketplaceItems => Set<MarketplaceItemEntity>();
@@ -754,6 +759,95 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany(s => s.Entries)
                 .HasForeignKey(e => e.DataStoreId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Data Tables ─────────────────────────────────────────────
+        modelBuilder.Entity<DataTableEntity>(entity =>
+        {
+            entity.ToTable("data_tables");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.ColumnsJson).HasColumnName("columns_json").HasColumnType("jsonb");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.WorkspaceId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Workspace)
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<DataRowEntity>(entity =>
+        {
+            entity.ToTable("data_rows");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DataTableId).HasColumnName("data_table_id");
+            entity.Property(e => e.ValuesJson).HasColumnName("values_json").HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.DataTableId);
+
+            entity.HasOne(e => e.DataTable)
+                .WithMany(t => t.Rows)
+                .HasForeignKey(e => e.DataTableId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DataFormEntity>(entity =>
+        {
+            entity.ToTable("data_forms");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DataTableId).HasColumnName("data_table_id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.Slug).HasColumnName("slug").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.FieldsJson).HasColumnName("fields_json").HasColumnType("jsonb");
+            entity.Property(e => e.ThemeJson).HasColumnName("theme_json").HasColumnType("jsonb");
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.Slug).IsUnique();
+            entity.HasIndex(e => e.DataTableId);
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.DataTable)
+                .WithMany(t => t.Forms)
+                .HasForeignKey(e => e.DataTableId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Workspace)
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ─── Workspaces ───────────────────────────────────────────────

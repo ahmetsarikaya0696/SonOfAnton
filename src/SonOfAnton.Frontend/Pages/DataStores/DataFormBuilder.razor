@@ -1,0 +1,246 @@
+@page "/dataforms/builder"
+@using System.Text.Json
+@using SonOfAnton.Shared.Models
+@using SonOfAnton.Frontend.Services
+@inject DataTableClientService DataTableService
+@inject DataFormClientService DataFormService
+@inject NavigationManager NavigationManager
+
+<div class="header">
+    <div class="title-container">
+        <h1><i class="fas fa-list-alt"></i> Form Builder</h1>
+        <p>Create forms mapped to Data Tables to easily collect and store entries.</p>
+    </div>
+</div>
+
+<div class="content">
+    <div class="form-builder-layout">
+        <!-- Sidebar -->
+        <div class="sidebar panel">
+            <h3>1. Select Data Table</h3>
+            @if (_tables.Any())
+            {
+                <select class="form-select" @onchange="OnTableSelected">
+                    <option value="">-- Choose a table --</option>
+                    @foreach (var table in _tables)
+                    {
+                        <option value="@table.Id">@table.Name</option>
+                    }
+                </select>
+            }
+            else if (_isLoadingTables)
+            {
+                <p class="text-muted">Loading tables...</p>
+            }
+            else
+            {
+                <p class="text-danger">No tables found. Please create one first.</p>
+                <button class="btn btn-outline w-100" @onclick='() => NavigationManager.NavigateTo("/datatables")'>Go to Data Tables</button>
+            }
+
+            @if (_selectedTable != null)
+            {
+                <h3 class="mt-4">2. Form Details</h3>
+                <div class="form-group mb-3">
+                    <label>Form Name</label>
+                    <input type="text" class="form-control" @bind="_formName" placeholder="E.g., Contact Us Form" />
+                </div>
+                <div class="form-group mb-3">
+                    <label>Description</label>
+                    <textarea class="form-control" @bind="_formDescription" rows="3"></textarea>
+                </div>
+                
+                <h3 class="mt-4">3. Map Fields</h3>
+                <p class="text-muted small">Select which columns to show in your form and customize their public label.</p>
+                
+                @if (!_fieldDefinitions.Any())
+                {
+                    <p class="text-warning">This table has no text columns to map.</p>
+                }
+                
+                <div class="fields-list">
+                    @foreach (var field in _fieldDefinitions)
+                    {
+                        <div class="field-item @(field.IsVisible ? "active" : "")">
+                            <label class="checkbox-label">
+                                <input type="checkbox" @bind="field.IsVisible" />
+                                <strong>@GetColumnName(field.ColumnId)</strong>
+                            </label>
+                            
+                            @if (field.IsVisible)
+                            {
+                                <div class="field-settings mt-2">
+                                    <input type="text" class="form-control form-control-sm mb-1" @bind="field.Label" placeholder="Public Label (e.g., First Name)" />
+                                    <label class="checkbox-label small">
+                                        <input type="checkbox" @bind="field.IsRequired" /> Required
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <button class="btn btn-primary w-100 mt-4" @onclick="SaveForm" disabled="@(!_fieldDefinitions.Any(x => x.IsVisible) || string.IsNullOrWhiteSpace(_formName))">
+                    Publish Form
+                </button>
+            }
+        </div>
+
+        <!-- Preview Area -->
+        <div class="preview-area panel">
+            <h3>Live Preview</h3>
+            @if (_selectedTable == null)
+            {
+                <div class="empty-preview">
+                    <i class="fas fa-eye text-muted" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                    <p class="text-muted">Select a table to see the form preview.</p>
+                </div>
+            }
+            else
+            {
+                <div class="live-form">
+                    <h2 class="form-title">@(string.IsNullOrWhiteSpace(_formName) ? "Untitled Form" : _formName)</h2>
+                    <p class="form-description">@_formDescription</p>
+                    
+                    <div class="form-fields">
+                        @foreach (var field in _fieldDefinitions.Where(f => f.IsVisible))
+                        {
+                            <div class="form-group mb-3">
+                                <label>
+                                    @field.Label
+                                    @if (field.IsRequired) { <span class="text-danger">*</span> }
+                                </label>
+                                <input type="text" class="form-control" disabled placeholder="Text input preview..." />
+                            </div>
+                        }
+                    </div>
+
+                    @if (_fieldDefinitions.Any(x => x.IsVisible))
+                    {
+                        <button class="btn btn-primary btn-lg mt-3" disabled>Submit</button>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">Enable mapped fields on the left to build your form.</p>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .header { margin-bottom: 24px; }
+    .title-container h1 { margin: 0; font-size: 1.8rem; display: flex; align-items: center; gap: 10px; }
+    .title-container p { color: var(--text-muted, #6c757d); margin: 5px 0 0 0; }
+    
+    .form-builder-layout { display: grid; grid-template-columns: 350px 1fr; gap: 20px; align-items: start; }
+    .panel { background: var(--surface-bg, #ffffff); border: 1px solid var(--border-color, #dee2e6); border-radius: 8px; padding: 20px; }
+    
+    .sidebar h3 { font-size: 1.1rem; margin-top: 0; border-bottom: 1px solid var(--border-color, #dee2e6); padding-bottom: 8px; margin-bottom: 15px; }
+    .form-select { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color, #dee2e6); }
+    .form-group label { font-weight: 500; font-size: 0.9rem; display: block; margin-bottom: 5px; }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color, #dee2e6); border-radius: 6px; box-sizing: border-box; }
+    .form-control-sm { padding: 6px 10px; font-size: 0.85rem; }
+    
+    .fields-list { display: flex; flex-direction: column; gap: 10px; }
+    .field-item { border: 1px solid var(--border-color, #dee2e6); border-radius: 6px; padding: 10px; background: #f8f9fa; }
+    .field-item.active { border-color: var(--primary-color, #0d6efd); background: #f0f7ff; }
+    .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; }
+    .field-settings { padding-top: 10px; border-top: 1px dashed #ccc; }
+    
+    .preview-area h3 { margin-top: 0; color: var(--text-muted, #6c757d); }
+    .empty-preview { text-align: center; padding: 80px 20px; }
+    
+    .live-form { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #eee; }
+    .form-title { font-size: 1.8rem; margin: 0 0 10px; color: #212529; }
+    .form-description { color: #6c757d; margin-bottom: 30px; }
+    
+    .btn { padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; border: 1px solid transparent; }
+    .btn-primary { background: var(--primary-color, #0d6efd); color: white; }
+    .btn-outline { background: white; border-color: var(--border-color, #dee2e6); color: var(--text-color, #212529); }
+    .btn-disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-lg { padding: 12px 24px; font-size: 1.1rem; width: 100%; }
+    .mt-3 { margin-top: 15px; } .mt-4 { margin-top: 20px; } .mb-3 { margin-bottom: 15px; } .mb-1 { margin-bottom: 5px; } .w-100 { width: 100%; }
+    .text-danger { color: #dc3545; } .text-muted { color: #6c757d; } .text-warning { color: #ffc107; }
+</style>
+
+@code {
+    private bool _isLoadingTables = true;
+    private List<DataTableDto> _tables = new();
+    
+    private DataTableDto? _selectedTable;
+    private List<DataTableColumnDefinition> _tableColumns = new();
+    
+    private string _formName = "";
+    private string _formDescription = "";
+    private List<DataFormFieldDefinition> _fieldDefinitions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoadingTables = true;
+        try
+        {
+            _tables = await DataTableService.GetTablesAsync();
+        }
+        finally
+        {
+            _isLoadingTables = false;
+        }
+    }
+
+    private async Task OnTableSelected(ChangeEventArgs e)
+    {
+        var idStr = e.Value?.ToString();
+        if (Guid.TryParse(idStr, out var tableId))
+        {
+            _selectedTable = await DataTableService.GetTableAsync(tableId);
+            if (_selectedTable != null && _selectedTable.ColumnsJson != null)
+            {
+                _tableColumns = JsonSerializer.Deserialize<List<DataTableColumnDefinition>>(_selectedTable.ColumnsJson.RootElement.GetRawText()) ?? new();
+                
+                _fieldDefinitions = _tableColumns.Select(c => new DataFormFieldDefinition
+                {
+                    ColumnId = c.Id,
+                    Label = c.Name,
+                    IsVisible = false,
+                    IsRequired = c.IsRequired
+                }).ToList();
+                
+                _formName = $"{_selectedTable.Name} Form";
+            }
+        }
+        else
+        {
+            _selectedTable = null;
+            _tableColumns.Clear();
+            _fieldDefinitions.Clear();
+        }
+    }
+
+    private string GetColumnName(string colId)
+    {
+        return _tableColumns.FirstOrDefault(c => c.Id == colId)?.Name ?? "Unknown";
+    }
+
+    private async Task SaveForm()
+    {
+        if (_selectedTable == null) return;
+
+        var dto = new DataFormCreateDto
+        {
+            DataTableId = _selectedTable.Id,
+            Name = _formName,
+            Description = _formDescription,
+            IsActive = true,
+            FieldsJson = JsonDocument.Parse(JsonSerializer.Serialize(_fieldDefinitions))
+        };
+
+        var result = await DataFormService.CreateFormAsync(dto);
+        if (result != null)
+        {
+            // Redirect to forms list or show success
+            NavigationManager.NavigateTo($"/p/{result.Slug}");
+        }
+    }
+}
