@@ -36,19 +36,19 @@ public class DynamicWorkflowEndpointMiddleware
         var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
         var jobService = scope.ServiceProvider.GetRequiredService<WorkflowJobService>();
 
-        var route = path.Substring("/api/published/".Length);
+        var route = path.Substring("/api/published/".Length).Trim('/');
         var method = context.Request.Method.ToUpper();
 
-        // 1. Endpoint'i bul
+        // 1. Endpoint'i bul (normalize edilmiş route ile karşılaştır)
         var endpoint = await dbContext.WorkflowApiEndpoints
-            .FirstOrDefaultAsync(e => e.Route == route && e.HttpMethod == method && e.IsActive);
+            .FirstOrDefaultAsync(e => e.IsActive && e.HttpMethod == method && (e.Route == route || e.Route == "/" + route));
 
         if (endpoint == null)
         {
             _logger.LogWarning("Published API endpoint bulunamadı: {Method} {Route}", method, route);
             
             // Eğer route aynı ama method farklıysa 405 Method Not Allowed dönelim
-            var anyEndpoint = await dbContext.WorkflowApiEndpoints.AnyAsync(e => e.Route == route && e.IsActive);
+            var anyEndpoint = await dbContext.WorkflowApiEndpoints.AnyAsync(e => e.IsActive && (e.Route == route || e.Route == "/" + route));
             if (anyEndpoint)
             {
                 context.Response.StatusCode = 405; // Method Not Allowed
@@ -76,13 +76,15 @@ public class DynamicWorkflowEndpointMiddleware
 
         // 3. Payload'u oku
         JsonElement? payload = null;
-        if (context.Request.ContentLength > 0 && 
-           (method == "POST" || method == "PUT" || method == "PATCH"))
+        if (method == "POST" || method == "PUT" || method == "PATCH")
         {
             try
             {
-                using var bodyReader = new StreamReader(context.Request.Body);
+                // Allow multiple reads in case downstream needs the body
+                context.Request.EnableBuffering();
+                using var bodyReader = new StreamReader(context.Request.Body, leaveOpen: true);
                 var bodyString = await bodyReader.ReadToEndAsync();
+                context.Request.Body.Position = 0;
                 if (!string.IsNullOrWhiteSpace(bodyString))
                 {
                     payload = JsonSerializer.Deserialize<JsonElement>(bodyString);

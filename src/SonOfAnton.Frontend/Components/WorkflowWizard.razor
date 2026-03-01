@@ -1,0 +1,275 @@
+@using SonOfAnton.Frontend.Services
+@using SonOfAnton.Shared.DTOs
+@using SonOfAnton.Shared.Enums
+@inject WorkflowApiService ApiService
+@inject DiagramStateService DiagramState
+
+@if (IsVisible)
+{
+    <div class="modal-overlay" @onclick="Close">
+        <div class="wizard-modal" @onclick:stopPropagation="true">
+            <div class="wizard-header">
+                <h3><Icon Name="magic-wand" Size="20" /> Yeni Workflow Oluşturma Sihirbazı</h3>
+                <button class="btn-icon" @onclick="Close"><Icon Name="x" Size="16" /></button>
+            </div>
+
+            <div class="wizard-progress">
+                <div class="step @(CurrentStep >= 1 ? "active" : "")">1. Tetikleyici</div>
+                <div class="step-line @(CurrentStep >= 2 ? "active" : "")"></div>
+                <div class="step @(CurrentStep >= 2 ? "active" : "")">2. Aksiyon</div>
+                <div class="step-line @(CurrentStep >= 3 ? "active" : "")"></div>
+                <div class="step @(CurrentStep >= 3 ? "active" : "")">3. Test</div>
+                <div class="step-line @(CurrentStep >= 4 ? "active" : "")"></div>
+                <div class="step @(CurrentStep >= 4 ? "active" : "")">4. Detaylar</div>
+            </div>
+
+            <div class="wizard-body">
+                @if (CurrentStep == 1)
+                {
+                    <div class="step-content">
+                        <h4>Bu workflow nasıl tetiklenecek?</h4>
+                        <div class="node-grid">
+                            @foreach (var trigger in _triggers)
+                            {
+                                <div class="node-card @(SelectedTrigger?.Type == trigger.Type ? "selected" : "")" 
+                                     @onclick="() => SelectedTrigger = trigger">
+                                    <Icon Name="@trigger.Icon" Size="24" />
+                                    <span>@trigger.Name</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (CurrentStep == 2)
+                {
+                    <div class="step-content">
+                        <h4>Sonrasında hangi işlem yapılacak?</h4>
+                        <div class="node-grid">
+                            <div class="node-card @(SelectedAction == null ? "selected" : "")" 
+                                 @onclick="() => SelectedAction = null">
+                                <Icon Name="skip-forward" Size="24" />
+                                <span>Aksiyonu Atla</span>
+                            </div>
+                            @foreach (var action in _actions)
+                            {
+                                <div class="node-card @(SelectedAction?.Type == action.Type ? "selected" : "")" 
+                                     @onclick="() => SelectedAction = action">
+                                    <Icon Name="@action.Icon" Size="24" />
+                                    <span>@action.Name</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (CurrentStep == 3)
+                {
+                    <div class="step-content">
+                        <h4>Aksiyonu Test Et</h4>
+                        @if (SelectedAction == null)
+                        {
+                            <p>Aksiyon seçilmediği için test atlandı.</p>
+                        }
+                        else
+                        {
+                            <div class="form-group">
+                                <label>Test Verisi (JSON)</label>
+                                <textarea class="input input-textarea" @bind="_testInput" rows="4"></textarea>
+                            </div>
+                            <button class="btn btn-primary" @onclick="TestNodeAsync" disabled="@_isTesting">
+                                @if(_isTesting) { <span class="spinner-sm"></span> }
+                                Testi Çalıştır
+                            </button>
+                            
+                            @if (!string.IsNullOrEmpty(_testError))
+                            {
+                                <div class="alert alert-danger" style="margin-top: 15px; padding: 10px; font-size: 12px; background: rgba(243, 139, 168, 0.1); border: 1px solid var(--error-color); color: var(--error-color); border-radius: 4px;">@_testError</div>
+                            }
+                            @if (!string.IsNullOrEmpty(_testOutput))
+                            {
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label>Sonuç</label>
+                                    <pre class="test-output">@_testOutput</pre>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+                else if (CurrentStep == 4)
+                {
+                    <div class="step-content">
+                        <h4>Workflow Detayları</h4>
+                        <div class="form-group">
+                            <label>İş Akışı Adı</label>
+                            <input type="text" @bind="WorkflowName" class="input" placeholder="Örn: E-ticaret Sipariş Takibi" />
+                        </div>
+                        <div class="summary-box">
+                            <p><strong>Tetikleyici:</strong> @SelectedTrigger?.Name</p>
+                            <p><strong>Aksiyon:</strong> @(SelectedAction?.Name ?? "Yok")</p>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="wizard-footer">
+                @if (CurrentStep > 1)
+                {
+                    <button class="btn btn-ghost" @onclick="PrevStep">Geri</button>
+                }
+                else
+                {
+                    <div></div> <!-- Spacer -->
+                }
+
+                @if (CurrentStep < 4)
+                {
+                    <button class="btn btn-primary" @onclick="NextStep" disabled="@(!CanGoNext)">İleri</button>
+                }
+                else
+                {
+                    <button class="btn btn-success" @onclick="Finish" disabled="@string.IsNullOrWhiteSpace(WorkflowName)">Tamamla ve Oluştur</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsVisibleChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnWizardCompleted { get; set; }
+
+    public int CurrentStep { get; set; } = 1;
+    public string WorkflowName { get; set; } = string.Empty;
+
+    private List<NodeDefinitionDto> _allNodes = new();
+    private List<NodeDefinitionDto> _triggers = new();
+    private List<NodeDefinitionDto> _actions = new();
+
+    private NodeDefinitionDto? SelectedTrigger;
+    private NodeDefinitionDto? SelectedAction;
+
+    private string _testInput = "{}";
+    private string _testOutput = "";
+    private string _testError = "";
+    private bool _isTesting = false;
+
+    private bool CanGoNext => (CurrentStep == 1 && SelectedTrigger != null) || (CurrentStep == 2) || (CurrentStep == 3);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allNodes = await ApiService.GetNodeDefinitionsAsync();
+        _triggers = _allNodes.Where(n => n.Category == "Trigger").ToList();
+        
+        // Eğer trigger yoksa manuel ekleyelim (fallback)
+        if (_triggers.Count == 0)
+        {
+            _triggers.Add(new NodeDefinitionDto { Type = "ManualTriggerNode", Name = "Manuel Başlat", Icon = "play-circle", Category = "Trigger" });
+            _triggers.Add(new NodeDefinitionDto { Type = "WebhookTriggerNode", Name = "Webhook", Icon = "webhook", Category = "Trigger" });
+            _triggers.Add(new NodeDefinitionDto { Type = "TimerNode", Name = "Zamanlayıcı", Icon = "clock", Category = "Trigger" });
+        }
+
+        _actions = _allNodes.Where(n => n.Category != "Trigger" && n.Category != "System").ToList();
+    }
+
+    private void NextStep()
+    {
+        if (CanGoNext)
+        {
+            CurrentStep++;
+        }
+    }
+
+    private void PrevStep()
+    {
+        if (CurrentStep > 1)
+        {
+            CurrentStep--;
+        }
+    }
+
+    private async Task TestNodeAsync()
+    {
+        if (SelectedAction == null) return;
+        _isTesting = true;
+        _testError = "";
+        _testOutput = "";
+        try
+        {
+            object? inputData = null;
+            if (!string.IsNullOrWhiteSpace(_testInput) && _testInput.Trim() != "{}")
+            {
+                inputData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(_testInput);
+            }
+
+            var request = new ExecuteSingleNodeRequest
+            {
+                WorkflowId = Guid.Empty, // Transient
+                Node = new WorkflowNodeDto 
+                { 
+                    Id = Guid.NewGuid(), 
+                    Type = SelectedAction.Type, 
+                    Name = SelectedAction.Name,
+                    Parameters = new Dictionary<string, object?>() 
+                },
+                InputData = inputData,
+                Memory = new Dictionary<string, object?>()
+            };
+
+            var result = await ApiService.ExecuteSingleNodeTransientAsync(request);
+            if (result != null)
+            {
+                if (result.Success)
+                    _testOutput = System.Text.Json.JsonSerializer.Serialize(result.OutputData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                else
+                    _testError = result.Error ?? "Bilinmeyen hata";
+            }
+        }
+        catch (Exception ex)
+        {
+            _testError = ex.Message;
+        }
+        finally
+        {
+            _isTesting = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        IsVisible = false;
+        CurrentStep = 1;
+        await IsVisibleChanged.InvokeAsync(false);
+    }
+
+    private async Task Finish()
+    {
+        DiagramState.CreateNewWorkflow();
+        if (DiagramState.CurrentWorkflow != null)
+        {
+            DiagramState.CurrentWorkflow.Name = string.IsNullOrWhiteSpace(WorkflowName) ? "Yeni İş Akışı" : WorkflowName;
+            
+            // Trigger ekleme
+            if (SelectedTrigger != null)
+            {
+                DiagramState.AddNode(SelectedTrigger, 100, 200);
+            }
+
+            // Action ekleme ve otomatik bağlama
+            if (SelectedAction != null)
+            {
+                DiagramState.AddNode(SelectedAction, 400, 200);
+                
+                // Note: Bağlantı kurmak için DiagramState'in iç mantığını zorlamak gerekebilir,
+                // veya kullanıcı ilk bağlantıyı kendisi çekecektir. UI/UX için yan yana node eklemek yeterlidir.
+            }
+        }
+
+        await Close();
+        await OnWizardCompleted.InvokeAsync();
+    }
+}

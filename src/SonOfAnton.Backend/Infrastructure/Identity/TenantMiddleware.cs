@@ -13,8 +13,8 @@ public class TenantMiddleware
 
     public TenantMiddleware(RequestDelegate next, ILogger<TenantMiddleware> logger)
     {
-        _next = next;
-        _logger = logger;
+        _next = next ?? throw new ArgumentNullException(nameof(next));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task InvokeAsync(HttpContext context, ITenantResolver tenantResolver, IConfiguration configuration)

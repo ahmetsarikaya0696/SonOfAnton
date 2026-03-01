@@ -39,6 +39,7 @@ Migration ile:
 migrations/
 |-- 20260124055211_InitialCreate.cs          ? İlk tablo oluşturma
 |-- 20260124095427_UpdateVectorDimension768.cs ? Vector boyutunu 768'e güncelleme
+|-- 20260228220000_AddNotificationsAndQuotas.cs ? Bildirim ve Kota tabloları
 |-- SonOfAntonDbContextModelSnapshot.cs       ? Güncel şema snapshot'ı
 ```
 
@@ -521,3 +522,32 @@ cd src/SonOfAnton.Backend
 dotnet ef migrations add AddIdentityEntities
 dotnet ef database update
 ```
+
+### 11. Bildirim ve Kota Tabloları (v4)
+
+### notifications
+Anlık ve geçmiş bildirimleri tutar.
+
+| Kolon | Tip | Açıklama |
+|-------|-----|----------|
+| id | UUID (PK) | Bildirim ID |
+| user_id | UUID (FK) | İlgili kullanıcı |
+| title | VARCHAR(200) | Başlık |
+| message | TEXT | İçerik |
+| type | INT | Başarı, Hata, Sistem vb. (Enum) |
+| link | VARCHAR(500) | Tıklandığında gidilecek URL |
+| is_read | BOOLEAN | Okundu mu |
+| created_at | TIMESTAMP | Oluşturulma tarihi |
+
+### user_quotas
+Kullanıcı bazlı kullanım limitlerini takip eder.
+
+| Kolon | Tip | Açıklama |
+|-------|-----|----------|
+| id | UUID (PK) | Kayıt ID |
+| user_id | UUID (FK) | Kullanıcı |
+| max_executions_per_month | INT | Aylık limit |
+| current_month_executions | INT | Mevcut ay kullanımı |
+| current_month_start | TIMESTAMP | Ayın başlangıç tarihi |
+| updated_at | TIMESTAMP | Son güncelleme |
+

@@ -3,7 +3,9 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="user-profile">
+        <div class="top-controls">
+            <NotificationBell />
+            <div class="user-profile">
             <div class="user-info">
                 <div class="avatar">
                     @(context.User.Identity?.Name?.Substring(0, 1).ToUpper() ?? "U")
@@ -19,6 +21,7 @@
                     <line x1="21" y1="12" x2="9" y2="12"></line>
                 </svg>
             </button>
+        </div>
         </div>
     </Authorized>
     <NotAuthorized>
@@ -56,6 +59,12 @@
 }
 
 <style>
+    .top-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
     .user-profile {
         display: flex;
         align-items: center;

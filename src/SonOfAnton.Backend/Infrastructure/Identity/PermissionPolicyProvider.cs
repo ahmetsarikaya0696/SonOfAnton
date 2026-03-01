@@ -26,6 +26,7 @@ public class PermissionPolicyProvider : IAuthorizationPolicyProvider
         if (Permissions.All.Contains(policyName))
         {
             var policy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
                 .AddRequirements(new PermissionRequirement(policyName))
                 .Build();
 

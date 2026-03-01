@@ -1,6 +1,7 @@
 .endpoints-page {
     padding: 2rem;
-    height: 100vh;
+    /* Keep flexible height so modals and toolbars don't get hidden on small screens */
+    min-height: calc(100vh - 80px);
     overflow-y: auto;
     background: var(--bg-color);
     color: var(--text-color);
@@ -35,7 +36,8 @@
 
 .endpoint-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    /* More responsive: allow narrower cards on small screens */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
 }
 

@@ -12,11 +12,16 @@ namespace SonOfAnton.Backend.Controllers;
 public class WorkspacesController : ControllerBase
 {
     private readonly WorkspaceService _workspaceService;
+    private readonly IUserContext _userContext;
     private readonly ILogger<WorkspacesController> _logger;
 
-    public WorkspacesController(WorkspaceService workspaceService, ILogger<WorkspacesController> logger)
+    public WorkspacesController(
+        WorkspaceService workspaceService, 
+        IUserContext userContext,
+        ILogger<WorkspacesController> logger)
     {
         _workspaceService = workspaceService;
+        _userContext = userContext;
         _logger = logger;
     }
 
@@ -26,9 +31,7 @@ public class WorkspacesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<WorkspaceDto>>> GetAll()
     {
-        // TODO: IUserContext'ten userId ve tenantId al — şimdilik Guid.Empty ile çalış
-        var userId = Guid.Empty;
-        var workspaces = await _workspaceService.GetWorkspacesAsync(userId);
+        var workspaces = await _workspaceService.GetWorkspacesAsync(_userContext.CurrentUserId, _userContext.TenantId);
         return Ok(workspaces);
     }
 
@@ -50,9 +53,7 @@ public class WorkspacesController : ControllerBase
     [Authorize(Policy = Permissions.WorkspacesCreate)]
     public async Task<ActionResult<WorkspaceDto>> Create([FromBody] CreateWorkspaceRequest request)
     {
-        // TODO: IUserContext'ten userId ve tenantId al
-        var userId = Guid.Empty;
-        var workspace = await _workspaceService.CreateWorkspaceAsync(request, userId);
+        var workspace = await _workspaceService.CreateWorkspaceAsync(request, _userContext.CurrentUserId, _userContext.TenantId);
         return Ok(workspace);
     }
 

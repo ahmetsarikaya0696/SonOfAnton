@@ -188,9 +188,11 @@ public class OllamaStartupService : IHostedService
                 using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
                 using var reader = new StreamReader(stream);
                 
-                while (!reader.EndOfStream && !cts.Token.IsCancellationRequested)
+                while (!cts.Token.IsCancellationRequested)
                 {
                     var line = await reader.ReadLineAsync(cts.Token);
+                    if (line == null) break;
+
                     if (!string.IsNullOrEmpty(line) && line.Contains("status"))
                     {
                         _logger.LogDebug("Model indirme durumu: {Status}", line);

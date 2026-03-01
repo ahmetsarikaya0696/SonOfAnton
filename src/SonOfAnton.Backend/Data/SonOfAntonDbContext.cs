@@ -59,6 +59,12 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<WorkspaceEntity> Workspaces => Set<WorkspaceEntity>();
     public DbSet<WorkspaceMemberEntity> WorkspaceMembers => Set<WorkspaceMemberEntity>();
 
+    // ─── Notifications ──────────────────────────────────────────────
+    public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
+
+    // ─── Usage Quotas ───────────────────────────────────────────────
+    public DbSet<UserQuotaEntity> UserQuotas => Set<UserQuotaEntity>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -901,6 +907,53 @@ public class SonOfAntonDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Notifications ──────────────────────────────────────────────
+        modelBuilder.Entity<NotificationEntity>(entity =>
+        {
+            entity.ToTable("notifications");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(e => e.Title).HasColumnName("title").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Message).HasColumnName("message").HasMaxLength(2000).IsRequired();
+            entity.Property(e => e.Type).HasColumnName("type").HasConversion<string>();
+            entity.Property(e => e.IsRead).HasColumnName("is_read").HasDefaultValue(false);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.ReadAt).HasColumnName("read_at");
+            entity.Property(e => e.Link).HasColumnName("link").HasMaxLength(500);
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.IsRead);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.HasOne<UserEntity>()
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Quotas ───────────────────────────────────────────────
+        modelBuilder.Entity<UserQuotaEntity>(entity =>
+        {
+            entity.ToTable("user_quotas");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id").IsRequired();
+            entity.Property(e => e.MaxWorkflows).HasColumnName("max_workflows").HasDefaultValue(5);
+            entity.Property(e => e.MaxExecutionsPerMonth).HasColumnName("max_executions_per_month").HasDefaultValue(100);
+            entity.Property(e => e.CurrentMonthExecutions).HasColumnName("current_month_executions").HasDefaultValue(0);
+            entity.Property(e => e.CurrentMonthStart).HasColumnName("current_month_start");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.UserId).IsUnique(); // Bir kullanıcının bir kotası olur
+
+            entity.HasOne<UserEntity>()
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);

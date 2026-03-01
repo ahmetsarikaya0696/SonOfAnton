@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
+using SonOfAnton.Shared.Core.Identity;
 using SonOfAnton.Shared.Entities;
 
 namespace SonOfAnton.Backend.Infrastructure.Identity;
@@ -31,7 +32,9 @@ public class JitUserProvisioningService
     {
         var externalId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
                       ?? principal.FindFirst("sub")?.Value
-                      ?? principal.FindFirst("oid")?.Value;
+                      ?? principal.FindFirst("oid")?.Value
+                      ?? principal.FindFirst("preferred_username")?.Value
+                      ?? principal.FindFirst("sid")?.Value;
 
         if (string.IsNullOrEmpty(externalId))
         {
@@ -88,11 +91,121 @@ public class JitUserProvisioningService
                 };
 
                 dbContext.Users.Add(newUser);
+                
+                // Varsayılan workspace oluştur
+                var workspace = new WorkspaceEntity
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Benim Workspace'im",
+                    Description = "Otomatik oluşturulan varsayılan workspace",
+                    TenantId = tenantId,
+                    OwnerUserId = newUser.Id,
+                    IsDefault = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                dbContext.Workspaces.Add(workspace);
+
+                // Kendini üye olarak ekle
+                var member = new WorkspaceMemberEntity
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = workspace.Id,
+                    UserId = newUser.Id,
+                    Role = WorkspaceMemberRole.Owner,
+                    JoinedAt = DateTime.UtcNow
+                };
+                dbContext.WorkspaceMembers.Add(member);
+
+                // Kota tanımla
+                var quota = new UserQuotaEntity
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = newUser.Id,
+                    MaxWorkflows = 10,
+                    MaxExecutionsPerMonth = 1000,
+                    CurrentMonthExecutions = 0,
+                    CurrentMonthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                dbContext.UserQuotas.Add(quota);
+
+                await dbContext.SaveChangesAsync();
+
+                // Rollerini ata
+                var externalRoles = principal.FindAll("roles").Select(c => c.Value).ToList();
+                if (principal.IsInRole("admin")) externalRoles.Add("Admin");
+                if (!externalRoles.Any()) externalRoles.Add("User");
+
+                // Mevcut rolleri bul
+                var tenantRoles = await dbContext.TenantRoles
+                    .Where(r => r.TenantId == tenantId && externalRoles.Contains(r.ExternalRoleName))
+                    .ToListAsync();
+
+                // Tenant'ta hiç rol yoksa ve 'default' ise temel rolleri oluştur
+                if (!tenantRoles.Any() && (tenantId == "default" || tenantId == "SonOfAnton"))
+                {
+                    var userRole = new TenantRoleEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = tenantId,
+                        ExternalRoleName = "User",
+                        Description = "Varsayılan kullanıcı rolü",
+                        MappedPermissions = [
+                            Permissions.WorkflowsRead, Permissions.WorkflowsCreate, Permissions.WorkflowsEdit, Permissions.WorkflowsExecute,
+                            Permissions.WorkspacesRead, Permissions.WorkspacesCreate, Permissions.WorkspacesManage,
+                            Permissions.FoldersRead, Permissions.FoldersManage,
+                            Permissions.ApiKeysRead, Permissions.ApiKeysManage,
+                            Permissions.ChatUse, Permissions.SearchExecute,
+                            Permissions.AgentsRead, Permissions.ExecutionsRead,
+                            Permissions.WebhooksRead, Permissions.WebhooksManage
+                        ]
+                    };
+                    var adminRole = new TenantRoleEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = tenantId,
+                        ExternalRoleName = "Admin",
+                        Description = "Yönetici rolü",
+                        MappedPermissions = Permissions.All.ToArray()
+                    };
+                    dbContext.TenantRoles.AddRange(userRole, adminRole);
+                    await dbContext.SaveChangesAsync();
+                    
+                    // Kullanıcının external rollerine göre eşleştir
+                    tenantRoles = new List<TenantRoleEntity>();
+                    if (externalRoles.Contains("Admin")) tenantRoles.Add(adminRole);
+                    // Her kullanıcıya en az User rolünü ver
+                    tenantRoles.Add(userRole);
+                }
+                // Eğer tenantRoles hâlâ boşsa (farklı tenant ama rol eşleşmesi yok), en azından "User" rolünü bul ve ata
+                else if (!tenantRoles.Any())
+                {
+                    var fallbackUserRole = await dbContext.TenantRoles
+                        .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.ExternalRoleName == "User");
+                    if (fallbackUserRole != null)
+                    {
+                        tenantRoles = new List<TenantRoleEntity> { fallbackUserRole };
+                        _logger.LogInformation("JIT: Fallback olarak 'User' rolü atanıyor (ExternalId: {ExternalId})", externalId);
+                    }
+                }
+
+                foreach (var tr in tenantRoles)
+                {
+                    dbContext.UserTenantRoles.Add(new UserTenantRoleEntity
+                    {
+                        UserId = newUser.Id,
+                        TenantRoleId = tr.Id,
+                        AssignedAt = DateTime.UtcNow
+                    });
+                }
+
                 await dbContext.SaveChangesAsync();
 
                 _logger.LogInformation(
-                    "JIT Provisioning: Yeni kullanıcı oluşturuldu. UserId: {UserId}, Email: {Email}, Tenant: {TenantId}",
-                    newUser.Id, email, tenantId);
+                    "JIT Provisioning: Yeni kullanıcı, workspace, kota ve {Count} rol oluşturuldu/atandı. UserId: {UserId}, Email: {Email}, Tenant: {TenantId}",
+                    tenantRoles.Count, newUser.Id, email, tenantId);
             }
             else
             {

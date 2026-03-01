@@ -106,7 +106,7 @@ public class WorkflowsController : ControllerBase
     [Authorize(Policy = Permissions.WorkflowsEdit)]
     public async Task<ActionResult<WorkflowDto>> Save([FromBody] SaveWorkflowRequest request)
     {
-        WorkflowEntity workflow;
+        WorkflowEntity? workflow;
 
         if (request.Id.HasValue)
         {
@@ -754,6 +754,17 @@ public class WorkflowsController : ControllerBase
         request.WorkflowId = id;
         var result = await _singleNodeSvc.ExecuteNodeAsync(request);
 
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Kaydedilmemiş bir workflow için (Wizard vb. içerisinde) tek node'u test et
+    /// </summary>
+    [HttpPost("execute-node-transient")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    public async Task<ActionResult<ExecuteSingleNodeResponse>> ExecuteSingleNodeTransient([FromBody] ExecuteSingleNodeRequest request)
+    {
+        var result = await _singleNodeSvc.ExecuteNodeAsync(request);
         return Ok(result);
     }
 }

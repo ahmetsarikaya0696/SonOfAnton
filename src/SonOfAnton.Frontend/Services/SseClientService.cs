@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Microsoft.JSInterop;
 
+using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
+
 namespace SonOfAnton.Frontend.Services;
 
 /// <summary>
@@ -34,6 +36,7 @@ public class SseClientStatistics
 public class SseClientService : IAsyncDisposable
 {
     private readonly IJSRuntime _jsRuntime;
+    private readonly IAccessTokenProvider _tokenProvider;
     private IJSObjectReference? _module;
     private DotNetObjectReference<SseClientService>? _dotNetRef;
     private readonly Dictionary<string, string> _activeConnections = new();
@@ -44,7 +47,6 @@ public class SseClientService : IAsyncDisposable
     private const int MaxProcessedEventIds = 10000;
     
     // Event ordering
-    private long _lastSequenceNumber;
     private readonly SortedDictionary<long, string> _reorderBuffer = new();
     private const int MaxReorderWindow = 50;
     
@@ -56,7 +58,6 @@ public class SseClientService : IAsyncDisposable
     // Statistics
     private long _totalEventsReceived;
     private long _duplicatesDropped;
-    private long _reorderCount;
     
     // Subscribed topics
     private readonly HashSet<string> _subscribedTopics = ["*"];
@@ -73,9 +74,10 @@ public class SseClientService : IAsyncDisposable
     public event Action<LogEvent>? OnLog;
     public event Action<WorkflowCompletedEventDto>? OnWorkflowCompleted;
     
-    public SseClientService(IJSRuntime jsRuntime)
+    public SseClientService(IJSRuntime jsRuntime, IAccessTokenProvider tokenProvider)
     {
         _jsRuntime = jsRuntime;
+        _tokenProvider = tokenProvider;
     }
     
     private async Task EnsureModuleLoadedAsync()
@@ -99,6 +101,14 @@ public class SseClientService : IAsyncDisposable
         {
             var separator = url.Contains('?') ? '&' : '?';
             url = $"{url}{separator}topics={string.Join(",", _subscribedTopics)}";
+        }
+        
+        // Token'ı al ve URL'ye ekle (EventSource Header desteklemez, query string ile gönderiyoruz)
+        var tokenResult = await _tokenProvider.RequestAccessToken();
+        if (tokenResult.TryGetToken(out var token))
+        {
+            var separator = url.Contains('?') ? '&' : '?';
+            url = $"{url}{separator}access_token={token.Value}";
         }
         
         var result = await _module!.InvokeAsync<bool>("connectToStream", connectionId, url, _dotNetRef);
@@ -186,7 +196,6 @@ public class SseClientService : IAsyncDisposable
             ActiveConnections = _activeConnections.Count,
             TotalEventsReceived = _totalEventsReceived,
             DuplicatesDropped = _duplicatesDropped,
-            ReorderCount = _reorderCount,
             BufferedEvents = _offlineBuffer.Count
         };
     }

@@ -23,6 +23,12 @@
 .dialog-large {
     max-width: 650px;
 }
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+    .dialog { max-width: 95%; margin: 1rem; }
+    .form-row { flex-direction: column; }
+}
 .dialog-header {
     display: flex;
     justify-content: space-between;

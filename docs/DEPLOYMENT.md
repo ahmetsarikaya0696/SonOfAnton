@@ -48,6 +48,9 @@
 | 5050 | pgAdmin (veritabanı yönetim aracı) |
 | 8080 | Keycloak (kimlik doğrulama) |
 | 11434 | Ollama |
+| /api/notifications/stream | SSE (Anlık Bildirimler) |
+| /api/logs/{id} | SSE (Execution Logları) |
+
 
 ---
 
@@ -231,13 +234,14 @@ Kullanıcılar -----|--   Proxy     ?
                     ?  (Kestrel)  ?
                     ---------------
                            ?
-              ---------------------------
-              |            |            ?
-        ---------|-- ---------|-- ------------
-        ?PostgreSQL? ? Hangfire ? ?  Ollama  ?
-        ?  (Ana)   ? ? (Worker) ? ?  (GPU)   ?
-        ---------|-- ---------|-- ------------
+               ---------------------------                 |
+               |            |            ?                 v
+         ---------|-- ---------|-- ------------    -----------------
+         ?PostgreSQL? ? Hangfire ? ?  Ollama  ?    ? SSE (Log/Notif)?
+         ?  (Ana)   ? ? (Worker) ? ?  (GPU)   ?    ? (Streaming)    ?
+         ---------|-- ---------|-- ------------    -----------------
 ```
+
 
 ---
 
@@ -298,11 +302,21 @@ Dönen JSON yapısı:
 }
 ```
 
-### SSE İstatistikleri
-
-```bash
-curl http://localhost:5000/api/sse/stats
 ```
+
+### SSE ve Canlı İzleme (Real-time)
+
+Uygulama, **Server-Sent Events (SSE)** üzerinden gerçek zamanlı iletişim kurar:
+- **Execution Logları**: `LogsController` üzerinden anlık olarak Hangfire işçisinden istemciye akıtılır.
+- **Bildirimler**: `NotificationStreamService` aracılığıyla başarı/hata bildirimleri anlık olarak push edilir.
+- **Yük Dengeleyiciler (Nginx/HAProxy)**: SSE'nin çalışması için proxy buffering (`X-Accel-Buffering: no`) devre dışı bırakılmalıdır.
+
+### Kullanım Limitleri (Quotas)
+
+Deployment sırasında kullanıcıların varsayılan limitlerini `UserQuotaEntity.cs` üzerinden veya veritabanından güncelleyebilirsiniz. Varsayılan (Free Tier):
+- Aylık Maksimum Execution: 100
+- Maksimum Workflow Sayısı: 5
+- Resetleme: Her ayın 1'inde otomatik olarak sıfırlanır.
 
 ### Hangfire Dashboard
 

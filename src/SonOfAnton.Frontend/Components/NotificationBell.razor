@@ -1,0 +1,177 @@
+@using SonOfAnton.Shared.Enums
+@inject NotificationApiService NotificationService
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<div class="notification-container" @onclick="ToggleDropdown">
+    <div class="notification-bell">
+        <i class="lucide-bell" style="font-size: 1.25rem; cursor: pointer;"></i>
+        @if (UnreadCount > 0)
+        {
+            <div class="notification-badge">@(UnreadCount > 99 ? "99+" : UnreadCount.ToString())</div>
+        }
+    </div>
+
+    @if (IsDropdownOpen)
+    {
+        <div class="notification-dropdown" @onclick:stopPropagation>
+            <div class="dropdown-header">
+                <h5 class="mb-0">Bildirimler</h5>
+                @if (UnreadCount > 0)
+                {
+                    <button class="btn btn-sm btn-link text-decoration-none" @onclick="MarkAllAsRead">Tümünü Okundu İşaretle</button>
+                }
+            </div>
+            
+            <div class="dropdown-body">
+                @if (Notifications.Count == 0)
+                {
+                    <div class="empty-state">
+                        <i class="lucide-bell-off"></i>
+                        <p>Henüz bildiriminiz yok.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var notification in Notifications)
+                    {
+                        <div class="notification-item @(notification.IsRead ? "" : "unread")" @onclick="() => HandleClick(notification)">
+                            <div class="notification-icon">
+                                @GetIconForType(notification.Type)
+                            </div>
+                            <div class="notification-content">
+                                <div class="notification-title">@notification.Title</div>
+                                <div class="notification-message">@notification.Message</div>
+                                <div class="notification-time">@GetTimeAgo(notification.CreatedAt)</div>
+                            </div>
+                            @if (!notification.IsRead)
+                            {
+                                <div class="unread-dot"></div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool IsDropdownOpen = false;
+    private int UnreadCount = 0;
+    private List<NotificationDto> Notifications = new();
+    private CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        StartSseStream();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            UnreadCount = await NotificationService.GetUnreadCountAsync();
+            Notifications = await NotificationService.GetNotificationsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading notifications: {ex.Message}");
+        }
+    }
+
+    private void StartSseStream()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var notification in NotificationService.StreamNotificationsAsync(_cts.Token))
+                {
+                    await InvokeAsync(() =>
+                    {
+                        Notifications.Insert(0, notification);
+                        if (!notification.IsRead) UnreadCount++;
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Görev iptal edildi
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error streaming notifications: {ex.Message}");
+                // İsteğe bağlı olarak yeniden bağlanma mantığı eklenebilir
+            }
+        });
+    }
+
+    private void ToggleDropdown()
+    {
+        IsDropdownOpen = !IsDropdownOpen;
+        if (IsDropdownOpen)
+        {
+            _ = LoadDataAsync(); // Açıldığında yenile
+        }
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        await NotificationService.MarkAllAsReadAsync();
+        UnreadCount = 0;
+        foreach (var n in Notifications) n.IsRead = true;
+    }
+
+    private async Task HandleClick(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+        {
+            await NotificationService.MarkAsReadAsync(notification.Id);
+            notification.IsRead = true;
+            UnreadCount--;
+        }
+        
+        IsDropdownOpen = false;
+
+        if (!string.IsNullOrEmpty(notification.Link))
+        {
+            Navigation.NavigateTo(notification.Link);
+        }
+    }
+
+    private RenderFragment GetIconForType(NotificationType type) => builder =>
+    {
+        var iconClass = type switch
+        {
+            NotificationType.Success => "lucide-check-circle color-success",
+            NotificationType.Error => "lucide-alert-octagon color-error",
+            NotificationType.Warning => "lucide-alert-triangle color-warning",
+            NotificationType.Info => "lucide-info color-info",
+            NotificationType.System => "lucide-settings color-system",
+            NotificationType.WorkflowExecution => "lucide-play-circle color-primary",
+            _ => "lucide-bell color-info"
+        };
+        builder.OpenElement(0, "i");
+        builder.AddAttribute(1, "class", iconClass);
+        builder.CloseElement();
+    };
+
+    private string GetTimeAgo(DateTime date)
+    {
+        var span = DateTime.UtcNow - date;
+        if (span.TotalMinutes < 1) return "Şimdi";
+        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}d";
+        if (span.TotalDays < 1) return $"{(int)span.TotalHours}s";
+        return $"{(int)span.TotalDays}g";
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

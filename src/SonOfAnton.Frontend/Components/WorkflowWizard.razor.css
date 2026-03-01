@@ -1,0 +1,142 @@
+.wizard-modal {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    width: 600px;
+    max-width: 90vw;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    animation: slideIn 0.3s ease-out;
+    border: 1px solid var(--border-color);
+}
+
+.wizard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.wizard-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+}
+
+.wizard-progress {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.wizard-progress .step {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.wizard-progress .step.active {
+    color: var(--accent-color);
+}
+
+.wizard-progress .step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--border-color);
+    margin: 0 1rem;
+}
+
+.wizard-progress .step-line.active {
+    background: var(--accent-color);
+}
+
+.wizard-body {
+    padding: 2rem;
+    min-height: 300px;
+}
+
+.step-content h4 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+}
+
+.node-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.node-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.node-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.node-card.selected {
+    border-color: var(--accent-color);
+    background: var(--accent-color-transparent, rgba(137, 180, 250, 0.1));
+    box-shadow: 0 0 0 2px var(--accent-color);
+}
+
+.node-card span {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.wizard-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.summary-box {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.summary-box p {
+    margin: 0.5rem 0;
+    color: var(--text-secondary);
+}
+
+.summary-box strong {
+    color: var(--text-primary);
+}
+
+.test-output {
+    background: var(--surface0);
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}

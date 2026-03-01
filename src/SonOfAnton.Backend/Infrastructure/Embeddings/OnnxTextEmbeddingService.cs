@@ -549,10 +549,10 @@ public class OllamaTextEmbeddingService : ITextEmbeddingService
         
         try
         {
-            #pragma warning disable SKEXP0001
+            #pragma warning disable SKEXP0001, CS0618
             var embeddingService = _kernel.GetRequiredService<Microsoft.SemanticKernel.Embeddings.ITextEmbeddingGenerationService>();
             var embeddings = await embeddingService.GenerateEmbeddingsAsync([text], _kernel, cancellationToken);
-            #pragma warning restore SKEXP0001
+            #pragma warning restore SKEXP0001, CS0618
             
             sw.Stop();
             

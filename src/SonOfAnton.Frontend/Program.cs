@@ -21,10 +21,17 @@ builder.Services.AddOidcAuthentication(options =>
     
     // Default scopes
     options.ProviderOptions.DefaultScopes.Clear();
-    var scopes = oidcConfig.GetSection("DefaultScopes").Get<string[]>() ?? ["openid", "profile", "email"];
+    var scopes = oidcConfig.GetSection("DefaultScopes").Get<string[]>() ?? new[] { "openid", "profile", "email" };
     foreach (var scope in scopes)
     {
         options.ProviderOptions.DefaultScopes.Add(scope);
+    }
+
+    // Optionally request an API scope if configured (Oidc:ApiScope).
+    var apiScope = oidcConfig["ApiScope"];
+    if (!string.IsNullOrWhiteSpace(apiScope) && !options.ProviderOptions.DefaultScopes.Contains(apiScope))
+    {
+        options.ProviderOptions.DefaultScopes.Add(apiScope);
     }
 
     // Keycloak post-logout redirect
@@ -41,31 +48,27 @@ builder.Services.AddHttpClient("BackendApi",
     client => client.BaseAddress = new Uri(backendUrl))
     .AddHttpMessageHandler(sp =>
     {
-        var handler = sp.GetRequiredService<AuthorizationMessageHandler>()
-            .ConfigureHandler(
-                authorizedUrls: [backendUrl],
-                scopes: ["openid", "profile", "email"]);
+        var handler = sp.GetRequiredService<AuthorizationMessageHandler>();
+        
+        // Configure handler to attach the token to all requests to the backend URL,
+        // regardless of specific scopes, to prevent it from silently dropping the token.
+        handler.ConfigureHandler(
+            authorizedUrls: new[] { backendUrl });
+
         return handler;
     });
 
-// Default HttpClient (auth'suz — public endpoint'ler için)
-builder.Services.AddScoped(sp => new HttpClient
-{
-    BaseAddress = new Uri(backendUrl)
-});
-
-// IHttpClientFactory'den kolayca erişim için
-builder.Services.AddScoped(sp =>
-    sp.GetRequiredService<IHttpClientFactory>().CreateClient("BackendApi"));
-
-// Application Services
-builder.Services.AddScoped<WorkflowApiService>();
-builder.Services.AddScoped<ApiKeyService>();
-builder.Services.AddScoped<CredentialService>();
-builder.Services.AddScoped<LinkedAccountService>();
-builder.Services.AddScoped<LogStreamService>();
-builder.Services.AddScoped<DataTableClientService>();
-builder.Services.AddScoped<DataFormClientService>();
+// ─── Typed HttpClients — tüm API servisleri authenticated "BackendApi" client kullanır ───
+builder.Services.AddHttpClient<WorkflowApiService>("BackendApi");
+builder.Services.AddHttpClient<NotificationApiService>("BackendApi");
+builder.Services.AddHttpClient<QuotaApiService>("BackendApi");
+builder.Services.AddHttpClient<ApiKeyService>("BackendApi");
+builder.Services.AddHttpClient<CredentialService>("BackendApi");
+builder.Services.AddHttpClient<LinkedAccountService>("BackendApi");
+builder.Services.AddHttpClient<LogStreamService>("BackendApi");
+builder.Services.AddHttpClient<DataTableClientService>("BackendApi");
+builder.Services.AddHttpClient<DataFormClientService>("BackendApi");
+builder.Services.AddHttpClient<ChatbotApiService>("BackendApi");
 builder.Services.AddSingleton<DiagramStateService>();
 builder.Services.AddSingleton<YamlSyncService>();
 builder.Services.AddSingleton<ChatDiagramBridge>();

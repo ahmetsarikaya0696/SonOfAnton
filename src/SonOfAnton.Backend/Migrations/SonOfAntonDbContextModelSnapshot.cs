@@ -1097,6 +1097,64 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("marketplace_reviews", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.NotificationEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsRead")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_read");
+
+                    b.Property<string>("Link")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("link");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("message");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("IsRead");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("notifications", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -1231,6 +1289,55 @@ namespace SonOfAnton.Backend.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.UserQuotaEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("CurrentMonthExecutions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("current_month_executions");
+
+                    b.Property<DateTime>("CurrentMonthStart")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("current_month_start");
+
+                    b.Property<int>("MaxExecutionsPerMonth")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(100)
+                        .HasColumnName("max_executions_per_month");
+
+                    b.Property<int>("MaxWorkflows")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(5)
+                        .HasColumnName("max_workflows");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("user_quotas", (string)null);
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.UserTenantRoleEntity", b =>
@@ -2021,6 +2128,15 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.NotificationEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantRoleEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
@@ -2041,6 +2157,15 @@ namespace SonOfAnton.Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.UserQuotaEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.UserTenantRoleEntity", b =>

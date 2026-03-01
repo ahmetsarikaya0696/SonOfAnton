@@ -65,7 +65,7 @@ public class CredentialsController : ControllerBase
             SystemName = request.SystemName,
             Description = request.Description,
             EncryptedData = encryptedData,
-            TenantId = tenantId,
+            TenantId = tenantId ?? "default",
             UserId = userId
         };
 

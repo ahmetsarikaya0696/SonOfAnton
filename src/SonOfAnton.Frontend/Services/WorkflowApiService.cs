@@ -19,7 +19,15 @@ public class WorkflowApiService
 
     public async Task<List<WorkflowDto>> GetWorkflowsAsync()
     {
-        return await _httpClient.GetFromJsonAsync<List<WorkflowDto>>("api/workflows") ?? [];
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<List<WorkflowDto>>("api/workflows") ?? new List<WorkflowDto>();
+        }
+        catch (HttpRequestException)
+        {
+            // Not authorized or network error — return empty list so UI can handle anonymously
+            return new List<WorkflowDto>();
+        }
     }
 
     public async Task<WorkflowDto?> GetWorkflowAsync(Guid id)
@@ -81,6 +89,13 @@ public class WorkflowApiService
         return await response.Content.ReadFromJsonAsync<ExecuteSingleNodeResponse>();
     }
 
+    public async Task<ExecuteSingleNodeResponse?> ExecuteSingleNodeTransientAsync(ExecuteSingleNodeRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/workflows/execute-node-transient", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ExecuteSingleNodeResponse>();
+    }
+
     #endregion
 
     #region Executions
@@ -117,7 +132,14 @@ public class WorkflowApiService
 
     public async Task<List<NodeDefinitionDto>> GetNodeDefinitionsAsync()
     {
-        return await _httpClient.GetFromJsonAsync<List<NodeDefinitionDto>>("api/nodes") ?? [];
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<List<NodeDefinitionDto>>("api/nodes") ?? new List<NodeDefinitionDto>();
+        }
+        catch (HttpRequestException)
+        {
+            return new List<NodeDefinitionDto>();
+        }
     }
 
     public async Task<NodeDefinitionDto?> GetNodeDefinitionAsync(string type)
@@ -417,7 +439,14 @@ public class WorkflowApiService
 
     public async Task<List<WorkspaceDto>> GetWorkspacesAsync()
     {
-        return await _httpClient.GetFromJsonAsync<List<WorkspaceDto>>("api/workspaces") ?? [];
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<List<WorkspaceDto>>("api/workspaces") ?? new List<WorkspaceDto>();
+        }
+        catch (HttpRequestException)
+        {
+            return new List<WorkspaceDto>();
+        }
     }
 
     public async Task<WorkspaceDto?> GetWorkspaceAsync(Guid id)

@@ -165,11 +165,11 @@ public class DataTableService : IDataTableService
         return true;
     }
 
-    public async Task<Guid> ImportCsvAsync(Stream csvStream, string fileName, string tenantId, Guid? workspaceId, Guid? userId, Guid? existingTableId = null)
+    public async Task<Guid> ImportCsvAsync(Stream csvStream, string fileName, string tenantId, Guid? workspaceId, Guid? userId, Guid? existingTableId = null, CancellationToken cancellationToken = default)
     {
         using var reader = new StreamReader(csvStream);
         
-        var headerLine = await reader.ReadLineAsync();
+        var headerLine = await reader.ReadLineAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(headerLine)) throw new InvalidOperationException("CSV dosyası boş veya başlık satırı yok.");
 
         var headers = headerLine.Split(',').Select(h => h.Trim('"').Trim()).ToList();
@@ -217,9 +217,11 @@ public class DataTableService : IDataTableService
 
         // Satırları okuyup map edelim
         var rowsToAdd = new List<DataRowEntity>();
-        while (!reader.EndOfStream)
+        while (!cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync();
+            if (line == null) break;
+            
             if (string.IsNullOrWhiteSpace(line)) continue;
 
             // Basit split, tırnak içindeki virgülleri tam desteklemez, ama ek framework kullanmamak için kısıtlı.
@@ -260,7 +262,7 @@ public class DataTableService : IDataTableService
         return table.Id;
     }
 
-    public async Task<Stream> ExportCsvAsync(Guid tableId, string tenantId)
+    public async Task<Stream> ExportCsvAsync(Guid tableId, string tenantId, CancellationToken cancellationToken = default)
     {
         var table = await _dbContext.DataTables.FirstOrDefaultAsync(t => t.Id == tableId && t.TenantId == tenantId);
         if (table == null) throw new InvalidOperationException("Tablo bulunamadı.");

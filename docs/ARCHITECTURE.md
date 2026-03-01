@@ -39,6 +39,47 @@ Replacing block between '**Node Durumları (State Machine):**' and '**Önemli:**
 **Teknoloji Yığını:**
 
 | Katman | Teknoloji | Neden? |
+# SonOfAnton — Mimari Dokümantasyonu
+
+> **Bu belge kime hitap ediyor?**  
+> Ekibe yeni katılan bir geliştirici olarak bu dokümanı okuduktan sonra
+> projenin nasıl çalıştığını, hangi parçanın ne iş yaptığını ve kodda
+> nereye bakman gerektiğini anlayabilmelisin.
+
+---
+
+## İçindekiler
+
+1. [Projeye Genel Bakış](#1-projeye-genel-bakış)
+2. [Klasör Yapısı](#2-klasör-yapısı)
+3. [Katmanlı Mimari](#3-katmanlı-mimari)
+4. [Bileşen Etkileşim Diyagramı](#4-bileşen-etkileşim-diyagramı)
+5. [Veri Akış Diyagramı](#5-veri-akış-diyagramı)
+6. [Graph Engine (Çekirdek Motor)](#6-graph-engine-çekirdek-motor)
+7. [Node Handler Sistemi](#7-node-handler-sistemi)
+8. [Veritabanı Yapısı](#8-veritabanı-yapısı)
+9. [Gerçek Zamanlı İletişim (SSE)](#9-gerçek-zamanlı-iletişim-sse)
+10. [Arka Plan İşleri (Hangfire)](#10-arka-plan-işleri-hangfire)
+11. [AI ve Vector Veritabanı](#11-ai-ve-vector-veritabanı)
+12. [Güvenlik Katmanları](#12-güvenlik-katmanları)
+13. [Test Stratejisi](#13-test-stratejisi)
+14. [Sık Yapılan Görevler](#14-sık-yapılan-görevler)
+
+---
+
+## 1. Projeye Genel Bakış
+
+**SonOfAnton**, Node-RED benzeri bir **görsel workflow otomasyon** platformudur.
+
+**Ne yapar?**
+- Kullanıcı, tarayıcıda sürükle-bırak ile node'ları birbirine bağlayarak
+  bir iş akışı (workflow) oluşturur
+- Oluşturulan workflow, arka planda çalıştırılır
+- Her adımın sonucu gerçek zamanlı olarak ekranda görüntülenir
+
+**Teknoloji Yığını:**
+
+| Katman | Teknoloji | Neden? |
 |--------|-----------|--------|
 | Frontend | Blazor WebAssembly | C# ile tek dil, .NET 10 |
 | Backend API | ASP.NET Core | Performanslı REST API |
@@ -46,7 +87,8 @@ Replacing block between '**Node Durumları (State Machine):**' and '**Önemli:**
 | Veritabanı | PostgreSQL + pgvector | JSONB + vektör arama |
 | Arka Plan İşleri | Hangfire | Güvenilir kuyruk sistemi |
 | AI | Ollama + ONNX Runtime | Yerel LLM ve embedding |
-| Gerçek Zamanlı | Server-Sent Events (SSE) | Tek yönlü event stream |
+| Gerçek Zamanlı | Server-Sent Events (SSE) | Tek yönlü event stream (Loglar & Bildirimler) |
+| Kotasyon & Ücretlendirme | Kullanım Limitleri | Aylık execution takibi |
 
 ---
 
@@ -143,15 +185,14 @@ SonOfAnton/
 |  |  +----------------+  |  | HTTP, LLM     |  | | |
 |  |                      |  | Email, DB     |  | | |
 |  |                      |  +---------------+  | | |
-|  |                      +---------------------+ | |
 |  +----------------------------------------------+ |
 |                       |                           |
 |                       v                           |
-|  +------------+ +-----------------+ +-----------+ |
-|  | Hangfire   | |  EF Core +      | | SSE Event | |
-|  | (Job Q)    | |  PostgreSQL     | | Service   | |
-|  +------------+ +-----------------+ +-----------+ |
-+---------------------------------------------------+
+|  +------------+ +-----------------+ +-----------------------------+ |
+|  | Hangfire   | |  EF Core +      | | Stream Service (Log & Notif)| |
+|  | (Job Q)    | |  PostgreSQL     | +-----------------------------+ |
+|  +------------+ +-----------------+                               |
++-------------------------------------------------------------------+
 ```
 
 **Katman Kuralları:**
@@ -266,7 +307,6 @@ Bir workflow çalıştırıldığında veri şu yolu izler:
                                                    ?  Node   ? ?  Node   ?
                                                    --------|-- -----------
 ```
-
 - Her node bir `NodeExecutionResult` döner
 - Bu result içinde `OutputData` (sonraki node'a gidecek veri) ve `OutputPort` (hangi çıkışa gideceği) bulunur
 - Logic node'ları (if, switch) farklı port'lara yönlendirebilir ("true"/"false")
@@ -313,205 +353,6 @@ GraphExecutor                        -> Çalıştırma motoru
     |              |               |
 +------------+ +------------+ +-------------+
 | COMPLETED  | |  FAILED    | | CANCELLED   |
-+------------+ +------------+ +-------------+
-```
-
-**Önemli:** Her durum geçişi `ExecutionStateTransitions` sözlüğünde tanımlıdır.
-Geçersiz bir geçiş denenirse `InvalidOperationException` fırlatılır.
-
-**Dosyalar:**
-- `Shared/Core/GraphEngine/INode.cs` — Interface + ExecutionState enum
-- `Shared/Core/GraphEngine/NodeBase.cs` — Pin tanımlama + durum yönetimi
-- `Shared/Core/GraphEngine/Edge.cs` — Bağlantı + veri transferi
-- `Shared/Core/GraphEngine/Graph.cs` — DAG analizi (döngü tespiti, topolojik sıralama)
-
----
-
-## 7. Node Handler Sistemi
-
-Her node tipi için bir `INodeHandler` implementasyonu vardır (**Strategy Pattern**).
-
-```
-INodeHandler (interface)
-|-- ManualTriggerHandler      (trigger.manual)
-|-- WebhookTriggerHandler     (trigger.webhook)
-|-- ScheduleTriggerHandler    (trigger.schedule)
-|-- HttpRequestHandler        (http.request)
-|-- SetValueHandler           (transform.set)
-|-- FilterHandler             (transform.filter)
-|-- CodeHandler               (transform.code)
-|-- TemplateHandler           (transform.template)
-|-- AggregateHandler          (transform.aggregate)
-|-- IfHandler                 (logic.if)
-|-- SwitchHandler             (logic.switch)
-|-- MergeHandler              (logic.merge)
-|-- DelayHandler              (logic.delay)
-|-- LoopHandler               (logic.loop)
-|-- LLMHandler                (ai.llm)
-|-- DatabaseHandler           (data.database)
-|-- EmailHandler              (comm.email)
-|-- SlackHandler              (comm.slack)
-|-- GenerateEmbeddingHandler  (vector.embed)
-|-- VectorStoreHandler        (vector.store)
-|-- VectorSearchHandler       (vector.search)
-|-- VectorDeleteHandler       (vector.delete)
-|-- ForEachLoopHandler        (subflow.foreach)    [YENi]
-|-- WhileLoopHandler          (subflow.while)      [YENi]
-|-- ParallelHandler           (subflow.parallel)   [YENi]
-|-- BreakHandler              (flow.break)         [YENi]
-|-- ContinueHandler           (flow.continue)      [YENi]
-|-- DebugHandler              (utility.debug)
-|-- EndHandler                (utility.end)
-```
-
-**Yeni bir node handler nasıl eklenir?**
-
-1. `Engine/Handlers/` altında handler sınıfını yaz:
-```csharp
-public class MyHandler : INodeHandler
-{
-    public string NodeType => "kategori.isim";
-
-    public async Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
-    {
-        // İş mantığın burada
-        var param = context.Node.Parameters.GetValueOrDefault("paramName")?.ToString();
-        
-        // Başarılı sonuç
-        return NodeExecutionResult.Ok(outputData);
-        
-        // veya Hata
-        return NodeExecutionResult.Fail("Hata mesajı");
-    }
-}
-```
-
-2. `Program.cs`'de DI'a kayıt et:
-```csharp
-builder.Services.AddScoped<INodeHandler, MyHandler>();
-```
-
-3. `NodeRegistry.cs`'e node tanımını ekle:
-```csharp
-new NodeDefinition
-{
-    Type = "kategori.isim",
-    Name = "Görünen Ad",
-    Category = "Kategori",
-    Icon = "icon-name",
-    Color = "#renk",
-    Inputs = [new NodePort { Name = "input", Type = "any" }],
-    Outputs = [new NodePort { Name = "output", Type = "any" }],
-    Parameters = [ /* ... */ ]
-}
-```
-
-4. Test yaz (`tests/Unit/Handlers/` altında)
-
----
-
-## 8. Veritabanı Yapısı
-
-**PostgreSQL** + **pgvector** uzantısı kullanılır.
-
-```
--------------------|--       ----------------------
-|    workflows       |       |    webhooks         ?
--------------------|--       ----------------------
-? id (PK, UUID)      ------|-- workflow_id (FK)   ?
-? name               |       ? id (PK, UUID)      ?
-? description        |       ? webhook_id (UNIQUE)?
-? trigger_type       |       ? name               ?
-? graph_data (JSONB) |       ? secret             ?
-? is_active          |       ? is_active          ?
-? created_at         |       ? min_interval_secs  ?
-? updated_at         |       ? trigger_count      ?
--------------------|--       ? last_triggered_at  ?
-         ? 1:N               ----------------------
-         ?
-----------------------
-|    executions      ?
-----------------------
-? id (PK, UUID)      ?
-? workflow_id (FK)   ?
-? status             ?
-? current_node_id    ?
-? memory (JSONB)     ?
-? error_message      ?
-? hangfire_job_id    ?
-? started_at         ?
-? completed_at       ?
-----------------------
-         ? 1:N
-         ?
--------------------|--       ----------------------
-?  execution_logs    |       |   vector_store     ?
--------------------|--       ----------------------
-? id (PK, UUID)      |       ? id (PK, UUID)      ?
-? execution_id (FK)  |       ? collection         ?
-? node_id            |       ? content            ?
-? level              |       ? metadata (JSONB)   ?
-? message            |       ? embedding          ?
-? data (JSONB)       |       |   vector(768)      ?
-? timestamp          |       ? created_at         ?
--------------------|--       ----------------------
-```
-
-**Neden JSONB?**
-- `graph_data`: Workflow'un node/edge yapısı. İlişkisel tablo yapmak
-  over-engineering olurdu. Blazor.Diagrams zaten JSON üretir.
-- `memory`: Execution sırasında node'lar arası veri taşır.
-- `data` (execution_logs): Log'a eklenen ek veri.
-
-**İndeksler:**
-- `executions.workflow_id` — Workflow'a ait execution'ları hızlı bul
-- `executions.status` — Durum bazlı filtreleme
-- `execution_logs.execution_id` — Execution'a ait logları hızlı bul
-- `execution_logs.timestamp` — Zamana göre sıralama
-- `vector_store.collection` — Koleksiyon bazlı filtreleme
-- `vector_store.embedding` (IVFFlat) — Vektör benzerlik araması
-
----
-
-## 9. Gerçek Zamanlı İletişim (SSE)
-
-**Server-Sent Events (SSE)**, sunucudan istemciye tek yönlü event stream sağlar.
-
-```
-Frontend                              Backend
-   |                                     ?
-   ?  GET /api/workflow/execution/       ?
-   |      {executionId}/stream           ?
-   ? --------------------------------|-- ?
-   |                                     ?
-   ?  |-- data: {"type":"node_start"}    ?
-   ?  |-- data: {"type":"node_complete"} ?
-   ?  |-- : heartbeat                    ?  (15 saniyede bir)
-   ?  |-- data: {"type":"log"}           ?
-   ?  |-- data: {"type":"workflow_done"} ?
-   |                                     ?
-   ?  (Bağlantı kapanır)                 ?
-```
-
-**Neden SSE, neden WebSocket değil?**
-- SSE, tek yönlü akış için daha basittir
-- HTTP/2 ile multiplexing desteği var
-- Otomatik yeniden bağlanma (tarayıcı destekler)
-- Workflow execution'ı zaten tek yönlü bir akıştır
-
-**Dosyalar:**
-- `Backend/Services/SseEventService.cs` — Olay yönetimi, kanal oluşturma, oturum takibi
-- `Backend/Services/LogStreamService.cs` — Execution log stream (ConcurrentDictionary)
-- `Frontend/Services/SseClientService.cs` — Frontend SSE istemcisi (exponential backoff)
-
----
-
-## 10. Arka Plan İşleri (Hangfire)
-
-Workflow'lar **hiçbir zaman** HTTP isteği içinde çalıştırılmaz.
-Her zaman Hangfire kuyruğuna eklenir.
-
-**Neden?**
 - HTTP timeout'u (ör: 30 saniye) workflow süresini kısıtlar
 - Sunucu yeniden başlasa bile kuyruktaki işler kaybolmaz
 - Birden fazla worker paralel iş yapabilir

@@ -14,8 +14,10 @@
 4. [Node API](#node-api)
 5. [Webhook API](#webhook-api)
 6. [Log Stream API (SSE)](#log-stream-api-sse)
-7. [Health Check API](#health-check-api)
-8. [Hata Kodları](#hata-kodları)
+7. [Notification API (SSE)](#notification-api-sse)
+8. [Quota API](#quota-api)
+9. [Health Check API](#health-check-api)
+10. [Hata Kodları](#hata-kodları)
 
 ---
 
@@ -446,6 +448,61 @@ GET /api/sse/stats
   "activeSessions": 2
 }
 ```
+
+---
+
+## Notification API (SSE)
+
+Gerçek zamanlı bildirimleri almak ve yönetmek için kullanılır.
+
+### Bildirim Akışı (SSE)
+
+```http
+GET /api/notifications/stream
+```
+
+**Yanıt:** `200 OK` (text/event-stream)
+```
+event: connected
+data: connection-guid
+
+data: {"id":"...","title":"Workflow Başarılı","message":"...","type":1,"createdAt":"..."}
+```
+
+### Okunmamış Bildirim Sayısı
+
+```http
+GET /api/notifications/unread-count
+```
+
+### Tümünü Okundu İşaretle
+
+```http
+PUT /api/notifications/read-all
+```
+
+---
+
+## Quota API
+
+Kullanıcının kullanım limitlerini sorgular.
+
+### Mevcut Kota Durumu
+
+```http
+GET /api/quotas
+```
+
+**Yanıt:** `200 OK`
+```json
+{
+  "userId": "...",
+  "maxExecutionsPerMonth": 1000,
+  "currentMonthExecutions": 142,
+  "updatedAt": "..."
+}
+```
+
 
 ---
 

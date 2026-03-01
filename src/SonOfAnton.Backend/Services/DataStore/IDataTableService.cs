@@ -18,14 +18,10 @@ public interface IDataTableService
     Task<bool> DeleteRowAsync(Guid rowId, string tenantId);
 
     // ─── CSV Import/Export ────────────────────────────────────────────
-    /// <summary>
-    /// Reads a CSV stream, maps headers to column definitions, and creates a table (if tableId is null) or appends rows.
-    /// Returns the affected/created DataTable ID.
-    /// </summary>
-    Task<Guid> ImportCsvAsync(Stream csvStream, string fileName, string tenantId, Guid? workspaceId, Guid? userId, Guid? existingTableId = null);
+    Task<Guid> ImportCsvAsync(Stream csvStream, string fileName, string tenantId, Guid? workspaceId, Guid? userId, Guid? existingTableId = null, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Generates a CSV stream for a given table ID containing all its rows.
     /// </summary>
-    Task<Stream> ExportCsvAsync(Guid tableId, string tenantId);
+    Task<Stream> ExportCsvAsync(Guid tableId, string tenantId, CancellationToken cancellationToken = default);
 }

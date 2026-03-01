@@ -397,3 +397,40 @@
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .content-dual {
+        grid-template-columns: 1fr;
+    }
+    
+    .header-left {
+        gap: 0.5rem;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .add-member-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    
+    .form-actions-inline {
+        justify-content: flex-end;
+    }
+    
+    .tab-bar {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 2px;
+    }
+}

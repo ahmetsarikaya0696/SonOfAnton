@@ -90,12 +90,27 @@ public class WorkflowRunner
 
         try
         {
-            // Status'u Running yap
+            // Kota kontrolü
+            if (workflow.CreatedByUserId.HasValue)
+            {
+                var quotaService = scope.ServiceProvider.GetRequiredService<IQuotaService>();
+                var canExecute = await quotaService.CheckCanExecuteAsync(workflow.CreatedByUserId.Value);
+                if (!canExecute)
+                {
+                    await FailExecution(dbContext, execution, "Aylık execution kotası aşıldı.");
+                    return;
+                }
+                
+                // Kotayı artır
+                await quotaService.IncrementExecutionAsync(workflow.CreatedByUserId.Value);
+            }
+
+            // Durumu 'Running' (Çalışıyor) yap
             await UpdateExecutionStatusAsync(dbContext, execution, ExecutionStatus.Running, cancellationToken);
 
             await WriteLog(dbContext, execution, null, LogLevel.Info, $"Workflow başlatılıyor: {workflow.Name}");
 
-            // Graph'ı parse et
+            // Grafiği parse et (çözümle)
             var graph = JsonSerializer.Deserialize<WorkflowGraphDto>(workflow.GraphData.RootElement.GetRawText());
             if (graph == null || graph.Nodes.Count == 0)
             {
@@ -103,7 +118,7 @@ public class WorkflowRunner
                 return;
             }
 
-            // Memory'i hazırla
+            // Belleği (Memory) hazırla
             if (execution.Memory != null)
             {
                 memory = JsonSerializer.Deserialize<Dictionary<string, object?>>(
@@ -122,7 +137,7 @@ public class WorkflowRunner
                 }
             }
 
-            // Çevrimsel bağımlılık kontrolü
+            // Döngüsel bağımlılık kontrolü (Visited Nodes)
             var visitedNodes = new HashSet<Guid>();
 
             // Trigger node'larını bul (girişi olmayan node'lar)
@@ -160,6 +175,7 @@ public class WorkflowRunner
                 _dbLock.Release();
             }
 
+            // Metrikleri kaydet
             _metrics.RecordWorkflowCompleted(execution.WorkflowId, sw.ElapsedMilliseconds);
 
             // İstatistik güncelle
@@ -169,12 +185,12 @@ public class WorkflowRunner
             await WriteLog(dbContext, execution, null, LogLevel.Info, 
                 $"Workflow başarıyla tamamlandı ({sw.ElapsedMilliseconds}ms)");
             
-            // SSE stream'i tamamla
+            // SSE akışını (stream) tamamla
             _logStream.Complete(executionId);
         }
         catch (OperationCanceledException)
         {
-            sw.Stop();
+            // İşlem iptal edildiğinde yapılacaklar
             _metrics.RecordWorkflowFailed(execution.WorkflowId, "İptal edildi", sw.ElapsedMilliseconds);
             var statsUpdater = scope.ServiceProvider.GetRequiredService<WorkflowStatsUpdater>();
             await statsUpdater.RecordExecutionAsync(execution.WorkflowId, false, sw.ElapsedMilliseconds);
@@ -216,7 +232,7 @@ public class WorkflowRunner
             await FailExecution(dbContext, execution, ex.Message);
             _logStream.Complete(executionId);
 
-            // GLOBAL ERROR HANDLER
+            // GENEL HATA YAKALAYICI (GLOBAL ERROR HANDLER)
             if (workflow.GlobalErrorWorkflowId.HasValue)
             {
                 try
@@ -352,11 +368,11 @@ public class WorkflowRunner
 
         try
         {
-            // Pause kontrolü — duraklatılmışsa bekle
+            // Duraklatma kontrolü — paused ise bekle
             var pauseToken = _pauseTokens.GetOrCreate(execution.Id);
             await pauseToken.WaitIfPausedAsync(cancellationToken);
 
-            // Current node'u güncelle
+            // Mevcut node bilgisini güncelle
             await _dbLock.WaitAsync(cancellationToken);
             try
             {
@@ -371,7 +387,7 @@ public class WorkflowRunner
             await WriteLog(dbContext, execution, node.Id, LogLevel.Info, 
                 $"Node çalıştırılıyor: {node.Name} ({node.Type})");
 
-            // Handler'ı bul
+            // İşleyiciyi (Handler) bul
             if (!_handlers.TryGetValue(node.Type, out var handler))
             {
                 // Custom node fallback — custom.* veya DB'de tanımlı olanlar
@@ -388,7 +404,7 @@ public class WorkflowRunner
                 }
             }
 
-            // Retry mekanizması ile node çalıştır
+            // Yeniden deneme mekanizması (Retry) ile node çalıştır
             // Önce parametrelerdeki {{...}} ifadelerini resolve et
             var variableStore = new VariableStore();
             foreach (var (k, v) in memory)
@@ -413,7 +429,7 @@ public class WorkflowRunner
 
             if (!result.Success)
             {
-                // continueOnError parametresini kontrol et
+                // 'continueOnError' (Hatada devam et) parametresini kontrol et
                 var continueOnError = node.Parameters.TryGetValue("continueOnError", out var coe) 
                     && coe?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
                 
@@ -445,7 +461,7 @@ public class WorkflowRunner
                 }
             }
 
-            // Memory'e yaz
+            // Çıktıyı belleğe (Memory) yaz
             memory[$"node_{node.Id}"] = result.OutputData;
 
             // Sonraki node'ları çalıştır
@@ -471,7 +487,7 @@ public class WorkflowRunner
         Dictionary<string, object?> memory,
         CancellationToken cancellationToken)
     {
-        // Node-spesifik timeout
+        // Node'a özgü zaman aşımı (timeout)
         var nodeTimeout = DefaultNodeTimeout;
         if (node.Parameters.TryGetValue("timeout", out var timeoutParam) 
             && int.TryParse(timeoutParam?.ToString(), out var timeoutMs))
@@ -479,12 +495,12 @@ public class WorkflowRunner
             nodeTimeout = TimeSpan.FromMilliseconds(timeoutMs);
         }
 
-        // Node-spesifik retry sayısı
+        // Node'a özgü yeniden deneme (retry) sayısı
         var maxRetries = MaxNodeRetries;
         if (node.Parameters.TryGetValue("retries", out var retryParam) 
             && int.TryParse(retryParam?.ToString(), out var retryCount))
         {
-            maxRetries = Math.Min(retryCount, 5); // Maksimum 5
+            maxRetries = Math.Min(retryCount, 5); // En fazla 5 deneme
         }
 
         for (int attempt = 0; attempt <= maxRetries; attempt++)
@@ -499,10 +515,10 @@ public class WorkflowRunner
 
             try
             {
-                // Node log'larını topla
+                // Node günlüklerini (log) topla
                 var pendingLogs = new List<(string msg, LogLevel level, object? data)>();
 
-                // Context oluştur
+                // Çalışma bağlamını (ExecutionContext) oluştur
                 var context = new NodeExecutionContext
                 {
                     ExecutionId = execution.Id,
@@ -526,7 +542,7 @@ public class WorkflowRunner
                     }
                 };
 
-                // Timeout ile çalıştır
+                // Zaman aşımı (Timeout) kontrolü ile çalıştır
                 var sw = Stopwatch.StartNew();
                 NodeExecutionResult result;
                 
@@ -555,7 +571,7 @@ public class WorkflowRunner
                     await WriteLog(dbContext, execution, node.Id, level, msg, data);
                 }
 
-                // Node metriği kaydet
+                // Node metriklerini kaydet
                 _metrics.RecordNodeExecution(node.Type, sw.ElapsedMilliseconds, result.Success);
 
                 if (result.Success)
@@ -568,7 +584,7 @@ public class WorkflowRunner
                     return result;
                 }
 
-                // Retry edilebilecek hata mı kontrol et
+                // Yeniden denenebilir bir hata mı kontrol et
                 if (attempt == maxRetries)
                 {
                     return result; // Son deneme, hatayı döndür
@@ -599,7 +615,7 @@ public class WorkflowRunner
         HashSet<Guid> visitedNodes,
         CancellationToken cancellationToken)
     {
-        // Belirtilen port'tan çıkan bağlantıları bul
+        // Belirtilen porttan çıkan bağlantıları bul
         var connections = graph.Connections
             .Where(c => c.SourceNodeId == currentNode.Id && c.SourcePort == outputPort)
             .ToList();
@@ -657,7 +673,7 @@ public class WorkflowRunner
             dbContext.ExecutionLogs.Add(log);
             await dbContext.SaveChangesAsync();
 
-            // SSE stream'e de yaz
+            // Canlı izleme (SSE stream) akışına da yaz
             var logEvent = new LogEventDto
             {
                 ExecutionId = execution.Id,
@@ -708,7 +724,7 @@ public class WorkflowRunner
         var actions = JsonSerializer.Deserialize<List<CompensatingAction>>(compListStr);
         if (actions == null || actions.Count == 0) return;
         
-        actions.Reverse(); // LIFO Order
+        actions.Reverse(); // LIFO sırası (Last In, First Out)
         
         await WriteLog(dbContext, execution, null, LogLevel.Warning, "Saga Rollback başlatıldı. Telafi adımları çalıştırılıyor.");
         

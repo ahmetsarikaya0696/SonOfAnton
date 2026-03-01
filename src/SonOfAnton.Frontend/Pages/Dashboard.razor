@@ -1,5 +1,7 @@
 @page "/dashboard"
+@using SonOfAnton.Shared.Entities
 @inject WorkflowApiService ApiService
+@inject QuotaApiService QuotaApi
 
 <div class="dashboard">
     <header class="dashboard-header">
@@ -50,6 +52,21 @@
             <span class="rate-label">@_stats.OverallSuccessRate.ToString("F1")%</span>
         </div>
 
+        @if (_quota != null)
+        {
+            <div class="quota-section" style="margin-top: 2rem; padding: 1.5rem; background: var(--surface-color, #fff); border-radius: 0.5rem; border: 1px solid var(--border-color, #e5e7eb);">
+                <h3 style="margin-top:0; font-size: 1.1rem; color: var(--text-color, #1f2937);">Aylık İşlem Kotası</h3>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
+                    <span>@_quota.CurrentMonthExecutions / @_quota.MaxExecutionsPerMonth İşlem</span>
+                    <span style="font-weight: 600;">@((_quota.CurrentMonthExecutions * 100.0 / Math.Max(1, _quota.MaxExecutionsPerMonth)).ToString("F0"))%</span>
+                </div>
+                <div class="large-progress" style="background: var(--bg-secondary, #f3f4f6);">
+                    <div class="progress-fill" style="width: @Math.Min(100, (_quota.CurrentMonthExecutions * 100.0 / Math.Max(1, _quota.MaxExecutionsPerMonth)))%; background: @((_quota.CurrentMonthExecutions >= _quota.MaxExecutionsPerMonth) ? "var(--danger-color, #ef4444)" : "var(--primary-color, #4f46e5)");"></div>
+                </div>
+                <small style="display: block; margin-top: 0.5rem; color: var(--text-muted, #6b7280);">Dönem Başlangıcı: @_quota.CurrentMonthStart.ToLocalTime().ToString("dd MMM yyyy")</small>
+            </div>
+        }
+
         @if (_stats.TopWorkflows.Count > 0)
         {
             <div class="top-workflows-section">
@@ -99,13 +116,19 @@
 
 @code {
     private DashboardStatsDto? _stats;
+    private UserQuotaEntity? _quota;
     private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _stats = await ApiService.GetDashboardStatsAsync();
+            var statsTask = ApiService.GetDashboardStatsAsync();
+            var quotaTask = QuotaApi.GetMyQuotaAsync();
+            
+            await Task.WhenAll(statsTask, quotaTask);
+            _stats = await statsTask;
+            _quota = await quotaTask;
         }
         catch
         {

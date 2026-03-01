@@ -29,8 +29,11 @@
             <button class="btn btn-ghost" @onclick="() => _isFolderTreeOpen = !_isFolderTreeOpen" title="Klasörler">
                 <Icon Name="folder" Size="14" />
             </button>
-            <button class="btn btn-primary" @onclick="NewWorkflow">
-                <Icon Name="plus" Size="14" /> Yeni
+            <button class="btn btn-primary" @onclick="() => _isWizardOpen = true">
+                <Icon Name="magic-wand" Size="14" /> Sihirbazla Oluştur
+            </button>
+            <button class="btn btn-ghost" @onclick="NewWorkflow" title="Boş Yeni (Gelişmiş)">
+                <Icon Name="plus" Size="14" /> Boş Yeni
             </button>
             
             <span class="toolbar-divider" style="margin: 0 8px; border-left: 1px solid var(--border-color); height: 20px;"></span>
@@ -300,6 +303,8 @@
                   WorkflowId="DiagramState.CurrentWorkflow.Id" />
 }
 
+<WorkflowWizard IsVisible="_isWizardOpen" IsVisibleChanged="v => _isWizardOpen = v" OnWizardCompleted="HandleWizardCompleted" />
+
 @code {
     private bool _isSaving;
     private bool _isExecuting;
@@ -310,6 +315,7 @@
     private string _workflowName = "Yeni İş Akışı";
     private bool _isMoreDropdownOpen;
     private ExecutionMonitor? _executionMonitor;
+    private bool _isWizardOpen;
 
     // New panel states
     private bool _isSearchOpen;
@@ -451,6 +457,15 @@
         _currentExecutionId = null;
         _isExecuting = false;
         _isTestMode = false;
+    }
+
+    private void HandleWizardCompleted()
+    {
+        _workflowName = DiagramState.CurrentWorkflow?.Name ?? "Yeni İş Akışı";
+        _currentExecutionId = null;
+        _isExecuting = false;
+        _isTestMode = false;
+        StateHasChanged();
     }
 
     private void HandleFolderSelected(Guid? folderId)

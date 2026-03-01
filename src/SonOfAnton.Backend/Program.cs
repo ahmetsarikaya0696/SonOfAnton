@@ -26,7 +26,7 @@ using SonOfAnton.Shared.Core.Identity;
 using SonOfAnton.Backend.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
@@ -195,8 +195,6 @@ builder.Services.AddScoped<ITenantResolver, TenantResolver>();
 // JIT User Provisioning
 builder.Services.AddScoped<JitUserProvisioningService>();
 
-// Dynamic OIDC Events
-builder.Services.AddScoped<DynamicOidcEvents>();
 
 // IClaimsTransformation — rol → izin dönüşümü
 builder.Services.AddScoped<IClaimsTransformation, PermissionClaimsTransformation>();
@@ -204,42 +202,88 @@ builder.Services.AddScoped<IClaimsTransformation, PermissionClaimsTransformation
 // SCIM Service
 builder.Services.AddScoped<ScimService>();
 
-// Authentication: OIDC + JwtBearer (Escape Hatch) + Policy scheme seçici
+// Authentication: JwtBearer + ApiKey + Policy scheme seçici
+// Not: Backend tamamen API olarak çalışır, OIDC interactive login frontend (Blazor WASM) tarafından yönetilir.
+// Backend sadece JWT Bearer token doğrulaması yapar.
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = "MultiScheme";
-    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddOpenIdConnect(options =>
+.AddJwtBearer(options =>
 {
-    var authConfig = builder.Configuration.GetSection("Authentication");
-    options.Authority = authConfig["DefaultAuthority"] ?? "https://login.microsoftonline.com/common/v2.0";
-    options.ClientId = authConfig["DefaultClientId"] ?? "not-configured";
-    options.ClientSecret = authConfig["DefaultClientSecret"];
-    options.ResponseType = "code";
-    options.SaveTokens = true;
-    options.GetClaimsFromUserInfoEndpoint = true;
-    options.Scope.Add("openid");
-    options.Scope.Add("profile");
-    options.Scope.Add("email");
-    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
-
-    // Dinamik tenant OIDC events
-    options.EventsType = typeof(DynamicOidcEvents);
-})
-.AddJwtBearer("ExternalBearer", options =>
-{
-    // Kaçış kapağı: Sadece JWT kabul eden dış kurumlar için
     var authConfig = builder.Configuration.GetSection("Authentication");
     options.Authority = authConfig["DefaultAuthority"] ?? "https://login.microsoftonline.com/common/v2.0";
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuer = true,
+        ValidateIssuer = false, // Dev ortamında issuer mismatch (trailing slash vb) sorunlarını engelle
         ValidateAudience = false, // Keycloak 'aud' claim'i farklı format — dev'de devre dışı
         ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromMinutes(1),
         NameClaimType = "preferred_username",
         RoleClaimType = "roles"
+    };
+
+    // JIT User Provisioning — İlk token doğrulamasında kullanıcıyı veritabanına kaydet
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            
+            // 1. Önce query string'den access_token kontrolü (EventSource/SSE için)
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && 
+                (path.StartsWithSegments("/api/notifications/stream") || 
+                 path.StartsWithSegments("/api/workflow/execution")))
+            {
+                context.Token = accessToken;
+                logger.LogInformation("Query string 'access_token' parameter used for SSE authentication on {Path}", path);
+                return Task.CompletedTask;
+            }
+
+            // 2. Normal Authorization header kontrolü
+            if (context.Request.Headers.ContainsKey("Authorization"))
+            {
+                var authHeader = context.Request.Headers["Authorization"].ToString();
+                logger.LogInformation("Authorization header alındı: {HeaderPrefix}...", 
+                    authHeader.Length > 15 ? authHeader.Substring(0, 15) : authHeader);
+            }
+            else
+            {
+                logger.LogWarning("Request'te Authorization header YOK! Endpoint: {Path}", context.Request.Path);
+            }
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(context.Exception, "JWT kimlik doğrulama BAŞARISIZ OLDU. Endpoint: {Path}", context.HttpContext.Request.Path);
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            if (context.Principal is not null)
+            {
+                logger.LogInformation("--- JWT BARIYERI GECILDI! TOKEN'DAKI BUTUN CLAIMLER: ---");
+                foreach (var claim in context.Principal.Claims)
+                {
+                    logger.LogInformation("CLAIM >> [{Type}] : {Value}", claim.Type, claim.Value);
+                }
+                logger.LogInformation("---------------------------------------------------------");
+            }
+
+            var jitService = context.HttpContext.RequestServices.GetRequiredService<JitUserProvisioningService>();
+            var tenantId = context.Principal?.FindFirst("tenant_id")?.Value ?? "default";
+
+            if (context.Principal is not null)
+            {
+                await jitService.ProvisionUserAsync(context.Principal, tenantId);
+            }
+        }
     };
 })
 .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationOptions.DefaultScheme, options => { })
@@ -253,15 +297,8 @@ builder.Services.AddAuthentication(options =>
             return ApiKeyAuthenticationOptions.DefaultScheme;
         }
 
-        // 2. Authorization header'ında Bearer token varsa → ExternalBearer
-        var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
-        if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            return "ExternalBearer";
-        }
-
-        // Aksi halde → OIDC (interactive login)
-        return OpenIdConnectDefaults.AuthenticationScheme;
+        // 2. Authorization header'ında Bearer token varsa veya default → JwtBearer
+        return JwtBearerDefaults.AuthenticationScheme;
     };
 });
 
@@ -306,7 +343,7 @@ builder.Services.AddSingleton(sp =>
         modelId: ollamaModel,
         endpoint: new Uri(ollamaEndpoint));
     
-    kernelBuilder.AddOllamaTextEmbeddingGeneration(
+    kernelBuilder.AddOllamaEmbeddingGenerator(
         modelId: ollamaEmbeddingModel,
         endpoint: new Uri(ollamaEndpoint));
     #pragma warning restore SKEXP0070
@@ -452,6 +489,13 @@ builder.Services.AddScoped<WorkspaceService>();
 // Chatbot Service
 builder.Services.AddScoped<ChatbotService>();
 
+// Quota Service
+builder.Services.AddScoped<IQuotaService, QuotaService>();
+
+// Notifications Service
+builder.Services.AddSingleton<NotificationStreamService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)
@@ -465,6 +509,17 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
+    
+    try 
+    {
+        // Migrasyonları otomatik uygula
+        await dbContext.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Veritabanı migrasyonu sırasında hata oluştu.");
+    }
 
     // A2A Agent'ları kaydet
     var registry = app.Services.GetRequiredService<AgentRegistry>();
@@ -494,7 +549,7 @@ if (app.Environment.IsDevelopment())
         options.DefaultHttpClient = new(ScalarTarget.CSharp, ScalarClient.HttpClient);
         options.Authentication = new ScalarAuthenticationOptions
         {
-            PreferredSecurityScheme = "ApiKey"
+            PreferredSecuritySchemes = ["ApiKey"]
         };
     });
 }

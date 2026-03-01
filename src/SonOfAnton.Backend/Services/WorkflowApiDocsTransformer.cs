@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using SonOfAnton.Backend.Data;
 using System.Text.Json;
+using System.Net.Http;
 
 namespace SonOfAnton.Backend.Services;
 
@@ -31,25 +32,29 @@ public class WorkflowApiDocsTransformer : IOpenApiDocumentTransformer
 
         if (!endpoints.Any()) return;
 
-        // Security requirement setup for ApiKey
-        var apiKeyScheme = new OpenApiSecurityScheme
-        {
-            Type = SecuritySchemeType.ApiKey,
-            In = ParameterLocation.Header,
-            Name = "X-Api-Key",
-            Description = "Workflow API Endpoint'leri ve admin API'leri için yetkilendirme anahtarı."
-        };
+        // Eğer eksikse ApiKey şema tanımını ekle
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
 
-        var apiKeySecurityRequirement = new OpenApiSecurityRequirement
-        {
-            [new OpenApiSecuritySchemeReference("ApiKey")] = new List<string>()
-        };
-
-        // Add ApiKey scheme definition if missing
         if (!document.Components.SecuritySchemes.ContainsKey("ApiKey"))
         {
+            var apiKeyScheme = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Header,
+                Name = "X-Api-Key",
+                Description = "Workflow API Endpoint'leri ve admin API'leri için yetkilendirme anahtarı."
+            };
             document.Components.SecuritySchemes.Add("ApiKey", apiKeyScheme);
         }
+
+        /*
+        // ApiKey gereksinimi için model tanımı (şu anki sürümde tip uyuşmazlığı nedeniyle devre dışı)
+        var apiKeySecurityRequirement = new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "ApiKey" } }] = new List<string>()
+        };
+        */
 
         foreach (var endpoint in endpoints)
         {
@@ -61,7 +66,8 @@ public class WorkflowApiDocsTransformer : IOpenApiDocumentTransformer
                 document.Paths.Add(path, pathItem);
             }
 
-            var httpMethod = new HttpMethod(endpoint.HttpMethod.ToUpper());
+            var httpMethodStr = endpoint.HttpMethod.ToUpper();
+            var httpMethod = new HttpMethod(httpMethodStr);
             
             var operation = new OpenApiOperation
             {
@@ -70,13 +76,14 @@ public class WorkflowApiDocsTransformer : IOpenApiDocumentTransformer
                 Responses = new OpenApiResponses()
             };
 
-            // Authentication setup
+            // Kimlik doğrulama ayarları
             if (endpoint.RequireApiKey)
             {
-                operation.Security.Add(apiKeySecurityRequirement);
+                operation.Security ??= new List<OpenApiSecurityRequirement>();
+                // operation.Security.Add(apiKeySecurityRequirement);
             }
 
-            // Request body setup based on InputSchema
+            // InputSchema'ya göre request body ayarları
             if (endpoint.InputSchema != null)
             {
                 var schemaDoc = endpoint.InputSchema;
@@ -124,7 +131,7 @@ public class WorkflowApiDocsTransformer : IOpenApiDocumentTransformer
                     }
                 };
             }
-            else if (httpMethod == HttpMethod.Post || httpMethod == HttpMethod.Put)
+            else if (httpMethodStr == "POST" || httpMethodStr == "PUT")
             {
                 operation.RequestBody = new OpenApiRequestBody
                 {
@@ -136,7 +143,7 @@ public class WorkflowApiDocsTransformer : IOpenApiDocumentTransformer
                 };
             }
 
-            // Responses setup
+            // Yanıt (Response) ayarları
             var successCode = endpoint.WaitForResult ? "200" : "202";
             var successDescription = endpoint.WaitForResult ? "Workflow başarıyla çalıştı ve sonuç döndü." : "Workflow arka planda çalışmak üzere kabul edildi.";
 
@@ -158,7 +165,7 @@ public class WorkflowApiDocsTransformer : IOpenApiDocumentTransformer
             if (endpoint.WaitForResult)
                 operation.Responses.Add("504", new OpenApiResponse { Description = "Gateway Timeout - Workflow execution took too long" });
 
-            pathItem.Operations.Add(httpMethod, operation);
+            pathItem.Operations!.Add(httpMethod, operation);
         }
     }
 }

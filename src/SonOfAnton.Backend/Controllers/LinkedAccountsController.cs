@@ -149,7 +149,7 @@ public class LinkedAccountsController : ControllerBase
             Name = $"{provider} Access",
             SystemName = provider,
             EncryptedData = _encryptionService.Encrypt(JsonSerializer.Serialize(rawData)),
-            TenantId = tenantId,
+            TenantId = tenantId ?? "default",
             UserId = userId
         };
         _dbContext.Add(dbCred);
@@ -159,7 +159,7 @@ public class LinkedAccountsController : ControllerBase
             Provider = provider,
             ProviderUserId = providerUserId,
             UserId = userId,
-            TenantId = tenantId,
+            TenantId = tenantId ?? "default",
             Credential = dbCred
         };
         _dbContext.Add(dbAccount);
