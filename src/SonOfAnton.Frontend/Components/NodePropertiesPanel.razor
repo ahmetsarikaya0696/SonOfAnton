@@ -94,6 +94,11 @@
                                               placeholder="@param.Placeholder"
                                               @onchange="(e) => SetParamValue(param.Name, e.Value)">@GetParamValue(param.Name)</textarea>
                                     break;
+
+                                case "markdown":
+                                    <MarkdownEditorPanel Value="@GetParamValue(param.Name)?.ToString()"
+                                                         ValueChanged="(v) => SetParamValue(param.Name, v)" />
+                                    break;
                             }
                         </div>
                     }

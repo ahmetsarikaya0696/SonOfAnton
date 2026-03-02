@@ -1,0 +1,341 @@
+/* ─── Markdown Editor Panel ─── */
+.md-editor-panel {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-color, #313244);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface-color, #1e1e2e);
+    margin-top: 6px;
+}
+
+/* ─── Toolbar ─── */
+.md-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border-color, #313244);
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.md-tabs {
+    display: flex;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.md-tab {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #a6adc8);
+    font-size: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.md-tab:hover {
+    color: var(--text-primary, #cdd6f4);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.md-tab.active {
+    color: var(--accent-color, #89b4fa);
+    background: rgba(137, 180, 250, 0.12);
+    font-weight: 500;
+}
+
+.md-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.md-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #a6adc8);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.md-btn:hover {
+    color: var(--text-primary, #cdd6f4);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.md-btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+/* ─── Template Dropdown ─── */
+.md-template-dropdown {
+    position: relative;
+}
+
+.md-template-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    margin-top: 4px;
+    background: var(--surface-color, #1e1e2e);
+    border: 1px solid var(--border-color, #313244);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    min-width: 200px;
+    animation: fadeSlideIn 0.15s ease;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.md-template-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary, #cdd6f4);
+    font-size: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+}
+
+.md-template-menu button:hover {
+    background: rgba(137, 180, 250, 0.12);
+}
+
+/* ─── Editor Area ─── */
+.md-editor-area {
+    position: relative;
+    min-height: 200px;
+}
+
+.md-textarea {
+    width: 100%;
+    min-height: 200px;
+    max-height: 400px;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary, #cdd6f4);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    tab-size: 2;
+    box-sizing: border-box;
+}
+
+.md-textarea::placeholder {
+    color: var(--text-secondary, #585b70);
+    font-style: italic;
+}
+
+/* ─── Drop Overlay ─── */
+.md-drop-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(137, 180, 250, 0.08);
+    border: 2px dashed var(--accent-color, #89b4fa);
+    border-radius: 6px;
+    color: var(--accent-color, #89b4fa);
+    font-size: 14px;
+    font-weight: 500;
+    pointer-events: none;
+    animation: pulseGlow 2s ease infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { border-color: rgba(137, 180, 250, 0.4); }
+    50% { border-color: rgba(137, 180, 250, 0.8); }
+}
+
+.md-editor-area.drag-over {
+    background: rgba(137, 180, 250, 0.04);
+}
+
+/* ─── File Info Bar ─── */
+.md-file-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(137, 180, 250, 0.08);
+    color: var(--accent-color, #89b4fa);
+    font-size: 11px;
+    border-top: 1px solid var(--border-color, #313244);
+}
+
+.md-clear-file {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #a6adc8);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+.md-clear-file:hover {
+    color: #f38ba8;
+    background: rgba(243, 139, 168, 0.12);
+}
+
+/* ─── Status Bar ─── */
+.md-status-bar {
+    display: flex;
+    gap: 12px;
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--text-secondary, #585b70);
+    border-top: 1px solid var(--border-color, #313244);
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.md-saved {
+    color: #a6e3a1;
+}
+
+/* ─── Preview Tab ─── */
+.md-preview {
+    padding: 16px;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    color: var(--text-primary, #cdd6f4);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.md-preview-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 150px;
+    color: var(--text-secondary, #585b70);
+}
+
+.md-preview-content h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 16px 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color, #313244);
+    color: var(--text-primary, #cdd6f4);
+}
+
+.md-preview-content h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 14px 0 6px;
+    color: var(--accent-color, #89b4fa);
+}
+
+.md-preview-content h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 12px 0 4px;
+    color: #cba6f7;
+}
+
+.md-preview-content strong {
+    color: #f9e2af;
+}
+
+.md-preview-content code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #a6e3a1;
+}
+
+.md-preview-content li {
+    margin-left: 16px;
+    margin-bottom: 2px;
+    list-style: disc;
+}
+
+.md-preview-content td {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color, #313244);
+    font-size: 12px;
+}
+
+.md-preview-content tr:first-child td {
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+::deep .md-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    font-size: 13px;
+}
+
+::deep .md-check .check-icon {
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+::deep .md-check.done {
+    color: #a6e3a1;
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+::deep .md-check.progress {
+    color: #f9e2af;
+}
+
+::deep .md-check.pending {
+    color: var(--text-secondary, #a6adc8);
+}
+
+::deep .md-comment {
+    color: var(--text-secondary, #585b70);
+    font-style: italic;
+    font-size: 12px;
+}

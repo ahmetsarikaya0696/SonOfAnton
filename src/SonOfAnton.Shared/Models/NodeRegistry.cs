@@ -446,6 +446,35 @@ public static class NodeRegistry
                 new NodeParameter { Name = "topK", DisplayName = "Sonuc Sayisi", Type = "number", DefaultValue = 5 }
             ]
         },
+        new NodeDefinition
+        {
+            Type = "ai.planning",
+            Name = "YZ Planlama",
+            Icon = "file-text",
+            Category = "Yapay Zeka",
+            Description = "Markdown tabanlı görev planı, bulgular ve ilerleme raporu yönetimi",
+            Color = "#74c7ec",
+            Inputs = [new NodePort { Name = "input", Type = "any" }],
+            Outputs = [new NodePort { Name = "output", Type = "any" }, new NodePort { Name = "error", Type = "any" }],
+            Parameters =
+            [
+                new NodeParameter { Name = "agentId", DisplayName = "Ajan Kimliği", Type = "string", Required = true, Placeholder = "agent-001" },
+                new NodeParameter
+                {
+                    Name = "fileType",
+                    DisplayName = "Belge Tipi",
+                    Type = "select",
+                    DefaultValue = "TaskPlan",
+                    Options =
+                    [
+                        new SelectOption { Value = "TaskPlan", Label = "Görev Planı (task_plan.md)" },
+                        new SelectOption { Value = "Findings", Label = "Bulgular (findings.md)" },
+                        new SelectOption { Value = "Progress", Label = "İlerleme (progress.md)" }
+                    ]
+                },
+                new NodeParameter { Name = "markdownContent", DisplayName = "Markdown İçeriği", Type = "markdown" }
+            ]
+        },
 
         // Veri
         new NodeDefinition

@@ -69,6 +69,7 @@ builder.Services.AddHttpClient<LogStreamService>("BackendApi");
 builder.Services.AddHttpClient<DataTableClientService>("BackendApi");
 builder.Services.AddHttpClient<DataFormClientService>("BackendApi");
 builder.Services.AddHttpClient<ChatbotApiService>("BackendApi");
+builder.Services.AddHttpClient<PlanningApiService>("BackendApi");
 builder.Services.AddSingleton<DiagramStateService>();
 builder.Services.AddSingleton<YamlSyncService>();
 builder.Services.AddSingleton<ChatDiagramBridge>();

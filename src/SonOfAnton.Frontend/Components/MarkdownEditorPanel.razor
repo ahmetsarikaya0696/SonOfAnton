@@ -1,0 +1,394 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="md-editor-panel">
+    @* ─── Toolbar ─── *@
+    <div class="md-toolbar">
+        <div class="md-tabs">
+            <button class="md-tab @(_activeTab == "editor" ? "active" : "")"
+                    @onclick='() => _activeTab = "editor"'>
+                <Icon Name="edit-3" Size="14" /> Editör
+            </button>
+            <button class="md-tab @(_activeTab == "preview" ? "active" : "")"
+                    @onclick='() => _activeTab = "preview"'>
+                <Icon Name="eye" Size="14" /> Önizleme
+            </button>
+        </div>
+
+        <div class="md-actions">
+            @* Şablon butonları *@
+            <div class="md-template-dropdown">
+                <button class="md-btn md-btn-sm" @onclick="ToggleTemplateMenu">
+                    <Icon Name="file-plus" Size="14" /> Şablon
+                </button>
+                @if (_showTemplateMenu)
+                {
+                    <div class="md-template-menu">
+                        <button @onclick='() => ApplyTemplate("TaskPlan")'>📋 Görev Planı</button>
+                        <button @onclick='() => ApplyTemplate("Findings")'>🔍 Bulgular</button>
+                        <button @onclick='() => ApplyTemplate("Progress")'>📊 İlerleme</button>
+                    </div>
+                }
+            </div>
+
+            @* Dosya yükleme *@
+            <button class="md-btn md-btn-sm" @onclick="TriggerFileUpload">
+                <Icon Name="upload" Size="14" /> Dosya Yükle
+            </button>
+
+            <input type="file"
+                   id="@_fileInputId"
+                   accept=".md,.markdown,.txt"
+                   style="display:none"
+                   @onchange="OnFileSelected" />
+        </div>
+    </div>
+
+    @* ─── Editor Tab ─── *@
+    @if (_activeTab == "editor")
+    {
+        <div class="md-editor-area" id="@_dropZoneId">
+            <textarea class="md-textarea"
+                      @bind="_content"
+                      @bind:event="oninput"
+                      @bind:after="OnContentChanged"
+                      placeholder="Markdown içeriğinizi buraya yazın veya .md dosya sürükleyip bırakın..."></textarea>
+
+            @if (_isDragOver)
+            {
+                <div class="md-drop-overlay">
+                    <Icon Name="upload-cloud" Size="48" />
+                    <span>.md dosyanızı bırakın</span>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_fileName))
+        {
+            <div class="md-file-info">
+                <Icon Name="file" Size="12" />
+                <span>@_fileName</span>
+                <button class="md-clear-file" @onclick="ClearFile">✕</button>
+            </div>
+        }
+
+        <div class="md-status-bar">
+            <span>@GetLineCount() satır</span>
+            <span>@GetCharCount() karakter</span>
+            @if (_lastSaved.HasValue)
+            {
+                <span class="md-saved">✓ Kaydedildi</span>
+            }
+        </div>
+    }
+
+    @* ─── Preview Tab ─── *@
+    @if (_activeTab == "preview")
+    {
+        <div class="md-preview">
+            @if (string.IsNullOrWhiteSpace(_content))
+            {
+                <div class="md-preview-empty">
+                    <Icon Name="file-text" Size="32" />
+                    <p>Önizlenecek içerik yok</p>
+                </div>
+            }
+            else
+            {
+                <div class="md-preview-content">
+                    @((MarkupString)RenderMarkdown(_content))
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private string _content = string.Empty;
+    private string _activeTab = "editor";
+    private string? _fileName;
+    private bool _isDragOver;
+    private bool _showTemplateMenu;
+    private DateTime? _lastSaved;
+    private DotNetObjectReference<MarkdownEditorPanel>? _dotNetHelper;
+    private System.Timers.Timer? _debounceTimer;
+
+    private readonly string _fileInputId = $"md-file-{Guid.NewGuid():N}";
+    private readonly string _dropZoneId = $"md-drop-{Guid.NewGuid():N}";
+
+    protected override void OnParametersSet()
+    {
+        if (Value != null && Value != _content)
+        {
+            _content = Value;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetHelper = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("soaFileUpload.setupDropZone",
+                    _dropZoneId, _dotNetHelper, "OnFileDrop");
+            }
+            catch (JSException)
+            {
+                // JS interop henüz hazır değilse sessizce atla
+            }
+        }
+    }
+
+    private async Task OnContentChanged()
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+
+        _debounceTimer = new System.Timers.Timer(500);
+        _debounceTimer.Elapsed += async (_, _) =>
+        {
+            _debounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                await ValueChanged.InvokeAsync(_content);
+                _lastSaved = DateTime.Now;
+                StateHasChanged();
+            });
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+
+        await Task.CompletedTask;
+    }
+
+    private async Task TriggerFileUpload()
+    {
+        await JS.InvokeVoidAsync("soaFileUpload.triggerFileInput", _fileInputId);
+    }
+
+    private async Task OnFileSelected()
+    {
+        try
+        {
+            var content = await JS.InvokeAsync<string?>("soaFileUpload.readFileAsText", _fileInputId);
+            var name = await JS.InvokeAsync<string?>("soaFileUpload.getFileName", _fileInputId);
+
+            if (content != null)
+            {
+                _content = content;
+                _fileName = name;
+                await ValueChanged.InvokeAsync(_content);
+                _lastSaved = DateTime.Now;
+            }
+        }
+        catch (JSException ex)
+        {
+            Console.Error.WriteLine($"Dosya okuma hatası: {ex.Message}");
+        }
+    }
+
+    [JSInvokable("OnFileDrop")]
+    public async Task OnFileDrop(string? content, string? fileName)
+    {
+        if (content != null)
+        {
+            _content = content;
+            _fileName = fileName;
+            await ValueChanged.InvokeAsync(_content);
+            _lastSaved = DateTime.Now;
+            StateHasChanged();
+        }
+        else
+        {
+            // Sadece .md/.markdown/.txt kabul edilir — kullanıcıya bilgi vermek isterseniz burayı genişletebilirsiniz
+        }
+    }
+
+    private void ToggleTemplateMenu()
+    {
+        _showTemplateMenu = !_showTemplateMenu;
+    }
+
+    private async Task ApplyTemplate(string templateType)
+    {
+        _showTemplateMenu = false;
+        _fileName = templateType switch
+        {
+            "TaskPlan" => "task_plan.md",
+            "Findings" => "findings.md",
+            "Progress" => "progress.md",
+            _ => "document.md"
+        };
+
+        _content = templateType switch
+        {
+            "TaskPlan" => """
+                # Görev Planı
+
+                ## Amaç
+                <!-- Projenin/görevin amacını buraya yazın -->
+
+                ## Görevler
+                - [ ] Görev 1
+                - [ ] Görev 2
+                - [ ] Görev 3
+
+                ## Zaman Çizelgesi
+                | Görev | Başlangıç | Bitiş | Durum |
+                |-------|-----------|-------|-------|
+                | Görev 1 | - | - | Bekliyor |
+
+                ## Notlar
+                <!-- Ek notlar -->
+                """,
+
+            "Findings" => """
+                # Bulgular
+
+                ## Özet
+                <!-- Araştırma/analiz özetini buraya yazın -->
+
+                ## Bulgular
+                ### Bulgu 1
+                - **Açıklama:**
+                - **Etki:** Yüksek / Orta / Düşük
+                - **Öneri:**
+
+                ### Bulgu 2
+                - **Açıklama:**
+                - **Etki:**
+                - **Öneri:**
+
+                ## Sonuç
+                <!-- Genel değerlendirme -->
+                """,
+
+            "Progress" => """
+                # İlerleme Raporu
+
+                ## Genel Durum
+                **Tamamlanma:** %0
+
+                ## Tamamlanan Görevler
+                - [x] Proje başlatıldı
+
+                ## Devam Eden Görevler
+                - [/] Aktif görev
+
+                ## Bekleyen Görevler
+                - [ ] Bekleyen görev 1
+                - [ ] Bekleyen görev 2
+
+                ## Engeller
+                <!-- Karşılaşılan engeller -->
+
+                ## Sonraki Adımlar
+                <!-- Bir sonraki döngüde yapılacaklar -->
+                """,
+
+            _ => ""
+        };
+
+        await ValueChanged.InvokeAsync(_content);
+        _lastSaved = DateTime.Now;
+    }
+
+    private void ClearFile()
+    {
+        _fileName = null;
+    }
+
+    private int GetLineCount() =>
+        string.IsNullOrEmpty(_content) ? 0 : _content.Split('\n').Length;
+
+    private int GetCharCount() =>
+        _content?.Length ?? 0;
+
+    /// <summary>
+    /// Basit Markdown → HTML dönüştürücü (sunucu tarafı kütüphane gerektirmez)
+    /// </summary>
+    private static string RenderMarkdown(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown)) return "";
+
+        var html = System.Text.RegularExpressions.Regex.Replace(
+            System.Web.HttpUtility.HtmlEncode(markdown),
+            @"^### (.+)$", "<h3>$1</h3>", System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^## (.+)$", "<h2>$1</h2>", System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^# (.+)$", "<h1>$1</h1>", System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        // Bold
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+
+        // Italic
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"\*(.+?)\*", "<em>$1</em>");
+
+        // Inline code
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"`(.+?)`", "<code>$1</code>");
+
+        // Checklist items
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^- \[x\] (.+)$",
+            "<div class='md-check done'><span class='check-icon'>✓</span> $1</div>",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^- \[/\] (.+)$",
+            "<div class='md-check progress'><span class='check-icon'>◐</span> $1</div>",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^- \[ \] (.+)$",
+            "<div class='md-check pending'><span class='check-icon'>○</span> $1</div>",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        // Unordered list
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^- (.+)$", "<li>$1</li>",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        // Table rows (basit)
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"^\|(.+)\|$",
+            m =>
+            {
+                var cells = m.Groups[1].Value.Split('|');
+                if (cells.All(c => c.Trim().All(ch => ch == '-' || ch == ' ' || ch == ':')))
+                    return ""; // Separator row'u atla
+                var tds = string.Join("", cells.Select(c => $"<td>{c.Trim()}</td>"));
+                return $"<tr>{tds}</tr>";
+            },
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        // Comment lines
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, @"&lt;!-- (.+?) --&gt;",
+            "<span class='md-comment'>$1</span>");
+
+        // Paragraphs (boş satırları <br/> olarak)
+        html = html.Replace("\n\n", "<br/><br/>");
+        html = html.Replace("\n", "<br/>");
+
+        return html;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+        _dotNetHelper?.Dispose();
+    }
+}
