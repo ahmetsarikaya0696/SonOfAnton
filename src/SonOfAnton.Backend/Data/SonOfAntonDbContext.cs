@@ -69,6 +69,10 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<CensorshipRuleEntity> CensorshipRules => Set<CensorshipRuleEntity>();
     public DbSet<CensorshipAuditLogEntity> CensorshipAuditLogs => Set<CensorshipAuditLogEntity>();
 
+    // ─── Planning & Execution ────────────────────────────────────────
+    public DbSet<PlanningDocumentEntity> PlanningDocuments => Set<PlanningDocumentEntity>();
+    public DbSet<LoopExecutionStateEntity> LoopExecutionStates => Set<LoopExecutionStateEntity>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1015,6 +1019,59 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ─── Planning Documents ──────────────────────────────────────────
+        modelBuilder.Entity<PlanningDocumentEntity>(entity =>
+        {
+            entity.ToTable("planning_documents");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.FileType).HasColumnName("file_type").HasConversion<string>();
+            entity.Property(e => e.Content).HasColumnName("content").IsRequired();
+            entity.Property(e => e.Version).HasColumnName("version").HasDefaultValue(1);
+            entity.Property(e => e.FilePath).HasColumnName("file_path").HasMaxLength(1000);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => new { e.AgentId, e.FileType }).IsUnique();
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ─── Loop Execution States ───────────────────────────────────────
+        modelBuilder.Entity<LoopExecutionStateEntity>(entity =>
+        {
+            entity.ToTable("loop_execution_states");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.LoopId).HasColumnName("loop_id").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.State).HasColumnName("state").HasConversion<string>();
+            entity.Property(e => e.CurrentIteration).HasColumnName("current_iteration").HasDefaultValue(0);
+            entity.Property(e => e.MaxIterations).HasColumnName("max_iterations").HasDefaultValue(100);
+            entity.Property(e => e.ContextJson).HasColumnName("context_json").HasColumnType("jsonb");
+            entity.Property(e => e.ExitReason).HasColumnName("exit_reason").HasConversion<string?>();
+            entity.Property(e => e.ExitMessage).HasColumnName("exit_message").HasMaxLength(2000);
+            entity.Property(e => e.HangfireJobId).HasColumnName("hangfire_job_id").HasMaxLength(100);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.StartedAt).HasColumnName("started_at");
+            entity.Property(e => e.LastHeartbeatAt).HasColumnName("last_heartbeat_at");
+            entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
+
+            entity.HasIndex(e => e.LoopId).IsUnique();
+            entity.HasIndex(e => e.State);
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

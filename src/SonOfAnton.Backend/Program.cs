@@ -26,6 +26,8 @@ using SonOfAnton.Shared.Core.Identity;
 using SonOfAnton.Backend.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using SonOfAnton.Backend.Services.Planning;
+using SonOfAnton.Shared.Core;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -514,6 +516,30 @@ builder.Services.AddScoped<SonOfAnton.Shared.Core.ISecretManager, SonOfAnton.Bac
 
 // Quota Service
 builder.Services.AddScoped<IQuotaService, QuotaService>();
+
+// ─── Planning & Execution Framework (Task 2) ───────────────────
+
+// Concurrent File Access Guard (Singleton — process-level locks)
+builder.Services.AddSingleton<ConcurrentFileAccessGuard>();
+
+// Markdown Planning Service
+builder.Services.AddScoped<IMarkdownPlanningService, MarkdownPlanningService>();
+
+// Planning File Watcher (BackgroundService — FileSystemWatcher event handling)
+builder.Services.AddHostedService<PlanningFileWatcherService>();
+
+// Loop State Store (PostgreSQL + MemoryCache hybrid)
+builder.Services.AddScoped<ILoopStateStore, LoopStateStore>();
+
+// Ralph Loop Engine (BackgroundService + Hangfire integration)
+builder.Services.AddHostedService<RalphLoopEngine>();
+builder.Services.AddSingleton<RalphLoopEngine>();
+
+// Loop Exit Validators (strategy pattern — chained evaluation)
+builder.Services.AddScoped<ILoopExitValidator, TimeoutValidator>();
+builder.Services.AddScoped<ILoopExitValidator, MaxIterationValidator>();
+builder.Services.AddScoped<ILoopExitValidator, TaskCompletionValidator>();
+builder.Services.AddScoped<ILoopExitValidator, CustomConditionValidator>();
 
 // Notifications Service
 builder.Services.AddSingleton<NotificationStreamService>();

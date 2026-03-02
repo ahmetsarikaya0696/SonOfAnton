@@ -50,15 +50,6 @@ Mevcut `.csproj` dosyaları incelendiğinde projenin halihazırda aşağıdaki t
   - [ ] Subtask 3.2.2: Giren uzun dökümanların işlenmesi için C# Token/Paragraf metin parçalama (Chunking) mantığının yazılması.
   - [ ] Subtask 3.2.3: Semantic Kernel kullanarak (veya manuel) elde edilen RAG verilerinin LLM promptlarına doğru biçimde dahil edilmesi (Prompt Builder).
 
-## Task 4: Platform Entegrasyonu ve İş Akışı Dışa Aktarımı
-- [ ] **Subtask 4.1: C# Native İş Akışı Modelleri ve Dışa Aktarım**
-  - [ ] Subtask 4.1.1: Arayüz (Frontend/NodeSdk) üzerinden gelen görsel iş akışını (Node graph) JSON'dan ara dile (IR) ayrıştıracak C# parser servisinin yazılması.
-  - [ ] Subtask 4.1.2: Ayrıştırılan yapıyı (Roslyn / `Microsoft.CodeAnalysis.CSharp.Scripting` paketinden yararlanarak) somut C# `record`/LINQ tabanlı kodlara dökecek kod üretim (Generator) modülünün oluşturulması.
-  - [ ] Subtask 4.1.3: Üretilen dinamik kodlara arka planda `dotnet format` işlemini tetikleyecek sürecin geliştirilmesi.
-- [ ] **Subtask 4.2: MCP (Model Context Protocol) Desteği**
-  - [ ] Subtask 4.2.1: Microsoft MCP C# SDK'sının referans olarak ilgili arka uç (Backend) süreçlerine dahil edilmesi.
-  - [ ] Subtask 4.2.2: `SonOfAnton.Backend` yeteneklerinin (veya özel araçların) MCP server endpoint'leri üzerinden LLM'lere veya merkezi platformlara açılması.
-
 ## Task 5: MassTransit & RabbitMQ ile A2A İletişimi ve Sansür Katmanı
 - [ ] **Subtask 5.1: RabbitMQ ve MassTransit Altyapısının Kurulması**
   - [ ] Subtask 5.1.1: RabbitMQ altyapısının Docker üzerinde management plugin ile hazırlanması (Uygulama dışı bağımlılık).
