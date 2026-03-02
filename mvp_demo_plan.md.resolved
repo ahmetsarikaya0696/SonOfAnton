@@ -1,0 +1,49 @@
+# SonOfAnton - Yatırımcı Demosu İçin Öncelikli Geliştirme Planı (MVP)
+
+Yatırımcı demosu için ürünün çekirdek değerini (AI Ajanlarının görsel bir akış üzerinden işbirliği yapmasını) en hızlı ve sorunsuz şekilde gösterecek özelliklerin geliştirilmesine öncelik verilmelidir. Kapsam daraltılmış olup, C# ve .NET ekosistemine sadık kalınacaktır.
+
+---
+
+## 📋 Task 1: Çekirdek İş Akışı Motoru (Core Workflow Engine)
+Ajanların (Node'ların) birbirine bağlanıp veri aktarabildiği temel mesajlaşma altyapısı ilk önce bitirilmelidir.
+
+- **SubTask 1.1: Temel Node (Ajan) Sınıflarının Tamamlanması (C#)**
+  - Sadece iki temel Node tipi geliştirilecek: `TriggerNode` (Akışı başlatan girdi) ve `ActionNode` (İşlem yapan çıktı).
+  - Karmaşık durum yönetimi (State Management) yerine, basit `Dictionary<string, object>` tabanlı veri taşıma (Payload) uygulanacak.
+- **SubTask 1.2: MassTransit & RabbitMQ Entagrasyonu (Basitleştirilmiş)**
+  - Ajanlar arası iletişimi sağlayacak asgari MassTransit konfigürasyonu yapılacak.
+  - Sadece mutlu yol (Happy Path) senaryosu için mesaj üretimi ve tüketimi (Pub/Sub) kodlanacak. Hata kuyrukları (Dead-letter) veya "Retry" mekanizmaları ikinci faza bırakılacak.
+
+## 📋 Task 2: Yapay Zeka (AI) Entegrasyonu
+Sonucun "akıllı" görünmesini sağlayacak ana modül. Semantic Kernel üzerinden sadece metin üretimi ve temel RAG yeteneği önceliklendirilecek.
+
+- **SubTask 2.1: Semantic Kernel LLM Entegrasyonu (Dış API)**
+  - Yerel modellerle uğraşmak yerine (demo performansı için) OpenAI veya Azure OpenAI için `IChatCompletionService` entegrasyonu tamamlanacak.
+  - Sabit ve hatasız çalışan bir "System Prompt" mekanizması eklenecek.
+- **SubTask 2.2: MVP Seviyesinde RAG (Retrieval-Augmented Generation)**
+  - Karmaşık vektör veritabanı kurulumları (Pgvector vb.) yerine, demoda kullanılacak 5-10 belgenin .NET içi `InMemoryVectorStore` veya çok basit bir SQLite tablosu üzerinden sorgulanabilmesi sağlanacak.
+  - `ITextEmbeddingGenerationService` entegre edilerek arama fonksiyonu devreye alınacak.
+
+## 📋 Task 3: Görsel "Workflow" Editörü (Blazor WebAssembly)
+Yatırımcının ürünü algılayacağı yüzey burasıdır. Sadece demo senaryosundaki ajanların bağlanmasını sağlayacak kadar çalışması yeterlidir.
+
+- **SubTask 3.1: Sürükle-Bırak (Drag & Drop) ve Bağlantı Çizimleri**
+  - Blazor üzerinde Node'ların ekrana yerleştirilmesi ve birbirlerine bağlanması implemente edilecek. *(Sadece bu kısımda performans için hafif bir JS kütüphanesi (örn: LeaderLine veya jsPlumb) Interop ile kullanılabilir).*
+- **SubTask 3.2: Basitleştirilmiş "Node Properties" Paneli**
+  - Node'a tıklandığında sadece "Prompt Girin" veya "RAG Kaynağı Seçin" gibi temel ayarların yapıldığı bir form yapılacak.
+- **SubTask 3.3: Gerçek Zamanlı Akış (Log) Gösterimi**
+  - SignalR kurularak, backend'de RabbitMQ üzerinden mesaj geçtikçe UI'da "Ajan X düşünüyor...", "Ajan Y cevap verdi..." gibi bildirimlerin düşmesi sağlanacak. (Bu, sistemin canlı olduğu hissini verir).
+
+## 📋 Task 4: Güvenlik ve Altyapının "Dondurulması"
+Demoda zaman kaybettirecek güvenlik ve yetki duvarları en aza indirilecektir.
+
+- **SubTask 4.1: Keycloak Dummy/Bypass Entegrasyonu**
+  - Geliştirme aşamasında yaşanan 401 Hatalarını kökten çözmek için, demo ortamında API'ler `[AllowAnonymous]` veya sabit bir "DemoUser" token'ı ile çalışacak şekilde configure edilecek.
+- **SubTask 4.2: Önceden Hazırlanmış Demo Verisi (Seed Data)**
+  - Sistem ayağa kalktığında, yatırımcıya gösterilecek "Örnek Senaryo" (örneğin: Finansal Rapor Analiz Ajanları akışı) veritabanına otomatik yüklenmiş (Seed) olarak gelecek.
+
+## 📋 Geliştirme Dışı Bırakılanlar (Out of Scope for MVP Demo)
+- Dinamik ajan oluşturma ve kompleks Prompt Engineering arayüzleri.
+- Kapsamlı hata ayıklama (Error Handling) ve sistem geri alma (Rollback) senaryoları.
+- Ölçeklenebilirlik (Scaling) ayarları ve mikroservis metrikleme ekranları.
+- Gelişmiş kullanıcı ve rol yönetimi (Admin Panelleri).
