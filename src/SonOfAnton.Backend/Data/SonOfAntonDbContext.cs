@@ -73,6 +73,10 @@ public class SonOfAntonDbContext : DbContext
     public DbSet<PlanningDocumentEntity> PlanningDocuments => Set<PlanningDocumentEntity>();
     public DbSet<LoopExecutionStateEntity> LoopExecutionStates => Set<LoopExecutionStateEntity>();
 
+    // ─── Memory (OpenMemory) ─────────────────────────────────────────
+    public DbSet<MemoryCollectionEntity> MemoryCollections => Set<MemoryCollectionEntity>();
+    public DbSet<MemoryEntryEntity> MemoryEntries => Set<MemoryEntryEntity>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1072,6 +1076,74 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ─── Memory Collections ─────────────────────────────────────────
+        modelBuilder.Entity<MemoryCollectionEntity>(entity =>
+        {
+            entity.ToTable("memory_collections");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.DefaultSectorType).HasColumnName("default_sector_type").HasConversion<string>();
+            entity.Property(e => e.EmbeddingDimension).HasColumnName("embedding_dimension").HasDefaultValue(384);
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Workspace)
+                .WithMany()
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ─── Memory Entries ──────────────────────────────────────────────
+        modelBuilder.Entity<MemoryEntryEntity>(entity =>
+        {
+            entity.ToTable("memory_entries");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CollectionId).HasColumnName("collection_id");
+            entity.Property(e => e.Content).HasColumnName("content").IsRequired();
+            entity.Property(e => e.Summary).HasColumnName("summary").HasMaxLength(2000);
+            // all-MiniLM-L6-v2 = 384 boyut
+            entity.Property(e => e.Embedding).HasColumnName("embedding").HasColumnType("vector(384)");
+            entity.Property(e => e.Metadata).HasColumnName("metadata").HasColumnType("jsonb");
+            entity.Property(e => e.SectorType).HasColumnName("sector_type").HasConversion<string>();
+            entity.Property(e => e.Importance).HasColumnName("importance").HasDefaultValue(0.5f);
+            entity.Property(e => e.AccessCount).HasColumnName("access_count").HasDefaultValue(0);
+            entity.Property(e => e.LastAccessedAt).HasColumnName("last_accessed_at");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.ChunkIndex).HasColumnName("chunk_index").HasDefaultValue(0);
+            entity.Property(e => e.SourceDocumentId).HasColumnName("source_document_id").HasMaxLength(255);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.CollectionId);
+            entity.HasIndex(e => e.SectorType);
+            entity.HasIndex(e => e.SourceDocumentId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            // pgvector cosine similarity index
+            entity.HasIndex(e => e.Embedding)
+                .HasMethod("ivfflat")
+                .HasOperators("vector_cosine_ops")
+                .HasStorageParameter("lists", 100);
+
+            entity.HasOne(e => e.Collection)
+                .WithMany(c => c.Entries)
+                .HasForeignKey(e => e.CollectionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

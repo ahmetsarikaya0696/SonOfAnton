@@ -545,6 +545,23 @@ builder.Services.AddScoped<ILoopExitValidator, CustomConditionValidator>();
 builder.Services.AddSingleton<NotificationStreamService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
+// ─── Memory & RAG Pipeline (Task 3) ────────────────────────────
+
+// Memory Embedding Service (wraps ITextEmbeddingService)
+builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemoryEmbeddingService, SonOfAnton.Backend.Services.Memory.MemoryEmbeddingService>();
+
+// Text Chunking Service (Singleton — stateless)
+builder.Services.AddSingleton<SonOfAnton.Backend.Services.Memory.ITextChunkingService, SonOfAnton.Backend.Services.Memory.TextChunkingService>();
+
+// Memory Search Service (pgvector cosine similarity)
+builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemorySearchService, SonOfAnton.Backend.Services.Memory.MemorySearchService>();
+
+// RAG Prompt Builder (search + context + prompt generation)
+builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IRagPromptBuilder, SonOfAnton.Backend.Services.Memory.RagPromptBuilder>();
+
+// Memory Service (CRUD + Search + Chunking pipeline orchestrator)
+builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemoryService, SonOfAnton.Backend.Services.Memory.MemoryService>();
+
 var app = builder.Build();
 
 // Docker servislerini otomatik baslat (PostgreSQL vb.)
