@@ -29,6 +29,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using SonOfAnton.Backend.Services.Planning;
 using SonOfAnton.Shared.Core;
 
+using MassTransit;
+using SonOfAnton.Backend.Infrastructure.Messaging.Filters;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
@@ -561,6 +564,35 @@ builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IRagPromptBuilder,
 
 // Memory Service (CRUD + Search + Chunking pipeline orchestrator)
 builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemoryService, SonOfAnton.Backend.Services.Memory.MemoryService>();
+
+// ─── MassTransit & RabbitMQ (Task 5) ───────────────────────────
+builder.Services.AddMassTransit(x =>
+{
+    // Define endpoints dynamically or register specific consumers here later
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var rabbitConfig = builder.Configuration.GetSection("RabbitMQ");
+        var host = rabbitConfig["Host"] ?? "localhost";
+        var port = int.TryParse(rabbitConfig["Port"], out int p) ? p : 5672;
+        var user = rabbitConfig["Username"] ?? "sonofanton";
+        var pass = rabbitConfig["Password"] ?? "sonofanton_dev_password";
+
+        cfg.Host(host, (ushort)port, "/", h =>
+        {
+            h.Username(user);
+            h.Password(pass);
+        });
+
+        // Egress Filter (Publish)
+        cfg.UsePublishFilter(typeof(CensorshipPublishFilter<>), context);
+
+        // Ingress Filter (Consume)
+        cfg.UseConsumeFilter(typeof(CensorshipConsumeFilter<>), context);
+
+        cfg.ConfigureEndpoints(context);
+    });
+});
 
 var app = builder.Build();
 

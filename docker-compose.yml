@@ -49,5 +49,20 @@ services:
       retries: 10
       start_period: 30s
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: sonofanton-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: sonofanton
+      RABBITMQ_DEFAULT_PASS: sonofanton_dev_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
