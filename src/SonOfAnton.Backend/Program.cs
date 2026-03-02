@@ -489,6 +489,29 @@ builder.Services.AddScoped<WorkspaceService>();
 // Chatbot Service
 builder.Services.AddScoped<ChatbotService>();
 
+// ─── AI Infrastructure (Task 1) ────────────────────────────────
+
+// Hardware Config
+builder.Services.Configure<SonOfAnton.Backend.Services.AI.HardwareConfig>(
+    builder.Configuration.GetSection("AI:Hardware"));
+
+// Local AI Service (Ollama via Semantic Kernel)
+builder.Services.AddScoped<SonOfAnton.Shared.Core.ILocalAIService, SonOfAnton.Backend.Services.AI.LocalAIService>();
+
+// Censorship Engine
+builder.Services.AddSingleton<SonOfAnton.Backend.Services.AI.Censorship.SensitiveDataDetector>();
+builder.Services.AddSingleton<SonOfAnton.Backend.Services.AI.Censorship.NerEntityDetector>();
+builder.Services.AddScoped<SonOfAnton.Shared.Core.ICensorshipEngine, SonOfAnton.Backend.Services.AI.Censorship.CensorshipEngine>();
+
+// External AI Gateway & Provider Adapters
+builder.Services.AddScoped<SonOfAnton.Backend.Services.AI.External.IProviderAdapter, SonOfAnton.Backend.Services.AI.External.OpenAIProviderAdapter>();
+builder.Services.AddScoped<SonOfAnton.Backend.Services.AI.External.IProviderAdapter, SonOfAnton.Backend.Services.AI.External.ClaudeProviderAdapter>();
+builder.Services.AddScoped<SonOfAnton.Backend.Services.AI.External.IProviderAdapter, SonOfAnton.Backend.Services.AI.External.GeminiProviderAdapter>();
+builder.Services.AddScoped<SonOfAnton.Shared.Core.IExternalAIGateway, SonOfAnton.Backend.Services.AI.External.ExternalAIGateway>();
+
+// Secret Manager (API key management)
+builder.Services.AddScoped<SonOfAnton.Shared.Core.ISecretManager, SonOfAnton.Backend.Services.AI.SecretManagerService>();
+
 // Quota Service
 builder.Services.AddScoped<IQuotaService, QuotaService>();
 

@@ -65,6 +65,10 @@ public class SonOfAntonDbContext : DbContext
     // ─── Usage Quotas ───────────────────────────────────────────────
     public DbSet<UserQuotaEntity> UserQuotas => Set<UserQuotaEntity>();
 
+    // ─── Censorship ─────────────────────────────────────────────────
+    public DbSet<CensorshipRuleEntity> CensorshipRules => Set<CensorshipRuleEntity>();
+    public DbSet<CensorshipAuditLogEntity> CensorshipAuditLogs => Set<CensorshipAuditLogEntity>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -957,6 +961,60 @@ public class SonOfAntonDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ─── Censorship Rules ────────────────────────────────────────
+        modelBuilder.Entity<CensorshipRuleEntity>(entity =>
+        {
+            entity.ToTable("censorship_rules");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.RuleType).HasColumnName("rule_type").HasConversion<string>();
+            entity.Property(e => e.Pattern).HasColumnName("pattern").HasMaxLength(2000).IsRequired();
+            entity.Property(e => e.ReplacementText).HasColumnName("replacement_text").HasMaxLength(500);
+            entity.Property(e => e.Severity).HasColumnName("severity").HasDefaultValue(3);
+            entity.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.IsActive);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ─── Censorship Audit Logs ───────────────────────────────────
+        modelBuilder.Entity<CensorshipAuditLogEntity>(entity =>
+        {
+            entity.ToTable("censorship_audit_logs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(100);
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.OriginalTextHash).HasColumnName("original_text_hash").HasMaxLength(128).IsRequired();
+            entity.Property(e => e.DetectedItemsJson).HasColumnName("detected_items_json").HasColumnType("jsonb");
+            entity.Property(e => e.Action).HasColumnName("action").HasConversion<string>();
+            entity.Property(e => e.TriggeredRuleIdsJson).HasColumnName("triggered_rule_ids_json").HasColumnType("jsonb");
+            entity.Property(e => e.Timestamp).HasColumnName("timestamp");
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.Timestamp);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
