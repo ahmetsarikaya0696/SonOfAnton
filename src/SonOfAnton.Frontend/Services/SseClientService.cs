@@ -37,6 +37,7 @@ public class SseClientService : IAsyncDisposable
 {
     private readonly IJSRuntime _jsRuntime;
     private readonly IAccessTokenProvider _tokenProvider;
+    private readonly IConfiguration _configuration;
     private IJSObjectReference? _module;
     private DotNetObjectReference<SseClientService>? _dotNetRef;
     private readonly Dictionary<string, string> _activeConnections = new();
@@ -74,10 +75,11 @@ public class SseClientService : IAsyncDisposable
     public event Action<LogEvent>? OnLog;
     public event Action<WorkflowCompletedEventDto>? OnWorkflowCompleted;
     
-    public SseClientService(IJSRuntime jsRuntime, IAccessTokenProvider tokenProvider)
+    public SseClientService(IJSRuntime jsRuntime, IAccessTokenProvider tokenProvider, IConfiguration configuration)
     {
         _jsRuntime = jsRuntime;
         _tokenProvider = tokenProvider;
+        _configuration = configuration;
     }
     
     private async Task EnsureModuleLoadedAsync()
@@ -103,16 +105,10 @@ public class SseClientService : IAsyncDisposable
             url = $"{url}{separator}topics={string.Join(",", _subscribedTopics)}";
         }
         
-        // Token'ı al ve URL'ye ekle (EventSource Header desteklemez, query string ile gönderiyoruz)
         var tokenResult = await _tokenProvider.RequestAccessToken();
-        if (tokenResult.TryGetToken(out var token))
-        {
-            var separator = url.Contains('?') ? '&' : '?';
-            url = $"{url}{separator}access_token={token.Value}";
-        }
-        
-        var result = await _module!.InvokeAsync<bool>("connectToStream", connectionId, url, _dotNetRef);
-        
+        if (!tokenResult.TryGetToken(out var token)) return false;
+        var result = await _module!.InvokeAsync<bool>("connectToStream", connectionId, url, _dotNetRef, token.Value);
+
         if (result)
         {
             _activeConnections[connectionId] = url;
@@ -128,6 +124,7 @@ public class SseClientService : IAsyncDisposable
     /// </summary>
     public async Task<bool> ConnectToExecutionAsync(Guid executionId, string baseUrl = "")
     {
+        baseUrl = string.IsNullOrEmpty(baseUrl) ? _configuration["BackendUrl"]?.TrimEnd('/') ?? "" : baseUrl;
         var url = string.IsNullOrEmpty(baseUrl) 
             ? $"/api/workflow/execution/{executionId}/stream"
             : $"{baseUrl}/api/workflow/execution/{executionId}/stream";

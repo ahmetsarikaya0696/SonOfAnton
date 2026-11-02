@@ -1,3 +1,4 @@
+@inject HttpClient Http
 @using Blazor.Diagrams.Components
 @using SonOfAnton.Frontend.Services
 @using SonOfAnton.Shared.Models
@@ -7,6 +8,8 @@
 @inject ChatDiagramBridge ChatBridge
 @inject IJSRuntime JS
 @implements IAsyncDisposable
+
+@if (_operationError is not null) { <div role="alert" style="padding:12px;color:#ef4444">@_operationError</div> }
 
 <div class="workflow-editor" @onkeydown="HandleGlobalKeyDown" tabindex="-1">
     <div class="toolbar">
@@ -28,9 +31,6 @@
             <WorkspaceSelector @bind-SelectedWorkspaceId="_selectedWorkspaceId" OnWorkspaceChanged="HandleWorkspaceChanged" />
             <button class="btn btn-ghost" @onclick="() => _isFolderTreeOpen = !_isFolderTreeOpen" title="Klasörler">
                 <Icon Name="folder" Size="14" />
-            </button>
-            <button class="btn btn-primary" @onclick="() => _isWizardOpen = true">
-                <Icon Name="magic-wand" Size="14" /> Sihirbazla Oluştur
             </button>
             <button class="btn btn-ghost" @onclick="NewWorkflow" title="Boş Yeni (Gelişmiş)">
                 <Icon Name="plus" Size="14" /> Boş Yeni
@@ -78,15 +78,15 @@
         </div>
         
         <div class="toolbar-right">
-            <button class="btn btn-ghost" @onclick="() => _isSearchOpen = true" title="Ara (Ctrl+K)">
-                <Icon Name="search" Size="14" />
-            </button>
             <button class="btn btn-ghost" @onclick="ToggleTheme" title="@(_currentTheme == "dark" ? "Aydınlık Mod" : "Karanlık Mod")">
                 <Icon Name="@(_currentTheme == "dark" ? "sun" : "moon")" Size="14" />
             </button>
+            @if (_aiEnabled)
+            {
             <button class="btn btn-ghost" @onclick="() => TogglePanel(nameof(_isChatOpen))" title="AI Asistan">
                 <Icon Name="message-circle" Size="14" />
             </button>
+            }
             <span class="toolbar-divider"></span>
             
             @if (_isExecuting)
@@ -176,31 +176,15 @@
                                 <Icon Name="list" Size="14" /> Execution Geçmişi
                             </a>
                         </div>
-                        <div class="ks-menu-item">
-                            <a class="ks-menu-link" href="/marketplace" @onclick="CloseMoreDropdown">
-                                <Icon Name="store" Size="14" /> Marketplace
-                            </a>
-                        </div>
+                        
                         <div class="ks-menu-item">
                             <a class="ks-menu-link" href="/dashboard" @onclick="CloseMoreDropdown">
                                 <Icon Name="bar-chart-2" Size="14" /> Dashboard
                             </a>
                         </div>
-                        <div class="ks-menu-item">
-                            <a class="ks-menu-link" href="/chatbots" @onclick="CloseMoreDropdown">
-                                <Icon Name="message-square" Size="14" /> Chatbotlar
-                            </a>
-                        </div>
-                        <div class="ks-menu-item">
-                            <a class="ks-menu-link" href="/datatables" @onclick="CloseMoreDropdown">
-                                <Icon Name="database" Size="14" /> Data Tables
-                            </a>
-                        </div>
-                        <div class="ks-menu-item">
-                            <a class="ks-menu-link" href="/dataforms/builder" @onclick="CloseMoreDropdown">
-                                <Icon Name="list-alt" Size="14" /> Form Oluşturucu
-                            </a>
-                        </div>
+                        
+                        
+                        
 
                         <div class="ks-separator"></div>
 
@@ -208,21 +192,9 @@
                         <div class="ks-menu-item">
                             <div class="ks-menu-content">ENTEGRASYON</div>
                         </div>
-                        <div class="ks-menu-item">
-                            <button class="ks-menu-link" @onclick="() => { _isWebhooksDialogOpen = true; CloseMoreDropdown(); }">
-                                <Icon Name="webhook" Size="14" /> Webhook'lar
-                            </button>
-                        </div>
-                        <div class="ks-menu-item">
-                            <button class="ks-menu-link" @onclick="() => { _isPublishDialogOpen = true; CloseMoreDropdown(); }">
-                                <Icon Name="globe" Size="14" /> REST API Yayınla
-                            </button>
-                        </div>
-                        <div class="ks-menu-item">
-                            <a class="ks-menu-link" href="/published-endpoints" @onclick="CloseMoreDropdown">
-                                <Icon Name="link" Size="14" /> Yayınlanan API'ler
-                            </a>
-                        </div>
+                        
+                        
+                        
                         <div class="ks-menu-item">
                             <a class="ks-menu-link" href="/apikeys" @onclick="CloseMoreDropdown">
                                 <Icon Name="key" Size="14" /> API Anahtarları
@@ -271,7 +243,7 @@
                       IsVisible="@_isMonitorVisible"
                       OnClose="HideMonitor"
                       OnNodeExecuting="HandleNodeExecuting"
-                      OnNodeCompleted="HandleNodeCompleted" />
+                      OnNodeCompleted="HandleNodeCompleted" OnWorkflowFinished="HandleWorkflowFinished" />
 </div>
 <WorkflowChatPanel IsOpen="_isChatOpen" IsOpenChanged="v => { _isChatOpen = v; if (!v) StateHasChanged(); }"
                    WorkflowId="DiagramState.CurrentWorkflow?.Id" />
@@ -307,6 +279,7 @@
 
 @code {
     private bool _isSaving;
+    private string? _operationError;
     private bool _isExecuting;
     private bool _isTestMode;
     private Guid? _currentExecutionId;
@@ -318,7 +291,6 @@
     private bool _isWizardOpen;
 
     // New panel states
-    private bool _isSearchOpen;
     private bool _isChatOpen;
     private bool _isYamlOpen;
     private bool _isVariablesOpen;
@@ -392,6 +364,17 @@
     [Parameter]
     [SupplyParameterFromQuery]
     public string? Template { get; set; }
+
+    private bool _aiEnabled;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var caps = await Http.GetFromJsonAsync<Dictionary<string, bool>>("api/capabilities");
+            _aiEnabled = caps?.GetValueOrDefault("chat") ?? false;
+        }
+        catch (HttpRequestException) { _aiEnabled = false; }
+    }
 
     protected override void OnInitialized()
     {
@@ -477,7 +460,6 @@
     {
         if (e.CtrlKey && e.Key == "k")
         {
-            _isSearchOpen = !_isSearchOpen;
             StateHasChanged();
         }
         else if (e.CtrlKey && e.Key == "z")
@@ -494,6 +476,7 @@
     {
         if (_isSaving) return;
         _isSaving = true;
+        _operationError = null;
 
         try
         {
@@ -528,7 +511,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Kaydetme hatası: {ex.Message}");
+            _operationError = $"Kaydedilemedi: {ex.Message}";
         }
         finally
         {
@@ -555,17 +538,13 @@
                 _currentExecutionId = execution.Id;
                 
                 // ExecutionMonitor'a bağlan
-                if (_executionMonitor != null)
-                {
-                    await _executionMonitor.ConnectAsync();
-                }
                 
                 StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Çalıştırma hatası: {ex.Message}");
+            _operationError = $"Çalıştırılamadı: {ex.Message}";
             _isExecuting = false;
             _isTestMode = false;
         }
@@ -590,10 +569,6 @@
             {
                 _currentExecutionId = execution.Id;
                 
-                if (_executionMonitor != null)
-                {
-                    await _executionMonitor.ConnectAsync();
-                }
                 
                 StateHasChanged();
             }
@@ -606,6 +581,12 @@
         }
     }
     
+    private void HandleWorkflowFinished(bool success)
+    {
+        _isExecuting = false; _isTestMode = false; _isPaused = false;
+        StateHasChanged();
+    }
+
     private async Task StopExecution()
     {
         if (_currentExecutionId.HasValue)
