@@ -1,157 +1,62 @@
-﻿# SonOfAnton AI Workflow Platform
+# SonOfAnton AI Workflow Platform
 
-> **Kendi yapay zeka asistanini lego parcalari gibi birlestirerek olustur!**
+SonOfAnton, Blazor WebAssembly üzerinde görsel workflow oluşturmayı ve ASP.NET Core backend üzerinde çalıştırmayı amaçlayan .NET 10 uygulamasıdır. Workflow yürütme, Hangfire ve PostgreSQL kullanır; AI özellikleri Ollama/Semantic Kernel ve embedding bileşenleri etrafında geliştirilir.
 
----
+> **Durum: geliştirme/prototip.** 2 Kasım 2026 incelemesi, kimlik doğrulama, tenant izolasyonu ve yürütme güvenilirliği açısından yayın engelleri buldu. Özelliklerin kodda veya menüde bulunması, production'a hazır oldukları anlamına gelmez. [Bulgular ve öncelikli işler](docs/REVIEW.md).
 
-## 🚀 Bu Proje Nedir?
+## Başlangıç
 
-**SonOfAnton**, bilgisayarinizda calisan akilli bir otomasyon fabrikasidir. Dijital bir **Lego seti** gibi dusunebilirsiniz:
+Gereksinimler: .NET **10** SDK, Docker Compose; AI senaryoları için yerel Ollama ve uygun modeller. Compose yalnızca PostgreSQL/pgvector, pgAdmin, Keycloak ve RabbitMQ'yu başlatır. Backend/frontend konteynerleri içermez.
 
-- **Parcalar (Node'lar):** Her bir parca farkli bir is yapar - "PDF oku", "Ozet cikar", "Email gonder", "Vektor aramasi yap"...
-- **Baglantilar (Kablolar):** Parcalari birbirine baglayarak verinin nereden nereye akacagini belirlersiniz.
-- **Is Akisi (Workflow):** Parcalari birlestirip "Calistir" tusuna bastiginizda, kurdugunuz sistem otomatik olarak calisir.
-
-### 🌟 Neler Yapabilirsiniz?
-- Uzun belgeleri otomatik ozetleyen sistemler kurabilirsiniz.
-- Belgeler icinde **semantik arama** yapabilirsiniz (kelime eslesmesi degil, anlam eslesmesi!).
-- Her sabah 08:00'de calisip size gundem ozeti gecen botlar yapabilirsiniz.
-- Web sitenizden gelen formlari otomatik analiz edip siniflandirabilirsiniz.
-- **AI Asistan** ile dogal dilde konusarak workflow olusturabilirsiniz.
-- **ForEach / While / Parallel** donguleri ile karmasik akislar kurabilirsiniz.
-
----
-
-## 🛠 Teknoloji Yigini
-
-| Katman | Teknoloji | Aciklama |
-|--------|-----------|----------|
-| **Backend** | .NET 10, ASP.NET Core | RESTful API |
-| **Frontend** | Blazor WebAssembly | Tarayici tabanli SPA  |
-| **Kimlik Yonetimi** | Keycloak | OIDC/OAuth2 Authentication & Authorization |
-| **Diagram** | Z.Blazor.Diagrams | Gorsel node editoru |
-| **Veritabani** | PostgreSQL + pgvector | JSONB + vektor arama + HNSW indeks |
-| **DB Yonetimi** | pgAdmin 4 | Veritabani yonetim arayuzu |
-| **Arka Plan** | Hangfire | Job scheduling, cron, kuyruk yonetimi |
-| **AI** | Ollama + Semantic Kernel | Yerel LLM ve chat completion |
-| **Embedding** | ONNX Runtime | Yerel embedding (all-MiniLM-L6-v2) |
-
----
-
-## ⚡ Kurulum ve Calistirma
-
-### Gereksinimler
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download) (veya guncel surum)
-- [Ollama](https://ollama.ai/) (AI ozellikleri icin)
-
-### Adim 1: Projeyi Indirin
 ```bash
 git clone https://github.com/ahmetsarikaya0696/SonOfAnton.git
 cd SonOfAnton
+docker compose up -d
+dotnet restore SonOfAnton.slnx
+dotnet build SonOfAnton.slnx --no-restore
+dotnet dev-certs https --trust
+dotnet run --project src/SonOfAnton.Backend --launch-profile https
 ```
 
-### Adim 2: Altyapiyi Ayaga Kaldirin (Docker)
-Veritabani, Yonetim Paneli ve Kimlik Servisi'ni baslatin:
+Ayrı terminalde:
+
 ```bash
-docker-compose up -d
-```
-Bu komut asagidaki servisleri baslatir:
-- **PostgreSQL**: `localhost:5432`
-- **pgAdmin**: `localhost:5050`
-- **Keycloak**: `localhost:8080`
-
-### Adim 3: Backend'i Calistirin
-```bash
-cd src/SonOfAnton.Backend
-dotnet run
-```
-Backend `https://localhost:5002` ve `http://localhost:5003` portlarinda calisacaktir. Ilk calistirmada veritabani semasini otomatik olusturur ve gerekli ONNX modellerini indirir.
-
-### Adim 4: Frontend'i Calistirin
-Yeni bir terminalde:
-```bash
-cd src/SonOfAnton.Frontend
-dotnet run
-```
-Tarayicinizda `https://localhost:5001` adresine gidin.
-
----
-
-## 🔐 Varsayilan Kimlik Bilgileri
-
-Gelistirme ortami icin tanimli varsayilan kullanici ve sifreler:
-
-| Servis | URL | Kullanici Adi | Sifre |
-|--------|-----|---------------|-------|
-| **Keycloak** | `http://localhost:8080` | `admin` | `admin` |
-| **pgAdmin** | `http://localhost:5050` | `admin@sonofanton.local` | `admin` |
-| **PostgreSQL** | `localhost:5432` | `sonofanton` | `sonofanton_dev_password` |
-
-> **Not:** Keycloak ilk baslatildiginda `realm-export.json` dosyasindan gerekli ayarlari otomatik yukler (realm, client, users).
-
----
-
-## 📂 Proje Yapisi
-
-```
-SonOfAnton/
-+-- src/
-|   +-- SonOfAnton.Backend/          # API, AI Motoru, Veritabani
-|   +-- SonOfAnton.Frontend/         # Blazor WebAssembly Arayuzu
-|   +-- SonOfAnton.Shared/           # Ortak DTO, Model ve Tipler
-|
-+-- docs/                            # Detayli Dokumantasyon
-|   +-- API.md                       # API Endpoint Referansi
-|   +-- ARCHITECTURE.md              # Mimari Tasarim ve Prensipler
-|   +-- DATABASE.md                  # Veritabani Semasi ve Vektor Yapisi
-|   +-- DEPLOYMENT.md                # Dagitim ve Container Kilavuzu
-|
-+-- init-scripts/                    # Docker ilk kurulum scriptleri (SQL)
-+-- keycloak/                        # Keycloak Realm export dosyalari
-+-- docker-compose.yml               # Container orkestrasyon dosyasi
+dotnet run --project src/SonOfAnton.Frontend --launch-profile https
 ```
 
----
+Frontend: `https://localhost:5001`; backend: `https://localhost:5002`. HTTPS profilleri açıkça seçilmelidir. Ayrıntılar: [çalıştırma kılavuzu](docs/DEPLOYMENT.md).
 
-## ✨ Temel Ozellikler
+Backend başlangıçta migration uygular; hata durumunda loglayıp devam eder. ONNX model indirme ve Ollama startup servisleri kayıtlıdır; internet/model gereksinimleri ve embedding DI eksikleri nedeniyle AI hazır kabul edilmemelidir. Geliştirme varsayılan parolalarını üretimde kullanmayın.
 
-### 🎨 Gorsel Workflow Editoru
-- Surukle-birak node ekleme, baglanti olusturma
-- 30+ node tipi (Tetikleyici, HTTP, Donusum, Mantik, AI, Vector DB...)
-- Dinamik parametre paneli ve `{{variable}}` destegi
+## Kaynak haritası
 
-### 🤖 AI Asistan ve Chat
-- Dogal dilde workflow olusturma
-- AI onerilerini tek tikla uygulama
+| Proje / dizin | Sorumluluk |
+|---|---|
+| `src/SonOfAnton.Backend` | API, EF Core, workflow runner, Hangfire, AI servisleri |
+| `src/SonOfAnton.Frontend` | Blazor WebAssembly editor ve API istemcileri |
+| `src/SonOfAnton.Shared` | Ortak DTO, model, entity ve graph tipleri |
+| `src/SonOfAnton.NodeSdk` | Özel node SDK'sı; solution içinde |
+| `templates/SonOfAnton.NodeTemplate` | Özel node proje şablonu |
+| `src/openapi_test_app` | OpenAPI örnek uygulaması; otomatik test projesi değil |
+| `keycloak/sonofanton-realm.json` | Geliştirme realm import dosyası |
 
-### 🔄 Gelismis Akis Kontrolu
-- **Donguler:** ForEach, While
-- **Paralel Calisma:** WaitAll, WaitAny, FireAndForget
-- **Yonetim:** Break, Continue
+## Kapsam ve sınırlar
 
-### 🛡️ Guvenlik ve Kimlik
-- Keycloak entegrasyonu ile merkezi kimlik yonetimi (SSO)
-- Rol tabanli erisim kontrolu (RBAC)
-- Guvenli API iletisimi
+Görsel editor, kalıcı workflow CRUD, execution/log takibi ve node handler altyapısı mevcut. RAG/embedding bağlantısı ve bazı AI handler kayıtları eksik; anonim eski workflow API'si, chatbot yönetimi ve eksik tenant filtreleri düzeltilmeli. Marketplace, A2A, SCIM, özel script, Ralph loop ve veri tabloları/formları genişletilmiş kapsamdır; çekirdek doğrulanana kadar geliştirmelerinin ertelenmesi önerilir.
 
-### 📊 Veri ve Analiz
-- **Vektor DB:** pgvector ile semantik arama
-- **Dashboard:** Workflow istatistikleri ve execution takibi
-- **Server-Sent Events (SSE):** Gercek zamanli log izleme
+Depoda otomatik test projesi veya CI workflow'u yok. Bu incelemede SDK bulunmadığı için build/test çalıştırılmadı. Çalışan ürün iddiası için [kabul kriterleri](docs/REVIEW.md) tamamlanmalı.
 
----
+## Belgeler
 
-## 🤝 Katkida Bulunma
+- [İnceleme, eksikler ve sadeleştirme planı](docs/REVIEW.md)
+- [Mevcut mimari](docs/ARCHITECTURE.md)
+- [API sözleşmesi ve sınırlamalar](docs/API.md)
+- [Veritabanı ve migration](docs/DATABASE.md)
+- [Kurulum ve dağıtım](docs/DEPLOYMENT.md)
+- [Kullanım rehberi](docs/KULLANIM%20REHBER%C4%B0.md)
 
-1. Fork edin.
-2. Branch olusturun (`git checkout -b feature/YeniOzellik`).
-3. Commit edin (`git commit -m 'Yeni ozellik eklendi'`).
-4. Push edin (`git push origin feature/YeniOzellik`).
-5. Pull Request acin.
+## Katkı ve lisans
 
----
+Değişiklikleri küçük, amaç odaklı PR'larla gönderin. Davranış değişikliklerine uygun test ve belge güncellemesi ekleyin. Öncelikli çalışma sırası inceleme raporundadır.
 
-## 📄 Lisans
-
-Bu proje [MIT Lisansi](LICENSE) ile lisanslanmistir.
+İncelenen commit'te `LICENSE` dosyası yok. Önceki README'nin MIT lisansı iddiası doğrulanamadığından kaldırılmıştır; lisansın depo sahibi tarafından açıkça belirlenmesi gerekir.

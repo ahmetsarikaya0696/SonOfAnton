@@ -1,7 +1,15 @@
 # 🚀 SonOfAnton Kullanım Rehberi
 
 > **Bu rehber, SonOfAnton uygulamasını ilk kez kullanan kişiler için hazırlanmıştır.**
-> Teknik bilgi gerektirmez. Adım adım ilerleyin, her şeyi kolayca öğreneceksiniz.
+> Kurulum için [çalıştırma kılavuzunu](DEPLOYMENT.md), bilinen eksikler için [inceleme raporunu](REVIEW.md) okuyun.
+
+## Mevcut sürümün sınırları
+
+Bu rehber geliştirme arayüzünü anlatır; tüm örnekler uçtan uca doğrulanmış değildir. Çok kullanıcılı veya internetten erişilen kullanım öncesi kimlik ve tenant/workspace açıkları kapatılmalıdır. Marketplace, chatbot, özel script ve API yayınlama deneysel kapsam olarak değerlendirilmelidir.
+
+`ai.sentiment`, `ai.classify`, `ai.vision` ve `ai.agent` handler kayıtları; Memory/RAG için `ITextEmbeddingService` DI bağlantısı eksiktir. Palette içinde görünmeleri çalıştıkları anlamına gelmez. Aşağıdaki ilgili örnekler bu eksikler giderildikten sonra doğrulanacak senaryolardır.
+
+İlk doğrulama için AI veya dış mesajlaşma içermeyen **Manuel Tetikleyici → Değer Ata → Debug** akışı kurun. Kaydedip çalıştırın; execution sonucunu ve logları kontrol edin. Yeniden açınca kayıtlı graph korunmalı. Bu senaryo burada çalıştırılmadı.
 
 ---
 
@@ -37,7 +45,6 @@ Bunu bir **Lego seti** gibi düşünebilirsiniz:
 
 Uygulamayı açtığınızda karşınıza **giriş ekranı** gelir.
 
-![SonOfAnton Giriş Ekranı](C:\Users\pc\.gemini\antigravity\brain\8cee499c-01c4-415f-a792-ece867e0bd38\screenshot_login.png)
 
 ### Adımlar:
 
@@ -54,7 +61,6 @@ Uygulamayı açtığınızda karşınıza **giriş ekranı** gelir.
 
 Giriş yaptıktan sonra karşınıza **ana düzenleme ekranı** gelir. Bu ekran 5 ana bölümden oluşur:
 
-![SonOfAnton Ana Ekranı](C:\Users\pc\.gemini\antigravity\brain\8cee499c-01c4-415f-a792-ece867e0bd38\screenshot_editor.png)
 
 ### Ekranın Bölümleri:
 
@@ -279,7 +285,7 @@ Asistana doğal dilde ne yapmak istediğinizi anlatın:
 
 > *"Bana bir müşteri e-postalarını analiz edip olumsuz olanları Slack'e bildiren bir iş akışı kur"*
 
-Asistan sizin için parçaları otomatik yerleştirir.
+Asistanın önerdiği graph ve parametreleri inceleyip uygulayın; öneri doğruluğu veya node desteği garanti değildir.
 
 ### Market (Marketplace) 🏪
 
@@ -318,8 +324,8 @@ Aşağıda, farklı ihtiyaçlara göre hazırlanmış **5 örnek iş akışı** 
 
 ```mermaid
 graph LR
-    A["▶️ Manuel Tetikleyici"] --> B["🤖 LLM<br/>(Metin Üret)"]
-    B --> C["📝 Şablon<br/>(E-posta Biçimle)"]
+    A["▶️ Manuel Tetikleyici"] --> B["🤖 LLM — (Metin Üret)"]
+    B --> C["📝 Şablon — (E-posta Biçimle)"]
     C --> D["📧 E-posta Gönder"]
 
     style A fill:#a6e3a1,color:#000
@@ -349,9 +355,9 @@ graph LR
 
 ```mermaid
 graph LR
-    A["⏰ Zamanlı Tetikleyici<br/>(Her gün 08:00)"] --> B["🌐 HTTP İsteği<br/>(Haber Sitesinden Veri Çek)"]
-    B --> C["🤖 LLM<br/>(Haberleri Özetle)"]
-    C --> D["💬 Slack<br/>(Özeti Kanala Gönder)"]
+    A["⏰ Zamanlı Tetikleyici — (Her gün 08:00)"] --> B["🌐 HTTP İsteği — (Haber Sitesinden Veri Çek)"]
+    B --> C["🤖 LLM — (Haberleri Özetle)"]
+    C --> D["💬 Slack — (Özeti Kanala Gönder)"]
 
     style A fill:#a6e3a1,color:#000
     style B fill:#89b4fa,color:#000
@@ -372,7 +378,7 @@ graph LR
    - Kanal: `"#gundem-ozeti"`
    - Mesaj: `"📰 Gündem Özeti:\n{{input.text}}"`
 5. Parçaları sırasıyla bağlayın
-6. **Kaydet** (İş akışı her sabah 8'de otomatik çalışacaktır)
+6. **Kaydet**; recurring job kaydının oluştuğunu ve etkin olduğunu doğrulayın. `0 8 * * *` ifadesinin saat dilimini kontrol edin; bunu otomatik olarak Türkiye saati kabul etmeyin.
 
 ---
 
@@ -382,10 +388,10 @@ graph LR
 
 ```mermaid
 graph TD
-    A["🔗 Webhook<br/>(Yorum Geldiğinde)"] --> B["😊 Duygu Analizi"]
-    B --> C{"🔀 Koşul (IF)<br/>Olumlu mu?"}
-    C -- Evet --> D["📧 E-posta Gönder<br/>(Teşekkür Mesajı)"]
-    C -- Hayır --> E["💬 Slack<br/>(Destek Ekibine Bildir)"]
+    A["🔗 Webhook — (Yorum Geldiğinde)"] --> B["😊 Duygu Analizi"]
+    B --> C{"🔀 Koşul (IF) — Olumlu mu?"}
+    C -- Evet --> D["📧 E-posta Gönder — (Teşekkür Mesajı)"]
+    C -- Hayır --> E["💬 Slack — (Destek Ekibine Bildir)"]
 
     style A fill:#a6e3a1,color:#000
     style B fill:#74c7ec,color:#000
@@ -420,9 +426,9 @@ graph TD
 
 ```mermaid
 graph LR
-    A["▶️ Manuel Tetikleyici"] --> B["📝 Değer Ata<br/>(Belge Metnini Gir)"]
-    B --> C["🔢 Embedding Oluştur<br/>(Metni Vektöre Çevir)"]
-    C --> D["💾 Vektör Kaydet<br/>(Veritabanına Kaydet)"]
+    A["▶️ Manuel Tetikleyici"] --> B["📝 Değer Ata — (Belge Metnini Gir)"]
+    B --> C["🔢 Embedding Oluştur — (Metni Vektöre Çevir)"]
+    C --> D["💾 Vektör Kaydet — (Veritabanına Kaydet)"]
 
     style A fill:#a6e3a1,color:#000
     style B fill:#f9e2af,color:#000
@@ -434,10 +440,10 @@ graph LR
 
 ```mermaid
 graph LR
-    A["▶️ Manuel Tetikleyici"] --> B["📝 Değer Ata<br/>(Soruyu Gir)"]
-    B --> C["🔢 Embedding Oluştur<br/>(Soruyu Vektöre Çevir)"]
-    C --> D["🔍 Vektör Ara<br/>(Benzer Belgeleri Bul)"]
-    D --> E["🤖 LLM<br/>(Bulunan Belgelere Göre Cevapla)"]
+    A["▶️ Manuel Tetikleyici"] --> B["📝 Değer Ata — (Soruyu Gir)"]
+    B --> C["🔢 Embedding Oluştur — (Soruyu Vektöre Çevir)"]
+    C --> D["🔍 Vektör Ara — (Benzer Belgeleri Bul)"]
+    D --> E["🤖 LLM — (Bulunan Belgelere Göre Cevapla)"]
 
     style A fill:#a6e3a1,color:#000
     style B fill:#f9e2af,color:#000
@@ -453,7 +459,7 @@ graph LR
    - Değerler: `{"text": "Şirket politikamız gereği yıllık izin 14 gündür..."}` (belge metni)
 3. **Embedding Oluştur** sürükleyin:
    - Giriş Tipi: `Metin`
-   - Model: `MiniLM (Hızlı)`
+   - Model: hedef koleksiyonla aynı model ve boyut. Mevcut `vector_store` 768, `memory_entries` 384 boyut kullanır; MiniLM/384 vektörünü 768 boyutlu kolona doğrudan yazmayın.
 4. **Vektör Kaydet** sürükleyin:
    - Koleksiyon: `"sirket-belgeleri"`
 5. Bağlayın ve çalıştırın (her belge için tekrarlayın)
@@ -472,12 +478,11 @@ graph LR
 
 ```mermaid
 graph TD
-    A["🔗 Webhook<br/>(Müşteri Listesi Gel.)"] --> B["🔁 ForEach Döngü<br/>(Her Müşteri İçin)"]
-    B --> C["📝 Şablon<br/>(Kişisel Mesaj Oluştur)"]
+    A["🔗 Webhook — (Müşteri Listesi Gel.)"] --> B["🔁 ForEach Döngü — (Her Müşteri İçin)"]
+    B --> C["📝 Şablon — (Kişisel Mesaj Oluştur)"]
     C --> D["📧 E-posta Gönder"]
-    D --> E["⏳ Bekle<br/>(2 saniye)"]
-    E --> B
-    B -- Tamamlandı --> F["💬 Slack<br/>(Tüm Mesajlar Gönderildi!)"]
+    D --> E["⏳ Bekle — (2 saniye)"]
+    B -- Tamamlandı --> F["💬 Slack — (Tüm Mesajlar Gönderildi!)"]
 
     style A fill:#a6e3a1,color:#000
     style B fill:#f5c2e7,color:#000
@@ -500,7 +505,7 @@ graph TD
 5. **Bekle** sürükleyin (2000 ms — e-posta sunucusunu yormamak için)
 6. Döngü tamamlandığında **Slack** ile bildirim gönderin:
    - Mesaj: `"✅ Tüm müşterilere kargo bildirimi gönderildi!"`
-7. **Kaydet**
+7. **Kaydet**. Bu döngü örneği kavramsaldır; gövdeyi `ChildGraph` içinde kurun. Ana grafiğe geri kenar eklemek ForEach gövdesi tanımlamanın yerine geçmez; node parametrelerini ve tamamlanma çıkışını doğrulayın.
 
 ---
 
@@ -523,7 +528,7 @@ Parçaya tıklayın ve klavyeden **Delete** (Sil) tuşuna basın.
 
 ### Yapılan değişiklikler otomatik kaydediliyor mu?
 
-Evet! Uygulama **3 saniye** işlem yapılmadığında otomatik kaydeder. Ayrıca istediğiniz zaman **Kaydet** düğmesiyle manuel olarak da kaydedebilirsiniz.
+Editor otomatik kaydetme için **3 saniyelik timer** kullanır. Ağ veya yetki hatasında kayıt başarısız olabilir; “Kayıtlı” bilgisini kontrol edin. Gerektiğinde **Kaydet** düğmesini kullanın.
 
 ### Eski halini geri getirebilir miyim?
 
