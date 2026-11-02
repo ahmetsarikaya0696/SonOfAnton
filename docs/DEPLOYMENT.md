@@ -1,104 +1,66 @@
-# SonOfAnton — Kurulum ve dağıtım
+# SonOfAnton — Kurulum
 
-Bu kılavuz `c91a288` kaynak durumuna göredir. Uygulama bu incelemede çalıştırılmadı; ortamda .NET SDK yoktu. Production yayınından önce [REVIEW.md](REVIEW.md) içindeki P0/P1 kabul kriterleri tamamlanmalıdır.
-
-## Yerel kurulum
-
-.NET 10 SDK ve Docker Compose kurulu olmalı. AI akışları ayrıca Ollama/model gerektirir. ONNX Runtime NuGet bağımlılığıdır; model dosyaları ayrı indirilir. İşletim sisteminizin desteklediği şekilde geliştirme HTTPS sertifikasına güven tanımlayın.
-
-Depo kökünde:
+.NET 10 SDK ve Docker Compose gerekir. Yerel başlangıç:
 
 ```bash
-docker compose up -d
-docker compose ps
+docker compose up -d --wait
 dotnet restore SonOfAnton.slnx
-dotnet build SonOfAnton.slnx --no-restore
+dotnet build SonOfAnton.slnx -m:1 --no-restore
 dotnet dev-certs https --trust
 dotnet run --project src/SonOfAnton.Backend --launch-profile https
-```
-
-Ayrı terminalde:
-
-```bash
+# Ayrı terminal:
 dotnet run --project src/SonOfAnton.Frontend --launch-profile https
 ```
 
-`dotnet run` için HTTPS profili açıkça seçilir; frontend'in `BackendUrl` değeri `https://localhost:5002` ile uyumlu olmalıdır. Backend Development ayarı Keycloak authority'sini `http://localhost:8080/realms/sonofanton` olarak değiştirir. Production temel ayarındaki placeholder değerleri gerçek dağıtım ayarları değildir.
-
-| Adres / port | Kaynak / kullanım |
+| Adres | Servis |
 |---|---|
-| `https://localhost:5002`, `http://localhost:5003` | Backend `Properties/launchSettings.json` |
-| `https://localhost:5001`, `http://localhost:5000` | Frontend `Properties/launchSettings.json` |
-| `localhost:5432` | PostgreSQL/pgvector |
-| `http://localhost:5050` | pgAdmin |
+| `https://localhost:5001` | Frontend |
+| `https://localhost:5002` | Backend |
 | `http://localhost:8080` | Keycloak |
-| `localhost:5672`, `http://localhost:15672` | RabbitMQ ve yönetim arayüzü |
-| `http://localhost:11434` | Yerel Ollama; Compose içinde değil |
+| `localhost:5432` | PostgreSQL/pgvector |
+| `http://localhost:5050` | Opsiyonel pgAdmin (`docker compose --profile tools up -d pgadmin`) |
 
-Compose, backend/frontend servisi veya Dockerfile içermez. `docker compose logs -f backend` geçerli değildir; uygulama logları `dotnet run` terminalindedir. Altyapı logları:
+Compose yalnız altyapıyı başlatır; backend/frontend logları kendi terminallerindedir. Portlar loopback'e bağlıdır. Keycloak `start-dev` ve örnek parolalar yerel geliştirme içindir.
 
-```bash
-docker compose logs -f postgres keycloak rabbitmq
-```
+## Giriş ve mevcut realm
 
-Compose parolaları geliştirme örnekleridir; Keycloak `start-dev` kullanır. Realm kaynağı [sonofanton-realm.json](../keycloak/sonofanton-realm.json); import dizini `./keycloak` olarak bağlanır. Gerçek parolaları repoya kaydetmeyin. Varsayılan Compose port eşlemeleri yalnızca loopback'e bağlanmış değildir; yerel makine ağ erişimini dikkate alın.
+Geliştirme hesabı `dev@sonofanton.local`; parolası `keycloak/sonofanton-realm.json` içindeki `users[].credentials[].value` alanındadır. Gerçek kullanıcı parolalarını repoya eklemeyin.
 
-## AI hazırlığı ve mevcut eksikler
-
-Ollama kurulup çalıştırıldıktan sonra, varsayılan model adlarıyla:
-
-```bash
-ollama pull qwen2.5-coder:14b
-ollama pull nomic-embed-text
-ollama list
-```
-
-Bu komutlar modeli indirir; donanım kapasitesi ayrıca değerlendirilmelidir. `OllamaStartupService` ve `ModelDownloadService` her başlangıçta kayıtlıdır. AI kullanmayacak geliştirme senaryosu için bu servisleri kapatan genel bir özellik bayrağı varmış gibi davranmayın.
-
-**Bilinen engel:** Uygulama DI'ında `ITextEmbeddingService` kaydı eksik. Model indirmek tek başına Memory/RAG yolunu düzeltmez. Bazı AI node handler kayıtları da eksiktir; rapor F11.
-
-## Veritabanı
-
-Backend başlangıçta `MigrateAsync` çağırır. Exception loglanıp uygulama devam ettiği için “HTTP açıldı” başarılı migration kanıtı değildir. Mevcut migration'ları uygulayın; kurulum için yeni migration üretmeyin. Ayrıntılı komutlar [DATABASE.md](DATABASE.md) içinde.
+Fresh import frontend client için `sonofanton-backend` audience mapper içerir. **Mevcut realm import ile üzerine yazılmaz.** Keycloak client mapper ayarına `oidc-audience-mapper`, `included.client.audience=sonofanton-backend`, `access.token.claim=true` ekleyip yeniden giriş yapın. Mevcut volume/veri silinmez.
 
 ## Yapılandırma
 
-| Anahtar / ortam değişkeni | Mevcut tüketici ve sınır |
+| Ortam değişkeni | Sözleşme |
 |---|---|
-| `ConnectionStrings__DefaultConnection` | EF Core, Hangfire, vector servisleri |
-| `Authentication__DefaultAuthority` | Backend JwtBearer authority; issuer/audience doğrulamasını tek başına düzeltmez |
-| `MultiTenancy__ResolveBy`, `MultiTenancy__DefaultTenantId` | Tenant resolver/middleware; kaynak izolasyonu garantisi değildir |
-| `Encryption__Key` | Credential encryption; mevcut kod 32 byte doğrulaması yerine pad/truncate yapar, düzeltilmeli |
-| `RabbitMQ__Host`, `RabbitMQ__Port`, `RabbitMQ__Username`, `RabbitMQ__Password` | MassTransit bağlantısı; mevcut startup'a kayıtlı |
-| `Ollama__Endpoint`, `Ollama__Model`, `Ollama__EmbeddingModel` | Semantic Kernel konfigürasyonu |
-| `ASPNETCORE_ENVIRONMENT` | Ortam seçimi |
-| `ASPNETCORE_URLS` | Profil dışında host dinleme adresi; launch profile ile çakışmayı önleyin |
+| `ConnectionStrings__DefaultConnection` | EF/Hangfire bağlantısı; Production'da zorunlu, Development örneği ayrı dosyada |
+| `Authentication__DefaultAuthority` | Tek güvenilen issuer; Production metadata HTTPS |
+| `Authentication__Audience` | Varsayılan `sonofanton-backend` |
+| `Features__AI` | Varsayılan false; yalnız Ollama node'ları |
+| `Ollama__Endpoint`, `Ollama__Model`, `Ollama__EmbeddingModel` | Operatörün hazırladığı model bağlantısı; otomatik indirme yok |
+| `Encryption__Key` | Servis kullanılırsa base64 kodlu tam 32 byte; fallback yok |
+| `Encryption__LegacyKey` | Eski CBC verinin kontrollü taşınması için isteğe bağlı 32 UTF-8 byte; yeni yazım AES-GCM |
 
-Frontend statik `wwwroot/appsettings.json` içindeki `BackendUrl` ve `Oidc` ayarları ayrı yapılandırılır. Tarayıcıya servis edilen dosyaya client secret/API key koymayın. Backend `DefaultClientId/DefaultClientSecret` alanlarının bulunması, aktif JWT akışının bunları audience olarak doğruladığı anlamına gelmez.
+Frontend `wwwroot/appsettings.json` içindeki `BackendUrl` ve `Oidc` alanları ayrı yapılandırılır. Bu dosya public'tir, secret konmaz. Yeni adreslerde frontend URL, backend CORS ve Keycloak redirect/web-origin ayarları birlikte değiştirilir. Varsayılan embedding 768 boyutlu `nomic-embed-text` içindir; farklı boyut açık hata verir. RAG/memory API'leri açılmaz.
 
-## Sağlık ve doğrulama
+## Veritabanı ve test
 
-HTTPS profilinde:
+Backend migration hatasında başlatmayı durdurur. PostgreSQL pgvector extension'ı kurulu olmalıdır. Kurulumda yeni migration üretmeyin.
 
 ```bash
-curl https://localhost:5002/health/live
-curl https://localhost:5002/health/ready
-curl https://localhost:5002/openapi/v1.json
+docker compose exec postgres createdb -U sonofanton sonofanton_test
+export SONOFANTON_TEST_DB='Host=localhost;Database=sonofanton_test;Username=sonofanton;Password=sonofanton_dev_password'
+dotnet test tests/SonOfAnton.Tests -m:1
+node --test tests/frontend/*.test.mjs
+dotnet tool restore
+dotnet ef migrations has-pending-model-changes --project src/SonOfAnton.Backend
 ```
 
-OpenAPI ve Scalar (`/scalar/v1`) yalnızca Development ortamında eşlenir. Liveness süreç canlılığını, readiness PostgreSQL bağlantısını ve Hangfire storage nesnesinin varlığını kontrol eder. Worker'ın gerçekten iş işlediği, migration güncelliği, RabbitMQ ve AI sağlığı bu yanıtla kanıtlanmaz.
+Test DB'si gerçek kullanıcı verisi içermemelidir. Testler migration uygular ve veri yazar; bağlantı ayarı yoksa sessizce atlanmak yerine hata verir. JS testleri için Node 22+ gerekir, uygulamanın çalışması için gerekmez.
 
-Depoda otomatik test projesi bulunmuyor; `dotnet test` sonucu tek başına test kapsamı kanıtı olamaz. Test projesi eklendikten sonra CI ile restore/build/test ve gerçek PostgreSQL entegrasyon senaryoları çalıştırılmalıdır.
+`/health/live` süreç, `/health/ready` PostgreSQL ve Hangfire storage durumunu bildirir; anonimdir. `/openapi/v1.json` ve `/scalar/v1` yalnız Development'da açıktır. AI/harici iş başarısını health cevabından çıkarmayın.
 
-## Production için tamamlanması gerekenler
+## Dağıtım sınırları
 
-- [ ] JWT issuer/audience, Hangfire yetkilendirmesi, anonim yönetim yolları ve tenant/workspace izolasyonu düzeltildi.
-- [ ] Published API scope kontrolü, credential redaksiyonu ve script güven sınırı tamamlandı.
-- [ ] Rate limit'ler endpoint'lere bağlandı; CORS gerçek frontend origin'iyle yapılandırıldı.
-- [ ] Migration başarısızlığında trafik engelleniyor; yedek ve geri yükleme provası yapıldı.
-- [ ] Secrets, encryption key rotasyonu, gerçek Keycloak production ayarı ve TLS yapılandırıldı.
-- [ ] Retry/idempotency, iptal/pause ve çok istemcili SSE testleri geçti.
-- [ ] Reverse proxy SSE buffering/timeout ayarları doğrulandı; süreç içi state nedeniyle çok replica garantisi varsayılmadı.
-- [ ] Uygulama için gerçek publish/hosting yöntemi tanımlandı; mevcut Compose dosyası production deployment olarak kullanılmadı.
+Çekirdek tek backend instance içindir. Pause/step süreç içindedir; restart'tan sonra checkpoint replay yoktur. Yarım kalmış işleri harici etkilerini incelemeden tekrar başlatmayın. Reverse proxy altında SSE buffering kapalı olmalıdır.
 
-Sorun giderirken endpoint yetkilerini kaldırmayın; token, policy, tenant ve logları inceleyin. Bu liste bir dağıtım yapıldığı veya kusurların giderildiği anlamına gelmez.
+Production dağıtımı yapılmadı. Gerçek ortam TLS/issuer/secrets, yedek–restore, eski üretim verisiyle upgrade, saklama/redaksiyon politikası ve harici entegrasyon kabulü gerekir. Eski tenant'sız/sahipsiz kayıtlar otomatik herkese açılmaz; açık sahiplik taşıma planı gerekir. Kanıt: [VERIFICATION.md](VERIFICATION.md).

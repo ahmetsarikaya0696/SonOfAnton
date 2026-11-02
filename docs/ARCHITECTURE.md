@@ -1,68 +1,44 @@
-# SonOfAnton — Mevcut mimari
+# SonOfAnton — Çekirdek mimari
 
-2 Kasım 2026, `c91a288` kaynak incelemesine dayanır. Bu belge mevcut bağlantıları anlatır; önerilen değişiklikler [REVIEW.md](REVIEW.md) içinde ayrı işaretlenmiştir.
-
-## Uygulama sınırları
-
-Blazor WebAssembly istemci ve ASP.NET Core backend bulunur. Backend bir monolith'tir; controller, servis, engine ve infrastructure klasörleri ayrı deploy edilen servisler değildir. EF Core doğrudan kullanılıyor; generic Repository katmanı zorunlu değildir. Hangfire server aynı backend sürecinde kayıtlıdır.
-
-| Alan | Kaynak | Görev |
-|---|---|---|
-| API | `Backend/Controllers` | Workflow, execution ve diğer HTTP sözleşmeleri |
-| Çalıştırma | `Backend/Engine/WorkflowRunner.cs` | Kalıcı execution üzerinde node yürütme |
-| Node stratejileri | `Backend/Engine/Handlers` | `INodeHandler` implementasyonları |
-| Kalıcılık | `Backend/Data`, `Backend/Migrations` | EF model ve şema geçmişi |
-| Arka plan | `Backend/Services/WorkflowJobService.cs` | Hangfire enqueue/schedule/recurring |
-| Kimlik | `Backend/Infrastructure/Identity` | JWT/API key bağlamı ve permission policy'leri |
-| UI | `Frontend/Components`, `Frontend/Services` | Editor, API ve SSE istemcileri |
-| Ortak tipler | `Shared` | DTO, entity, enum, graph ve YAML tipleri |
-| Eklenti | `NodeSdk`, `templates` | Özel node sözleşmeleri/şablonları |
-
-Tablodaki yollar `src/SonOfAnton.*` proje köklerine göredir.
-
-## Aktif yürütme yolları
+Backend tek monolith, frontend Blazor WebAssembly'dir. EF Core doğrudan kullanılır; yeni Repository katmanı veya ayrı servis topolojisi yoktur.
 
 ```mermaid
 flowchart TD
-    UI["Blazor istemci"] --> API["WorkflowsController"]
-    API --> DB["PostgreSQL"]
-    API --> Q["Hangfire"]
-    OTHER["Execution ve published API"] --> JOB["WorkflowJobService"]
-    JOB --> Q
-    Q --> RUN["WorkflowRunner"]
-    RUN --> H["INodeHandler"]
+    UI["Blazor editör"] --> API["Yetkili API"]
+    API --> JOB["WorkflowJobService"]
+    JOB --> DB["PostgreSQL"]
+    JOB --> HF["Hangfire"]
+    HF --> RUN["WorkflowRunner"]
+    RUN --> NODE["Kayıtlı handler"]
     RUN --> DB
-    RUN --> LOG["Log ve event servisleri"]
+    DB --> LOG["Kalıcı log SSE"]
+    RUN --> SSE["Canlı ilerleme SSE"]
+    LOG --> UI
+    SSE --> UI
 ```
 
-`WorkflowsController.Execute`, execution kaydını oluşturup runner'ı doğrudan kuyruğa ekler. `WorkflowJobService.ExecuteWorkflowAsync` ise execution kaydını job içinde oluşturur. Bunlar aynı giriş sözleşmesi değildir; retry ve event lifecycle davranışları birleştirilmelidir.
+## Yürütme
 
-`WorkflowController` tekil `/api/workflow` rotasında statik liste tutar. Kalıcı `/api/workflows` API'sinin eşdeğeri değildir. Shared `GraphExecutor` ve Backend `Execution/WorkflowExecutor` için uygulama çağrısı bulunmadı; bunları aktif motor gibi belgelemek doğru olmaz. Graph veri tiplerinin frontend kullanımı ayrı değerlendirilmelidir.
+`StartAsync` execution'ı kuyruktan önce kaydeder. Anlık, gecikmeli ve adımlı API'ler aynı yolu kullanır. Job'a execution ID, tenant ID ve dahili kullanıcı ID taşınır; token saklanmaz. Worker kullanıcı/tenant aktifliğini ve workspace yazma üyeliğini tekrar denetler. Recurring wrapper her çağrıda yeni ID üretir; cron beş alanlıdır ve UTC'dir.
 
-## Node ve expression akışı
+Runner koşullu SQL update ile `Queued → Running` geçişini alır. Aynı execution tekrar teslim edilince otomatik yürütülmez. Hangfire/node otomatik retry kapalıdır. Bu, harici sistemlerde exactly-once garantisi değildir: süreç kesilirse `Running` kayıt operatör incelemesi gerektirebilir. İptal kooperatiftir, yapılmış yan etkileri geri almaz.
 
-Runner, node tipine göre kayıtlı `INodeHandler` seçer. Parametre/expression, çıktı portu ve execution state davranışları engine kodundadır. Yeni node eklerken sınıf, DI kaydı, editor tanımı ve test birlikte güncellenmelidir. AI sentiment/classification/vision/agent sınıfları mevcut olsa da Program'daki handler kayıtları eksiktir.
+## Yetki
 
-Özel expression lexer/parser/interpreter, JavaScript/Jint, C#/Roslyn ve plugin assembly yükleme farklı yürütme yüzeyleridir. Hepsini MVP gereksinimi saymayın. C# script'leri backend sürecinde çalışır; güvenilmeyen kod için güvenlik izolasyonu sağlandığı iddia edilemez.
+JWT issuer/audience/lifetime doğrulanır. JIT kullanıcı/workspace/kota kaydını transaction içinde oluşturur; paralel ilk istekler aynı tenant kilidiyle korunur. API key aktif kullanıcı/tenant'a bağlıdır. Uygulama permission claim'leri standartlaştırılmıştır.
 
-## Kimlik ve kaynak erişimi
+HTTP sorguları tenant, kullanıcı ve workspace üyeliğiyle filtrelenir. Genel permission yanında workspace yazma rolü gerekir; Viewer mutasyon yapamaz. Üye yönetimi Owner/Admin gerektirir. Roller metin saklandığı için SQL'de büyüklük karşılaştırması kullanılmaz. Job DbContext'i `SetJobAccess` ile açık kapsam alır. Bağlamsız DbContext güvenilen iç servis/migration/test kullanımı içindir; yeni public endpoint bu sınırı atlayamaz.
 
-Frontend OIDC login'i yürütür. Backend `MultiScheme` seçicisi `X-Api-Key` varsa API key handler'ına, aksi halde JwtBearer'a yönlendirir. Aktif backend kaydında interactive `AddOpenIdConnect` yoktur; `DynamicOidcEvents` dosyasının varlığı tenant başına JWT authority seçimi sağlamaz.
+`CoreControllerFeatureProvider` dışa açılan controller listesini sınırlar. Fallback authorization kimlik doğrulama ister. Hangfire paneli kapalıdır. `X-Tenant-ID` claim ile çelişirse reddedilir; workspace header'ı üyelik sağlamaz.
 
-Tenant middleware header/subdomain sonucunu `HttpContext.Items` içine koyar; `IUserContext` tenant'ı claim'den okur. Bu iki kaynak birleştirilmiş ve üyelikle doğrulanmış bir güvenlik sınırı olarak kabul edilmemeli. Permission policy'leri kaynak sahipliği kontrolü sağlamaz; workflow sorgularında tenant/workspace filtreleri eksiktir. JWT issuer/audience ve Hangfire paneli için kritik açıklar raporda listelenmiştir.
+## Graph ve durum
 
-## Durum ve gerçek zamanlı iletişim
+Graph en fazla 200 node/400 edge içerir; ID'ler benzersiz, bağlantılar geçerli ve döngüsüz olmalıdır. Desteklenmeyen handler/subflow kaydedilmez. Boş taslak kaydedilebilir; çalıştırma başarısız durumuna geçer. Trigger başlangıç verisini alır, çıktılar JSON olarak normalleştirilir. Workflow/revizyon aynı transaction'da ve workflow başına advisory lock altında kaydedilir. JSONB karşılaştırması metin sırasına değil içerik eşitliğine dayanır.
 
-Execution, log, checkpoint ve snapshot tabloları kalıcıdır. Pause registry, SSE kanalları ve sanal dosya sistemi süreç içindedir. Kalıcı tablo varlığı tek başına restart sonrası doğru devam etme veya yatay ölçekleme garantisi değildir.
+Log SSE veritabanından 200 kayıtlık sayfalar okur; tarihçe/canlı abonelik boşluğu yoktur. İlerleme SSE abone başına 256 event'lik kanal ve tek async writer kullanır; yavaş istemci ayrılır. Geç abonelik terminal durumu DB'den görür. Frontend Fetch + Authorization header kullanır, token URL'ye yazılmaz; özel gzip envelope kaldırılmıştır.
 
-`SseEventService` tek execution kanalını birden fazla okuyucuya verir; bu broadcast değildir. Notification ve log akışları ayrı servislerdir. Önce sahiplik doğrulaması, abone başına teslim ve bounded buffering; sonra topic/priority/metrics genişletmesi yapılmalıdır.
+Pause/step ve canlı event'ler süreç içindedir. Restart sonrası checkpoint replay veya çok replica pause garantisi yoktur. Snapshot restore 501 döner.
 
-## AI ve ek altyapı
+## Sadeleştirme
 
-Semantic Kernel Ollama chat/embedding generator kullanır. Ayrı `ITextEmbeddingService` implementasyonları bulunur fakat uygulama DI kaydı yoktur; memory embedding çağrısı bundan etkilenir. Vector store 768, memory entries 384 boyutludur. Sağlayıcı değiştirmek veri boyutu/model sözleşmesini de etkiler.
-
-RabbitMQ/MassTransit startup'a kayıtlıdır, ancak uygulama publisher/consumer kullanımı bulunmadı. Hangfire mevcut job ihtiyacını karşılayan çekirdektir. A2A, Ralph loop, Markdown watcher, marketplace, SCIM ve DataTables/Forms ayrı kapsam maliyeti getirir; bunların sadeleştirme kararları rapordadır.
-
-## Doğrulama ve geliştirme ilkesi
-
-Mevcut depoda test projesi/CI bulunmuyor. Önce tenant izolasyonu, auth, retry, iptal/pause, SSE ve handler çözümleme testleri eklenmeli. İhtiyaç duyulursa mevcut monolith içinde feature klasörleri kullanılabilir; ek proje veya soyutlama yalnızca somut bağımlılık sınırı varsa eklenmelidir.
+RabbitMQ/MassTransit, statik legacy workflow controller ve kullanılmayan alternatif backend executor kaldırıldı. Deneysel controller, hosted servis ve plugin taraması kayıtlı değildir; kaynak ve şema geçmişi tutulur. AI flag yalnız Ollama node'larını açar; AI chat, RAG veya global vector-store API'lerini açmaz. Tam özellik geri açılışı kaynak yetkisi ve entegrasyon testleri gerektirir.

@@ -1,132 +1,72 @@
-# SonOfAnton — API referansı ve mevcut sınırlamalar
+# SonOfAnton — Çekirdek API
 
-Kaynak: `c91a288`, 2 Kasım 2026 statik incelemesi. HTTPS backend taban adresi **`https://localhost:5002`**. Development ortamında `/openapi/v1.json` ve `/scalar/v1` kullanılabilir. Aşağıdaki tablolar kaynak koddan çıkarılmıştır; uçtan uca çağrı testi yapılmamıştır.
+Development taban adresi `https://localhost:5002`. OpenAPI `/openapi/v1.json`, arayüz `/scalar/v1`. JSON enum'ları sayısaldır. Kalıcı API **`/api/workflows`**; tekil legacy CRUD kaldırılmıştır.
 
-## Kritik sözleşme ayrımı
+## Yetki ve limit
 
-**Kalıcı workflow API'si `/api/workflows` rotasıdır.** Tekil `/api/workflow` ayrı bir legacy controller'dır: statik liste tutar, anonimdir ve DB workflow API'siyle eşdeğer değildir. Yeni entegrasyonları buna bağlamayın. `/api/workflow/chat` ve `/api/workflow/execution/{executionId}/stream` ise ayrı uçlardır; tekil CRUD kaldırılırken bunlar ayrıca değerlendirilmelidir.
+`Authorization: Bearer <token>` veya `X-Api-Key` gerekir. JWT issuer/audience/lifetime doğrulanır. API key aktif kullanıcı/tenant'a bağlıdır. Genel permission yanında kaynak sahipliği/üyeliği denetlenir: kimliksiz 401, yetkisiz mutasyon 403, erişilemeyen workflow/execution 404. Tenant header'ı claim ile çelişirse 403. Workspace header'ı üyelik vermez.
 
-Tüm endpoint'lerin yetkilendirildiği veya genel rate limit'in uygulandığı iddia edilemez. [REVIEW.md](REVIEW.md) F01–F08 erişim kusurlarını açıklar. Bu belge, mevcut açıkları desteklenen güvenlik davranışı olarak onaylamaz.
+Genel limit JWT kullanıcısı için 100/dakika, API key için kayıtlı değere göre 1–1000/dakikadır. Execution mutasyonlarına ek kullanıcı başına 10/dakika uygulanır. Aşım 429'dur.
 
-## Kalıcı workflow API
+## Workflow
 
-Kaynak: [WorkflowsController](../src/SonOfAnton.Backend/Controllers/WorkflowsController.cs), [DTO'lar](../src/SonOfAnton.Shared/DTOs/WorkflowDtos.cs).
+| Metot / yol | Davranış |
+|---|---|
+| GET `/api/workflows`, `/{id}` | Liste / graph dahil ayrıntı |
+| POST `/api/workflows` | ID varsa güncelle, yoksa oluştur; `Workflows.Edit` ve workspace yazma rolü |
+| DELETE `/api/workflows/{id}` | Aynı yazma koşuluyla sil |
+| POST `/api/workflows/{id}/execute` | `StartExecutionRequest`; `ExecutionDto` döner |
+| POST `/api/workflows/{id}/test-run` | Adımlı yürütme |
+| POST `/api/workflows/execution/{id}/step` | Bir sonraki node'a izin ver |
+| POST `/api/workflows/execution/{id}/cancel`, `/pause`, `/resume` | İptal / aynı süreçte dur–devam |
+| GET `/api/workflows/{id}/executions` | Çalıştırma geçmişi |
+| PATCH `/api/workflows/{id}/move` | Aynı workspace klasörüne taşı |
+| GET `/api/workflows/stats`, `/{id}/stats` | Kapsamlanmış istatistik |
+| GET `/api/workflows/{id}/revisions`, `/{id}/revisions/{version}` | Graph sürümleri |
+| POST `/api/workflows/{id}/execute-node`, `/api/workflows/execute-node-transient` | Kayıtlı handler ile tek node; execution izni |
+| POST `/api/workflows/execution/{id}/snapshot` | Bilgi amaçlı snapshot |
+| GET `/api/workflows/execution/{id}/snapshots` | Snapshot listesi |
+| POST `.../resume-from-node/{nodeId}`, `.../snapshot/{snapshotId}/restore` | **501**; checkpoint replay desteklenmez |
 
-Controller düzeyinde `Workflows.Read` istenir. Bazı işlemler ek policy ister; kaynak sahipliği/tenant kontrolü ayrıca eksiktir.
+Graph 200 node/400 edge sınırında, benzersiz ID'li ve döngüsüz olmalıdır. Desteklenmeyen handler/subflow reddedilir. Boş taslak kaydedilebilir ama çalıştırılması başarısız olur. Global hata workflow zinciri kapalıdır.
 
-| Metot | Yol | Davranış / ek policy |
-|---|---|---|
-| GET | `/api/workflows` | Workflow listesi; graph dahil değil |
-| GET | `/api/workflows/{id}` | Ayrıntı ve graph |
-| POST | `/api/workflows` | `SaveWorkflowRequest`; ID varsa güncelle, yoksa oluştur; `Workflows.Edit` |
-| DELETE | `/api/workflows/{id}` | Sil; `Workflows.Edit` |
-| POST | `/api/workflows/{id}/execute` | `StartExecutionRequest`; `Workflows.Execute` |
-| POST | `/api/workflows/{id}/test-run` | Adımlı çalışma; `Workflows.Execute` |
-| POST | `/api/workflows/execution/{id}/step` | Sonraki adım; `Workflows.Execute` |
-| GET | `/api/workflows/execution/{executionId}` | Execution durumu |
-| GET | `/api/workflows/{id}/executions` | Workflow execution geçmişi |
-| POST | `/api/workflows/execution/{executionId}/cancel` | İptal isteği |
-| POST | `/api/workflows/execution/{executionId}/pause` | Duraklatma |
-| POST | `/api/workflows/execution/{executionId}/resume` | Devam |
-| POST | `/api/workflows/execution/{executionId}/resume-from-node/{nodeId}` | Seçilen node'dan devam |
-| POST | `/api/workflows/execution/{executionId}/snapshot` | Snapshot oluştur |
-| GET | `/api/workflows/execution/{executionId}/snapshots` | Snapshot listesi |
-| POST | `/api/workflows/execution/{executionId}/snapshot/{snapshotId}/restore` | Snapshot geri yükle |
-| PATCH | `/api/workflows/{id}/move` | Klasöre taşı |
-| GET | `/api/workflows/stats` | Genel istatistikler |
-| GET | `/api/workflows/{id}/stats` | Workflow istatistikleri |
-| GET | `/api/workflows/{id}/revisions` | Revizyonlar |
-| GET | `/api/workflows/{id}/revisions/{version}` | Tek revizyon |
-| GET | `/api/workflows/{id}/artifacts` | Artifact verileri |
-| POST | `/api/workflows/{id}/execute-node` | Tek node; `Workflows.Execute` |
-| POST | `/api/workflows/execute-node-transient` | Kaydedilmemiş node; `Workflows.Execute` |
-
-Cancel/pause/restore/move gibi mutasyonların yalnızca controller'ın read policy'siyle kalması ayrıca giderilmelidir. İzin tablosu hedef yetkilendirme tasarımı değildir.
-
-Kaydetme gövdesinin şekli (boş graph çalıştırılabilir örnek değildir):
+Kaydetme örneği (`workspaceId` gerçek yetkili workspace olmalı):
 
 ```json
-{
-  "id": null,
-  "name": "İlk workflow",
-  "description": "Geliştirme örneği",
-  "graph": { "nodes": [], "connections": [], "variables": [] },
-  "isActive": false
-}
+{"name":"İlk akış","workspaceId":"11111111-1111-1111-1111-111111111111","graph":{"nodes":[{"id":"22222222-2222-2222-2222-222222222222","type":"trigger.manual","name":"Başlat","parameters":{}}],"connections":[],"variables":[]}}
 ```
 
-Çalıştırma gövdesi:
-
-```http
-POST /api/workflows/{id}/execute
-Authorization: Bearer <token>
-Content-Type: application/json
-
-{"initialData":{"message":"Merhaba"}}
-```
-
-Yanıt `ExecutionDto` biçimindedir; execution kimliği `id` alanındadır. `/api/executions/run/{workflowId}` ise `{executionId, message}` döner. Bunlar aynı yanıt sözleşmesi değildir. Enum değerlerinin JSON gösterimi için OpenAPI/serializer çıktısını kullanın; önceki belgelerdeki string enum örneklerini garanti kabul etmeyin.
+Çalıştırma gövdesi `{"initialData":{"message":"Merhaba"}}`; response execution kimliği `id` alanındadır.
 
 ## Execution ve zamanlama
 
-Kaynak: [ExecutionsController](../src/SonOfAnton.Backend/Controllers/ExecutionsController.cs).
-
-| Metot | Yol | Açıklama |
-|---|---|---|
-| GET | `/api/executions?workflowId={id}` | Filtre opsiyonel; son 100 execution |
-| GET | `/api/executions/{id}` | ExecutionDto |
-| GET | `/api/executions/{id}/logs` | JSON log listesi |
-| POST | `/api/executions/{id}/cancel` | DB durumunu değiştirir; devam eden yan etkinin durması ayrıca doğrulanmalı |
-| POST | `/api/executions/run/{workflowId}` | Job service ile kuyruğa ekler; `executionId` döner |
-| POST | `/api/executions/schedule/{workflowId}?delaySeconds=60` | Gecikmeli; `jobId` döner |
-| POST | `/api/executions/recurring/{workflowId}?cron={encodedCron}&jobName={name}` | Cron kaydı |
-| DELETE | `/api/executions/recurring/{jobName}` | Cron kaydını kaldırır |
-| POST | `/api/executions/validate-cron` | `{"cronExpression":"0 9 * * 1-5"}` |
-| GET | `/api/executions/job/{jobId}` | Hangfire job bilgisi |
-
-Controller `Workflows.Read`; run/schedule/recurring ek olarak `Workflows.Execute` ister. Recurring silme ve cancel için ayrı mutasyon policy'si eksiktir. Cron query değeri URL-encode edilmelidir. Mevcut cron doğrulayıcının scheduler uyumu ve timezone davranışı test edilmemiştir; bir ifadeye otomatik olarak Türkiye saati anlamı vermeyin.
-
-## Stream, public API ve sağlık
-
-| Yol | Mevcut davranış / sınırlama |
+| Metot / yol | Sözleşme |
 |---|---|
-| `/api/workflow/execution/{executionId}/stream?topics=node,log` | SSE; explicit authorization/ownership kontrolü yok, çok istemcili broadcast kusurlu |
-| `/api/logs/{executionId}` | Ayrı log SSE controller'ı |
-| `/api/notifications/stream` | Ayrı bildirim stream'i |
-| `/api/sse/stats`, `/api/metrics` | Minimal endpoint; explicit authorization yok |
-| `/api/published/{route}` | Dinamik workflow tetikleme; API key ve input schema eksikleri F05 |
-| `/api/webhook/{webhookId}` | Dış tetikleme; imza/aktiflik davranışı WebhookController'da |
-| `/health/live` | Süreç canlılığı |
-| `/health/ready` | PostgreSQL ve Hangfire storage kontrolü; şema/AI sağlığı değil |
+| GET `/api/executions?workflowId={id}` | Son 100 execution |
+| GET `/api/executions/{id}`, `/{id}/logs` | Durum / JSON log |
+| POST `/api/executions/run/{workflowId}` | `{executionId, message}`; gövde başlangıç verisi |
+| POST `/api/executions/schedule/{workflowId}?delaySeconds=60` | `{jobId, executionId, message}`; 0–30 gün |
+| POST `/api/executions/recurring/{workflowId}?cron=...` | Beş alanlı **UTC** cron; ad `workflow_{workflowId}` |
+| DELETE `/api/executions/recurring/workflow_{workflowId}` | Yetkili workflow'nun cron kaydını kaldır |
+| POST `/api/executions/validate-cron` | `{"cronExpression":"0 9 * * 1-5"}` |
+| POST `/api/executions/{id}/cancel` | Queued/Running/Paused işi iptal et |
+| GET `/api/executions/job/{jobId}` | Yalnız yönetici |
 
-Published API `WaitForResult=false` durumunda 202 ve executionId döndürür; sonuç beklerken timeout 504 olabilir. Request header'larının trigger verisine kopyalanması giderilmeden gerçek sırlarla kullanmayın. SSE için query token desteği bulunması endpoint'in yetkili olduğu anlamına gelmez; URL token'ları loglara sızabilir.
+Çalıştırma mutasyonları `Workflows.Execute` ve workspace yazma rolü ister. Cron URL-encode edilir. Otomatik retry kapalıdır; yeni çalışma yeni execution'dır. İptal yapılmış dış işlemleri geri almaz.
 
-## Diğer endpoint aileleri
+## Stream ve yardımcı uçlar
 
-Ayrıntılı request/response için ilgili controller ve üretilen OpenAPI birlikte incelenmelidir. Bu tablo uyumluluk veya tamamlanmışlık garantisi vermez.
-
-| Rota | Kaynak |
+| Yol | Davranış |
 |---|---|
-| `/api/nodes` | [NodesController](../src/SonOfAnton.Backend/Controllers/NodesController.cs) |
-| `/api/folders` | [FoldersController](../src/SonOfAnton.Backend/Controllers/FoldersController.cs) |
-| `/api/workspaces` | [WorkspacesController](../src/SonOfAnton.Backend/Controllers/WorkspacesController.cs) |
-| `/api/workflow/chat` | [WorkflowChatController](../src/SonOfAnton.Backend/Controllers/WorkflowChatController.cs); explicit Authorize yok |
-| `/api/search` | [SearchController](../src/SonOfAnton.Backend/Controllers/SearchController.cs) |
-| `/api/apikeys` | [ApiKeysController](../src/SonOfAnton.Backend/Controllers/ApiKeysController.cs) |
-| `/api/workflow-endpoints` | [WorkflowApiController](../src/SonOfAnton.Backend/Controllers/WorkflowApiController.cs) |
-| `/api/credentials`, `/api/linked-accounts` | Credential ve bağlı hesap controller'ları |
-| `/api/chatbots`, `/api/public/chatbots` | [ChatbotController](../src/SonOfAnton.Backend/Controllers/ChatbotController.cs); F04/F14 |
-| `/api/custom-nodes`, `/api/marketplace` | CustomNodes ve Marketplace controller'ları |
-| `/api/datastores`, `/api/data-tables`, `/api/data-forms` | Veri yönetimi controller'ları |
-| `/api/planning`, `/api/loops` | Planning ve RalphLoop controller'ları |
-| `/api/a2a`, `/.well-known/agent.json` | A2A controller/Program; protokol uyumluluğu test edilmedi |
-| `/scim/v2/Users`, `/scim/v2/Groups` | SCIM controller'ları; tam RFC uyumluluğu doğrulanmadı |
-| `/api/notifications`, `/api/quotas` | Bildirim ve kota controller'ları |
+| `/api/logs/{executionId}` | Kalıcı SSE; `id: ticks/guid`, `data: LogEventDto`, sonunda `event: complete`; reconnect `Last-Event-ID` destekler |
+| `/api/workflow/execution/{executionId}/stream` | Yetkili ilerleme; node/log ve terminal `workflow-completed`; query token kabul edilmez |
+| `/api/nodes` | Sunucuda kayıtlı node kataloğu |
+| `/api/capabilities` | `ai`, `chat=false`, `experimental=false` |
+| `/api/workspaces`, `/api/folders`, `/api/apikeys` | Kapsamlı yönetim; ayrıntı OpenAPI'de |
+| `/api/notifications`, `/api/quotas` | Kullanıcının kayıtları |
+| `/api/sse/stats`, `/api/metrics` | Yalnız yönetici |
+| `/health/live`, `/health/ready` | Anonim sağlık |
 
-## Kimlik, limit ve hatalar
+İlerleme SSE geçmiş node event'lerini replay etmez; geç abone terminal durumu görür, geçmiş için kalıcı log API'sini kullanır. Yavaş abone ayrılabilir. Tek instance pause/step sınırı geçerlidir.
 
-JWT: `Authorization: Bearer <token>`. API key: `X-Api-Key: <key>`. `X-Tenant-ID` ve `X-Workspace-Id` güvenilir üyelik kanıtı değildir. Backend bu değerleri doğrulanmış kullanıcı ve kaynak kapsamıyla eşleştirmelidir.
-
-Named rate limit policy'leri tanımlı fakat endpoint'lere bağlanmamış; “her API dakikada 100 istekle sınırlıdır” garantisi yoktur. Policy sabitleri için [Permissions.cs](../src/SonOfAnton.Shared/Core/Identity/Permissions.cs) referanstır; API key claim adlarıyla uyumsuzluk vardır.
-
-Global exception handler `{error, requestId}` üretir; controller'lar string, farklı JSON veya framework validation yanıtları da döndürebilir. Tüm hatalar için tek şema varsaymayın. Hedef iyileştirme: tutarlı ProblemDetails, kaynak yetkisi ve otomatik sözleşme testleri.
+Marketplace/chatbot/webhook/published/SCIM/A2A/chat/RAG/planlama/veri tablosu/formu/credential API'leri core listesinde değildir. Kimliği doğrulanmış istemci 404 alır; kimliksiz istek önce fallback nedeniyle 401 alabilir. Bunların güvenli biçimde ürünleştirilmesi ayrı iştir.

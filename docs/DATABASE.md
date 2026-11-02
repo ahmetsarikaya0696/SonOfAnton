@@ -1,78 +1,33 @@
-# SonOfAnton — Veritabanı ve migration
+# SonOfAnton — Veritabanı
 
-Kaynak incelemesi: `c91a288`, 2 Kasım 2026. Canlı veritabanı incelenmedi ve migration'lar bu ortamda çalıştırılmadı.
+Kaynaklar: [DbContext](../src/SonOfAnton.Backend/Data/SonOfAntonDbContext.cs), [migration geçmişi](../src/SonOfAnton.Backend/Migrations), [entity'ler](../src/SonOfAnton.Shared/Entities). PostgreSQL ve pgvector gerekir; Hangfire kendi şemasını kullanır.
 
-## Kaynakların önceliği
+## Migration düzeltmesi
 
-- [SonOfAntonDbContext](../src/SonOfAnton.Backend/Data/SonOfAntonDbContext.cs): güncel EF mapping.
-- [Model snapshot](../src/SonOfAnton.Backend/Migrations/SonOfAntonDbContextModelSnapshot.cs): son üretilmiş migration modeli.
-- [Migrations](../src/SonOfAnton.Backend/Migrations): uygulanacak şema geçmişi.
-- [Entities](../src/SonOfAnton.Shared/Entities): alanlar ve ilişkiler.
+`20261102090720_SyncCoreReadinessModel` önceki snapshot'ta eksik altı tabloyu ekler: `censorship_audit_logs`, `censorship_rules`, `loop_execution_states`, `planning_documents`, `memory_collections`, `memory_entries`; index/FK'leriyle birlikte. `Up` mevcut tablo/kolon/veri silmez. `Down` yeni tablolardaki veriyi siler; üretimde otomatik geri alma yöntemi değildir.
 
-Model, snapshot ve kurulu DB'nin aynı olduğu varsayılmamalıdır. Mevcut son migration dosyası `20260228215928_AddNotificationsAndQuotas.cs` olarak görünür. Dosya varlığı migration zincirinin temiz DB'de başarıyla uygulandığını kanıtlamaz.
+Tabloların oluşturulması deneysel API'lerin açıldığı anlamına gelmez. Model/snapshot tutarlı tutulur, controller listesi ayrıca sınırlandırılır. Backend `MigrateAsync` başarısızsa kapanır.
 
-## Şema grupları
+## Veri sözleşmeleri
 
-| Alan | Örnek tablolar / amaç |
-|---|---|
-| Workflow | `workflows`, `workflow_revisions`, `folders` |
-| Çalıştırma | `executions`, `execution_logs`, `execution_snapshots`, `execution_checkpoints` |
-| Kimlik | `tenants`, `users`, `tenant_roles`, `user_tenant_roles` |
-| Erişim / entegrasyon | `workspaces`, `workspace_members`, `api_keys`, `workflow_api_endpoints`, `credentials`, `linked_accounts` |
-| AI / arama | `vector_store`, `memory_collections`, `memory_entries`, `chat_history` |
-| Ek kapsam | Chatbot, marketplace/custom node, data store/table/form, planlama, censorship, bildirim ve kota entity'leri |
+- Workflow tenant/workspace/oluşturan kullanıcıya bağlıdır. HTTP ve job erişimi kapsamlanır.
+- Execution ID tekildir; koşullu `Queued → Running` geçişi tekrar teslimi engeller. Harici sistemlerde exactly-once garantisi yoktur.
+- Log/snapshot/revizyon erişimi ana workflow/execution kapsamından gelir.
+- Workflow ve graph revizyonu aynı transaction'da; eşzamanlı güncelleme workflow kilidiyle korunur.
+- Vector-store 768, memory 384 boyutludur. Model değişimi otomatik backfill değildir; bu API'ler kapalıdır.
+- Credential yeni yazımları AES-GCM `v1:` biçimindedir. Eski ciphertext için explicit legacy key gerekir; yanlış anahtar sessizce boş veri üretmez.
 
-Tam kolon/constraint listesi mapping ve migration dosyalarından okunmalıdır; burada ikinci bir elle kopyalanmış şema tutulmaz.
+Tenant/kullanıcı alanları boş eski kayıtlar görünmeyebilir. Kullanıcı verisini silmeden, onaylı sahiplik eşlemesiyle taşımak gerekir. Tek issuer varsayımı vardır; `ExternalIdentityId` tek başına unique olduğu için çok issuer desteği ayrıca tasarlanmalıdır.
 
-## Kritik veri sözleşmeleri
-
-| Konu | Mevcut durum | Gerekli iş |
-|---|---|---|
-| Tenant izolasyonu | Tenant FK/index var; DbContext global query filter içermiyor; workflow sorguları kapsamlanmıyor | Kullanıcı üyeliği ve tenant/workspace kapsamını okuma/yazma/job yollarında uygula |
-| Vector store | `embedding` tipi `vector(768)` | 768 boyutlu seçili modelle yaz/ara |
-| Memory entries | `embedding` tipi `vector(384)` | 384 boyutlu seçili modelle yaz/ara; 768 ile karıştırma |
-| Model değiştirme | Model adı/boyutu değişikliği veriyi otomatik dönüştürmez | Model sürümü ve yeniden embedding/backfill planı |
-| Dış kullanıcı kimliği | `ExternalIdentityId` tek başına unique | Çok issuer ihtiyacı varsa issuer + subject + tenant kimlik tasarımını değerlendir |
-| Tenant OIDC secret | String kolon mapping'i; bu alanda şifreleme garantisi gösterilmiyor | Secret saklama/rotasyonunu uygulamada doğrula |
-| Execution retry | Aynı execution ID tekrar `Add` ediliyor | Tekil kayıt ve idempotent durum geçişi |
-| Graph revizyonu | Workflow ve revizyon ayrı SaveChanges çağrıları; sürüm max+1 ile üretiliyor | Atomiklik ve eşzamanlı güncelleme testi |
-
-Genel credential şifreleme servisinde sabit fallback anahtar ve bütünlük doğrulama eksikleri vardır. Bir kolonun “secret” veya “encrypted” diye adlandırılması güvenlik kanıtı değildir. [İnceleme](REVIEW.md).
-
-## Mevcut migration'ları uygulama
-
-Depo kökünde, .NET 10 SDK ve proje EF Core sürümüyle uyumlu `dotnet-ef` kuruluyken:
+## Komutlar
 
 ```bash
-dotnet ef migrations list --project src/SonOfAnton.Backend --startup-project src/SonOfAnton.Backend
-dotnet ef database update --project src/SonOfAnton.Backend --startup-project src/SonOfAnton.Backend
+dotnet tool restore
+dotnet ef migrations list --project src/SonOfAnton.Backend
+dotnet ef migrations has-pending-model-changes --project src/SonOfAnton.Backend
+dotnet ef migrations script --idempotent --project src/SonOfAnton.Backend
 ```
 
-`dotnet-ef` yoksa araç sürümünü projedeki `Microsoft.EntityFrameworkCore.Design` sürümüyle eşleştirerek kurun. Mevcut projede bu paket 10.0.3'tür:
+Design-time factory `ConnectionStrings__DefaultConnection` kullanır ve yerel fallback içerir; runtime Production bağlantısı zorunludur. Yeni model değişikliğinde migration üretip `Up/Down` etkilerini inceleyin. Uygulanmış geçmişi silmeyin. `init-scripts` yalnız yeni Compose volume'de çalışır.
 
-```bash
-dotnet tool install --global dotnet-ef --version 10.0.3
-```
-
-Kurulum için tekrar `AddIdentityEntities` migration'ı oluşturmayın; kimlik migration geçmişi zaten depodadır. Backend startup da `MigrateAsync` çağırır, ancak hatayı loglayıp devam eder. Deployment başarılı sayılmadan migration sonucu ve şema kontrol edilmelidir.
-
-## Yeni model değişikliği
-
-1. Entity ve `SonOfAntonDbContext` mapping'ini değiştir.
-2. Anlamlı adla migration üret.
-3. `Up`/`Down`, index, FK, veri kaybı ve veri taşıma gereksinimlerini incele.
-4. Temiz DB ve önceki sürüm DB'si üzerinde upgrade testi yap.
-5. Gerekirse geri dönüş için yedekten restore veya ileri düzeltme migration'ı hazırla.
-
-```bash
-dotnet ef migrations add DescribeActualChange --project src/SonOfAnton.Backend --startup-project src/SonOfAnton.Backend
-dotnet ef migrations script --idempotent --project src/SonOfAnton.Backend --startup-project src/SonOfAnton.Backend
-```
-
-Üretimde uygulanmış migration'ı silerek geçmişi değiştirmeyin. `Down` veri kaybını otomatik geri getirmez. Bu belge güncellemesi şema değiştirmez veya yeni migration oluşturmaz.
-
-## Konfigürasyon ve işletim
-
-Bağlantı `ConnectionStrings:DefaultConnection` üzerinden okunur; ortam değişkeni `ConnectionStrings__DefaultConnection` ile verilebilir. Gerçek parolaları repoya koymayın. Geliştirme User Secrets kullanılacaksa proje UserSecretsId yapılandırması da bulunmalıdır.
-
-`init-scripts` PostgreSQL Docker volume ilk oluşturulduğunda çalışır; mevcut volume üzerinde her başlangıçta yeniden uygulanmaz. Başlangıç verisi ile EF migration geçmişini karıştırmayın. Yedekleme/restore, log-history saklama süresi, şema upgrade'i ve encryption key yedekleme/rotasyonu yayın öncesi doğrulanmalıdır.
+Temiz DB migration ve uygulama testleri [VERIFICATION.md](VERIFICATION.md) içinde. Üretim yedeğinden upgrade/restore ve anahtar rotasyonu bu ortamda denenmedi.

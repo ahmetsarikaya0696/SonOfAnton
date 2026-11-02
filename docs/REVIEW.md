@@ -8,7 +8,21 @@ Proje, görsel workflow otomasyon çekirdeğinin çevresine marketplace, özel k
 
 Bu rapor statik kod incelemesidir; production sızma testi veya tüm özelliklerin uçtan uca doğrulaması değildir. Controller/servis/DI bağlantıları, veri modeli, yürütme ve SSE yolları, proje/Compose dosyaları ve mevcut Markdown belgeleri incelendi. Ortamda `dotnet` bulunmadığından build, migration ve uygulama testleri çalıştırılamadı. Depoda test projesi ve GitHub Actions workflow'u bulunmuyor. `src/openapi_test_app` bir örnek uygulamadır, otomatik test paketi değildir.
 
-**Bu değişiklik yalnızca belgeleri günceller. Aşağıdaki kod kusurları düzeltilmiş değildir.**
+**Tarihsel kayıt:** Bulgular `c91a288` içindir. Sonraki uygulama çalışmasının güncel durumu [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) ve [VERIFICATION.md](VERIFICATION.md) içindedir. Aşağıdaki eski kod örnekleri güncel durum iddiası değildir.
+
+| Bulgu | Çekirdek çalışmasındaki karşılık |
+|---|---|
+| F01–F04 | JWT/fallback doğrulaması, Hangfire paneli/legacy kaldırma, tenant/workspace kaynak kontrolü |
+| F05–F06 | Published API ve script/plugin yürütmesi kapalı; özelliklerin tamamlandığı iddia edilmiyor |
+| F07–F08 | Rate limiter bağlandı; API key claim sözleşmesi ve scope yönetimi düzeltildi |
+| F09–F10 | Tek job yolu, açık bağlam, tekrar teslim koruması, bounded broadcast ve kalıcı log stream |
+| F11 | AI node'ları opt-in; embedding DI düzeltildi, gerçek model/RAG kabulü açık |
+| F12 | AES-GCM, zorunlu anahtar ve açık legacy geçişi; credential yönetim API'si kapalı |
+| F13 | UTC cron, yeni recurring execution ID, fail-fast migration ve eksik şema düzeltmesi |
+| F14 | Public chatbot erişimi kapalı; ürünleştirme açık |
+| F15 | Plan, çalışma talimatları, API/kurulum/kullanım ve test kanıtı güncellendi |
+
+Kapalı bir endpoint için asıl özelliğin güvenli ve tamamlanmış olduğu sonucunu çıkarmayın.
 
 ## Doğrulanmış bulgular
 
@@ -40,7 +54,7 @@ Düzeltme: doğrulanmış kullanıcıdan tenant/workspace bağlamını üret, ü
 
 ### F04 — P0: Anonim yönetim yolları var
 
-Kanıt: [WorkflowController](../src/SonOfAnton.Backend/Controllers/WorkflowController.cs), [ChatbotController](../src/SonOfAnton.Backend/Controllers/ChatbotController.cs), [ChatbotService](../src/SonOfAnton.Backend/Services/ChatbotService.cs), [Program.cs](../src/SonOfAnton.Backend/Program.cs).
+Kanıt: [eski WorkflowController](https://github.com/ahmetsarikaya0696/SonOfAnton/blob/c91a288cede2bf5069496afa3f1c74cd46b79424/src/SonOfAnton.Backend/Controllers/WorkflowController.cs), [ChatbotController](../src/SonOfAnton.Backend/Controllers/ChatbotController.cs), [ChatbotService](../src/SonOfAnton.Backend/Services/ChatbotService.cs), [Program.cs](../src/SonOfAnton.Backend/Program.cs).
 
 `/api/workflow` statik bir liste üzerinde CRUD yapıyor ve `[Authorize]` taşımıyor. `/api/chatbots` yönetim uçları da anonim; istemcinin verdiği `X-Workspace-Id` üyelik doğrulanmadan kullanılıyor. `WorkflowChatController` da explicit authorization taşımıyor. Global fallback authorization policy tanımlı değil. Execution SSE, SSE istatistikleri ve metrics minimal endpoint'lerinde de `RequireAuthorization` yok; execution stream sahipliği kontrol edilmiyor.
 

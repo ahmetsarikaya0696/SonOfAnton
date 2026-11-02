@@ -9,3 +9,13 @@
 - Build: dotnet build SonOfAnton.slnx -m:1. Test: dotnet test SonOfAnton.slnx -m:1. PostgreSQL entegrasyon testlerinin ön koşullarını docs/DEPLOYMENT.md içinde tut.
 - Testleri geçirmeden veya çalıştıramadığın kontrolleri açıkça belirtmeden çalışır/production-ready iddiasında bulunma.
 - İlgili davranış değişince README ve API/deployment belgelerini güncelle. Commit'leri amaç odaklı tut.
+
+## Regresyon kuralları
+
+- Entegrasyon testlerinde `SONOFANTON_TEST_DB` yalnız ayrılmış PostgreSQL/pgvector veritabanını göstermelidir. Test bağlantısı eksikse testi atlama.
+- Workspace rolü veritabanında metindir; yetki sırasını SQL string karşılaştırmasıyla çıkarma. İzin verilen rolleri açıkça eşleştir.
+- JSONB revizyon karşılaştırmalarında metinsel alan sırasına güvenme; yapısal JSON eşitliğini kullan. Eşzamanlı kaydetmeyi test et.
+- Otomatik job/node retry eklemek harici yan etkileri tekrarlar. Idempotency sözleşmesi ve testi olmadan etkinleştirme.
+- SSE token'ını URL'ye koyma. Abone kuyruğunu sınırla, tek writer kullan ve bağlantı kapandığında aboneliği kaldır.
+- Doğrulama: `node --test tests/frontend/*.test.mjs`, `dotnet tool restore`, `dotnet ef migrations has-pending-model-changes --project src/SonOfAnton.Backend`.
+- Yerel araç paketine uygulanan ortam workaround'unu ürün düzeltmesi veya temiz CI sonucu diye sunma. Tarayıcı açılmadıysa UI kabulünü tamamlandı işaretleme.
