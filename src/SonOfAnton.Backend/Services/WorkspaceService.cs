@@ -30,7 +30,7 @@ public class WorkspaceService
         var query = _dbContext.Workspaces
             .Include(w => w.Members)
             .Include(w => w.OwnerUser)
-            .Where(w => w.Members.Any(m => m.UserId == userId));
+            .Where(w => w.OwnerUserId == userId || w.Members.Any(m => m.UserId == userId));
 
         if (!string.IsNullOrEmpty(tenantId))
             query = query.Where(w => w.TenantId == tenantId);
@@ -206,7 +206,9 @@ public class WorkspaceService
     /// </summary>
     public async Task<WorkspaceMemberDto?> AddMemberAsync(Guid workspaceId, AddWorkspaceMemberRequest request)
     {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var workspace = await _dbContext.Workspaces.FirstOrDefaultAsync(w => w.Id == workspaceId);
+        if (workspace is null) return null;
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.TenantId == workspace.TenantId && u.IsActive);
         if (user == null)
         {
             _logger.LogWarning("Üye eklenemedi: kullanıcı bulunamadı ({Email})", request.Email);

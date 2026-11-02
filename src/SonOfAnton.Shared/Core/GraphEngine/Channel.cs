@@ -272,6 +272,7 @@ public record NodeExecutionCompletedEvent : WorkflowEvent
     public bool Success { get; init; }
     public string? Error { get; init; }
     public TimeSpan Duration { get; init; }
+    public double DurationMs => Duration.TotalMilliseconds;
     public object? OutputPreview { get; init; }
 }
 

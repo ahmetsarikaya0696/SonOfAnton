@@ -1,115 +1,62 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
-using SonOfAnton.Backend.Services;
+using SonOfAnton.Shared.Core.Identity;
 using SonOfAnton.Shared.DTOs;
-
+using SonOfAnton.Shared.Enums;
 namespace SonOfAnton.Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class LogsController : ControllerBase
+[Authorize(Policy = Permissions.WorkflowsRead)]
+public sealed class LogsController(SonOfAntonDbContext db) : ControllerBase
 {
-    private readonly LogStreamService _logStream;
-    private readonly SonOfAntonDbContext _dbContext;
-    private readonly ILogger<LogsController> _logger;
-
-    public LogsController(LogStreamService logStream, SonOfAntonDbContext dbContext, ILogger<LogsController> logger)
-    {
-        _logStream = logStream;
-        _dbContext = dbContext;
-        _logger = logger;
-    }
-
-    /// <summary>
-    /// SSE endpoint - Execution log'lar�n� stream eder
-    /// �nce veritaban�ndaki ge�mi� loglar� g�nderir, sonra canl� loglar� dinler
-    /// </summary>
+    // Durable paged reading avoids the gap between history and a live subscription.
     [HttpGet("{executionId:guid}")]
-    public async Task Stream(Guid executionId, CancellationToken cancellationToken)
+    public async Task Stream(Guid executionId, CancellationToken ct)
     {
-        _logger.LogInformation("SSE stream ba�lat�ld�: {ExecutionId}", executionId);
-
-        // SSE headers
-        Response.Headers.ContentType = "text/event-stream";
+        if (!await db.Executions.AnyAsync(e => e.Id == executionId, ct)) { Response.StatusCode = 404; return; }
+        Response.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
-        // Note: Connection header removed - not valid for HTTP/2 and HTTP/3
-        
-        // Proxy buffering'i a�mak i�in
         Response.Headers["X-Accel-Buffering"] = "no";
-
+        var timestamp = DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
+        var lastId = Guid.Empty;
+        if (Request.Headers["Last-Event-ID"].FirstOrDefault() is string cursor)
+        {
+            var parts = cursor.Split('/');
+            if (parts.Length == 2 && long.TryParse(parts[0], out var ticks) && ticks >= 0 && ticks <= DateTime.MaxValue.Ticks && Guid.TryParse(parts[1], out var id))
+            { timestamp = new DateTime(ticks, DateTimeKind.Utc); lastId = id; }
+        }
+        bool terminal = false;
         try
         {
-            // �nce veritaban�ndaki ge�mi� loglar� g�nder
-            var historicalLogs = await _dbContext.ExecutionLogs
-                .Where(l => l.ExecutionId == executionId)
-                .OrderBy(l => l.Timestamp)
-                .ToListAsync(cancellationToken);
-
-            foreach (var log in historicalLogs)
+            while (!ct.IsCancellationRequested)
             {
-                var logEvent = new LogEventDto
+                var logs = await db.ExecutionLogs.AsNoTracking().Where(l => l.ExecutionId == executionId &&
+                    (l.Timestamp > timestamp || l.Timestamp == timestamp && l.Id.CompareTo(lastId) > 0))
+                    .OrderBy(l => l.Timestamp).ThenBy(l => l.Id).Take(200).ToListAsync(ct);
+                foreach (var log in logs)
                 {
-                    ExecutionId = log.ExecutionId,
-                    NodeId = log.NodeId,
-                    Level = log.Level,
-                    Message = log.Message,
-                    Data = log.Data != null ? JsonSerializer.Deserialize<object>(log.Data.RootElement.GetRawText()) : null,
-                    Timestamp = log.Timestamp
-                };
-
-                var json = JsonSerializer.Serialize(logEvent);
-                var data = $"data: {json}\n\n";
-                
-                if (data.Length < 512)
-                {
-                    data += new string(' ', 512 - data.Length);
+                    var item = new LogEventDto { ExecutionId = executionId, NodeId = log.NodeId, Level = log.Level,
+                        Message = log.Message, Data = log.Data?.RootElement.Clone(), Timestamp = log.Timestamp };
+                    timestamp = log.Timestamp; lastId = log.Id;
+                    await Response.WriteAsync($"id: {timestamp.Ticks}/{lastId}\ndata: {JsonSerializer.Serialize(item)}\n\n", ct);
                 }
-                
-                await Response.WriteAsync(data, cancellationToken);
-                await Response.Body.FlushAsync(cancellationToken);
-            }
-
-            // Execution zaten tamamland�ysa stream'i bitir
-            var execution = await _dbContext.Executions.FindAsync([executionId], cancellationToken);
-            if (execution != null && (execution.Status == Shared.Enums.ExecutionStatus.Completed || 
-                                       execution.Status == Shared.Enums.ExecutionStatus.Failed))
-            {
-                await Response.WriteAsync("event: complete\ndata: done\n\n", cancellationToken);
-                await Response.Body.FlushAsync(cancellationToken);
-                return;
-            }
-
-            // Canl� loglar� dinle
-            await foreach (var logEvent in _logStream.ReadAsync(executionId, cancellationToken))
-            {
-                var json = JsonSerializer.Serialize(logEvent);
-                
-                // SSE format: data: {json}\n\n
-                var data = $"data: {json}\n\n";
-                
-                if (data.Length < 512)
+                await Response.Body.FlushAsync(ct);
+                if (logs.Count == 200) continue;
+                if (terminal)
                 {
-                    data += new string(' ', 512 - data.Length);
+                    await Response.WriteAsync("event: complete\ndata: done\n\n", ct);
+                    await Response.Body.FlushAsync(ct); return;
                 }
-                
-                await Response.WriteAsync(data, cancellationToken);
-                await Response.Body.FlushAsync(cancellationToken);
+                var state = await db.Executions.AsNoTracking().Where(e => e.Id == executionId).Select(e => (ExecutionStatus?)e.Status).FirstOrDefaultAsync(ct);
+                terminal = state is null or ExecutionStatus.Completed or ExecutionStatus.Failed or ExecutionStatus.Cancelled;
+                await Response.WriteAsync(": heartbeat\n\n", ct);
+                await Task.Delay(500, ct);
             }
-            
-            // Stream tamamland�
-            await Response.WriteAsync("event: complete\ndata: done\n\n", cancellationToken);
-            await Response.Body.FlushAsync(cancellationToken);
         }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("SSE stream iptal edildi: {ExecutionId}", executionId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SSE stream hatas�: {ExecutionId}", executionId);
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
     }
 }
-

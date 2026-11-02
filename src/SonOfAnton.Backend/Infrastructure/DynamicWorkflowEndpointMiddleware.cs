@@ -128,7 +128,7 @@ public class DynamicWorkflowEndpointMiddleware
         }
 
         // 5. Workflow'u Tetikle
-        var executionId = jobService.EnqueueWorkflow(endpoint.WorkflowId, triggerData);
+        var executionId = (await jobService.StartAsync(endpoint.WorkflowId, triggerData)).Id.ToString();
         _logger.LogInformation("API trigger successful: Endpoint {EndpointId}, Execution {ExecutionId}", endpoint.Id, executionId);
 
         // 6. Yanıt Dön

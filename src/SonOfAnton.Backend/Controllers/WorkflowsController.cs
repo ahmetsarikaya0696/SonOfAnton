@@ -20,20 +20,23 @@ namespace SonOfAnton.Backend.Controllers;
 public class WorkflowsController : ControllerBase
 {
     private readonly SonOfAntonDbContext _dbContext;
-    private readonly IBackgroundJobClient _jobClient;
+    private readonly IUserContext _user;
+    private readonly WorkflowJobService _jobs;
     private readonly PauseTokenRegistry _pauseTokens;
     private readonly ISingleNodeExecutionService _singleNodeSvc;
     private readonly ILogger<WorkflowsController> _logger;
 
     public WorkflowsController(
         SonOfAntonDbContext dbContext,
-        IBackgroundJobClient jobClient,
+        IUserContext user,
+        WorkflowJobService jobs,
         PauseTokenRegistry pauseTokens,
         ISingleNodeExecutionService singleNodeSvc,
         ILogger<WorkflowsController> logger)
     {
         _dbContext = dbContext;
-        _jobClient = jobClient;
+        _user = user;
+        _jobs = jobs;
         _pauseTokens = pauseTokens;
         _singleNodeSvc = singleNodeSvc;
         _logger = logger;
@@ -61,6 +64,7 @@ public class WorkflowsController : ControllerBase
                 FailureCount = w.FailureCount,
                 AvgDurationMs = w.AvgDurationMs,
                 LastRunAt = w.LastRunAt,
+                WorkspaceId = w.WorkspaceId,
                 FolderId = w.FolderId,
                 FolderName = w.Folder != null ? w.Folder.Name : null
             })
@@ -82,6 +86,7 @@ public class WorkflowsController : ControllerBase
         var dto = new WorkflowDto
         {
             Id = workflow.Id,
+            WorkspaceId = workflow.WorkspaceId,
             Name = workflow.Name,
             Description = workflow.Description,
             TriggerType = workflow.TriggerType,
@@ -106,6 +111,19 @@ public class WorkflowsController : ControllerBase
     [Authorize(Policy = Permissions.WorkflowsEdit)]
     public async Task<ActionResult<WorkflowDto>> Save([FromBody] SaveWorkflowRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
+        if (request.GlobalErrorWorkflowId.HasValue) return BadRequest("Automatic error workflow chains are unavailable.");
+        var graphError = WorkflowGraphValidation.Validate(request.Graph, HttpContext.RequestServices.GetServices<INodeHandler>());
+        if (graphError is not null) return BadRequest(graphError);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        if (request.Id.HasValue) await _dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtext({request.Id.Value.ToString()}))");
+        Guid? workspaceId = request.WorkspaceId;
+        if (!workspaceId.HasValue && request.Id.HasValue) workspaceId = await _dbContext.Workflows.Where(w => w.Id == request.Id).Select(w => w.WorkspaceId).FirstOrDefaultAsync();
+        if (!workspaceId.HasValue && Guid.TryParse(Request.Headers["X-Workspace-Id"].FirstOrDefault(), out var headerWorkspace)) workspaceId = headerWorkspace;
+        workspaceId ??= await _dbContext.Workspaces.OrderByDescending(w => w.IsDefault).Select(w => (Guid?)w.Id).FirstOrDefaultAsync();
+        if (!workspaceId.HasValue || !await _dbContext.Workspaces.AnyAsync(w => w.Id == workspaceId)) return Forbid();
+        if (request.FolderId.HasValue && !await _dbContext.Folders.AnyAsync(f => f.Id == request.FolderId && f.WorkspaceId == workspaceId)) return BadRequest("Invalid folder.");
+        if (request.GlobalErrorWorkflowId.HasValue && !await _dbContext.Workflows.AnyAsync(w => w.Id == request.GlobalErrorWorkflowId && w.WorkspaceId == workspaceId)) return BadRequest("Invalid error workflow.");
         WorkflowEntity? workflow;
 
         if (request.Id.HasValue)
@@ -131,9 +149,14 @@ public class WorkflowsController : ControllerBase
                 TriggerType = request.TriggerType,
                 IsActive = request.IsActive
             };
+            workflow.TenantId = _user.TenantId;
+            workflow.CreatedByUserId = _user.CurrentUserId;
             _dbContext.Workflows.Add(workflow);
         }
 
+        workflow.WorkspaceId = workspaceId;
+        workflow.FolderId = request.FolderId;
+        workflow.GlobalErrorWorkflowId = request.GlobalErrorWorkflowId;
         bool stateChanged = true;
         JsonDocument? newGraphDoc = null;
         string newGraphJson = string.Empty;
@@ -147,7 +170,7 @@ public class WorkflowsController : ControllerBase
             if (request.Id.HasValue && workflow.GraphData != null)
             {
                 string oldGraphJson = workflow.GraphData.RootElement.GetRawText();
-                if (oldGraphJson == newGraphJson)
+                if (JsonElement.DeepEquals(workflow.GraphData.RootElement, newGraphDoc.RootElement))
                 {
                     stateChanged = false; // JSON aynı, revizyon atmaya gerek yok
                 }
@@ -178,11 +201,13 @@ public class WorkflowsController : ControllerBase
             await _dbContext.SaveChangesAsync();
         }
 
+        await transaction.CommitAsync();
         _logger.LogInformation("Workflow kaydedildi: {WorkflowId} - {Name}", workflow.Id, workflow.Name);
 
         return Ok(new WorkflowDto
         {
             Id = workflow.Id,
+            WorkspaceId = workflow.WorkspaceId,
             Name = workflow.Name,
             Description = workflow.Description,
             TriggerType = workflow.TriggerType,
@@ -217,35 +242,14 @@ public class WorkflowsController : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/execute")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<ActionResult<ExecutionDto>> Execute(Guid id, [FromBody] StartExecutionRequest? request = null)
     {
         var workflow = await _dbContext.Workflows.FindAsync(id);
         if (workflow == null)
             return NotFound();
 
-        // Execution kayd� olu�tur
-        var execution = new ExecutionEntity
-        {
-            WorkflowId = id,
-            Status = ExecutionStatus.Queued
-        };
-
-        if (request?.InitialData != null)
-        {
-            execution.Memory = JsonDocument.Parse(JsonSerializer.Serialize(request.InitialData));
-        }
-
-        _dbContext.Executions.Add(execution);
-        await _dbContext.SaveChangesAsync();
-
-        // Hangfire job'� ba�lat
-        var jobId = _jobClient.Enqueue<WorkflowRunner>(runner => 
-            runner.RunAsync(execution.Id, CancellationToken.None));
-
-        execution.HangfireJobId = jobId;
-        await _dbContext.SaveChangesAsync();
-
-        _logger.LogInformation("Workflow �al��t�r�l�yor: {WorkflowId} -> Execution: {ExecutionId}", id, execution.Id);
+        var execution = await _jobs.StartAsync(id, request?.InitialData, stepMode: false);
 
         return Ok(new ExecutionDto
         {
@@ -262,34 +266,13 @@ public class WorkflowsController : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/test-run")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<ActionResult<ExecutionDto>> TestRun(Guid id, [FromBody] StartExecutionRequest? request = null)
     {
         var workflow = await _dbContext.Workflows.FindAsync(id);
         if (workflow == null) return NotFound();
 
-        var execution = new ExecutionEntity
-        {
-            WorkflowId = id,
-            Status = ExecutionStatus.Queued
-        };
-
-        if (request?.InitialData != null)
-        {
-            execution.Memory = JsonDocument.Parse(JsonSerializer.Serialize(request.InitialData));
-        }
-
-        _dbContext.Executions.Add(execution);
-        await _dbContext.SaveChangesAsync();
-
-        var token = _pauseTokens.GetOrCreate(execution.Id);
-        token.IsStepMode = true;
-        token.Pause();
-
-        var jobId = _jobClient.Enqueue<WorkflowRunner>(runner => 
-            runner.RunAsync(execution.Id, CancellationToken.None));
-
-        execution.HangfireJobId = jobId;
-        await _dbContext.SaveChangesAsync();
+        var execution = await _jobs.StartAsync(id, request?.InitialData, stepMode: true);
 
         return Ok(new ExecutionDto
         {
@@ -306,8 +289,10 @@ public class WorkflowsController : ControllerBase
     /// </summary>
     [HttpPost("execution/{id:guid}/step")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
-    public IActionResult StepExecution(Guid id)
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public async Task<IActionResult> StepExecution(Guid id)
     {
+        if (!await _dbContext.Executions.AnyAsync(e => e.Id == id)) return NotFound();
         var token = _pauseTokens.GetOrCreate(id);
         token.IsStepMode = true;
         token.Resume();
@@ -369,13 +354,15 @@ public class WorkflowsController : ControllerBase
     /// Çalışan execution'ı iptal et
     /// </summary>
     [HttpPost("execution/{executionId:guid}/cancel")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<IActionResult> CancelExecution(Guid executionId)
     {
         var execution = await _dbContext.Executions.FindAsync(executionId);
         if (execution == null)
             return NotFound();
         
-        if (execution.Status != ExecutionStatus.Running && execution.Status != ExecutionStatus.Queued)
+        if (execution.Status != ExecutionStatus.Running && execution.Status != ExecutionStatus.Queued && execution.Status != ExecutionStatus.Paused)
             return BadRequest(new { error = "Only running or queued executions can be cancelled" });
         
         // Hangfire job'ı iptal et
@@ -384,6 +371,7 @@ public class WorkflowsController : ControllerBase
             BackgroundJob.Delete(execution.HangfireJobId);
         }
         
+        _pauseTokens.ResumeExecution(executionId);
         execution.Status = ExecutionStatus.Cancelled;
         execution.CompletedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
@@ -397,11 +385,13 @@ public class WorkflowsController : ControllerBase
     /// Workflow'u başka klasöre taşı
     /// </summary>
     [HttpPatch("{id:guid}/move")]
+    [Authorize(Policy = Permissions.WorkflowsEdit)]
     public async Task<IActionResult> MoveWorkflow(Guid id, [FromBody] MoveWorkflowRequest request)
     {
         var workflow = await _dbContext.Workflows.FindAsync(id);
         if (workflow == null) return NotFound();
 
+        if (request.FolderId.HasValue && !await _dbContext.Folders.AnyAsync(f => f.Id == request.FolderId && f.WorkspaceId == workflow.WorkspaceId)) return BadRequest("Invalid folder.");
         workflow.FolderId = request.FolderId;
         workflow.UpdatedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
@@ -493,6 +483,8 @@ public class WorkflowsController : ControllerBase
     /// Execution'ı duraklat
     /// </summary>
     [HttpPost("execution/{executionId:guid}/pause")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<IActionResult> PauseExecution(Guid executionId)
     {
         var execution = await _dbContext.Executions.FindAsync(executionId);
@@ -514,6 +506,8 @@ public class WorkflowsController : ControllerBase
     /// Execution'ı devam ettir
     /// </summary>
     [HttpPost("execution/{executionId:guid}/resume")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<IActionResult> ResumeExecution(Guid executionId)
     {
         var execution = await _dbContext.Executions.FindAsync(executionId);
@@ -522,7 +516,7 @@ public class WorkflowsController : ControllerBase
         if (execution.Status != ExecutionStatus.Paused)
             return BadRequest(new { error = "Only paused executions can be resumed" });
 
-        execution.Status = ExecutionStatus.Resuming;
+        execution.Status = ExecutionStatus.Running;
         await _dbContext.SaveChangesAsync();
 
         _pauseTokens.ResumeExecution(executionId);
@@ -535,23 +529,19 @@ public class WorkflowsController : ControllerBase
     /// Execution'ı kaldığı Node'dan devam ettir (Saga/Checkpoint)
     /// </summary>
     [HttpPost("execution/{executionId:guid}/resume-from-node/{nodeId:guid}")]
-    public async Task<IActionResult> ResumeExecutionFromNode(Guid executionId, Guid nodeId, [FromServices] WorkflowJobService jobService)
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public IActionResult ResumeExecutionFromNode(Guid executionId, Guid nodeId)
     {
-        var execution = await _dbContext.Executions.FindAsync(executionId);
-        if (execution == null) return NotFound();
-
-        if (execution.Status != ExecutionStatus.Failed && execution.Status != ExecutionStatus.Paused)
-            return BadRequest(new { error = "Sadece Failed veya Paused durumundaki execution'lar bu noktadan devam ettirilebilir." });
-
-        jobService.ResumeWorkflow(execution.WorkflowId, executionId, nodeId);
-
-        return Ok(new { message = "Execution resumption enqueued" });
+        return StatusCode(501, new { error = "Checkpoint replay is not supported in the core release." });
     }
 
     /// <summary>
     /// Execution snapshot al
     /// </summary>
     [HttpPost("execution/{executionId:guid}/snapshot")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<ActionResult<SnapshotDto>> TakeSnapshot(Guid executionId, [FromBody] CreateSnapshotRequest? request = null)
     {
         var execution = await _dbContext.Executions.FindAsync(executionId);
@@ -607,36 +597,11 @@ public class WorkflowsController : ControllerBase
     /// Snapshot'tan yeni execution başlat
     /// </summary>
     [HttpPost("execution/{executionId:guid}/snapshot/{snapshotId:guid}/restore")]
-    public async Task<ActionResult<ExecutionDto>> RestoreFromSnapshot(Guid executionId, Guid snapshotId)
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public ActionResult<ExecutionDto> RestoreFromSnapshot(Guid executionId, Guid snapshotId)
     {
-        var snapshot = await _dbContext.ExecutionSnapshots
-            .Include(s => s.Execution)
-            .FirstOrDefaultAsync(s => s.Id == snapshotId && s.ExecutionId == executionId);
-
-        if (snapshot == null) return NotFound();
-
-        var newExecution = new Shared.Entities.ExecutionEntity
-        {
-            WorkflowId = snapshot.Execution.WorkflowId,
-            Status = ExecutionStatus.Queued,
-            Memory = snapshot.MemorySnapshot,
-            CurrentNodeId = snapshot.AtNodeId
-        };
-
-        _dbContext.Executions.Add(newExecution);
-        await _dbContext.SaveChangesAsync();
-
-        var jobId = _jobClient.Enqueue<WorkflowRunner>(r => r.RunAsync(newExecution.Id, CancellationToken.None));
-        newExecution.HangfireJobId = jobId;
-        await _dbContext.SaveChangesAsync();
-
-        return Ok(new ExecutionDto
-        {
-            Id = newExecution.Id,
-            WorkflowId = newExecution.WorkflowId,
-            Status = newExecution.Status,
-            StartedAt = newExecution.StartedAt
-        });
+        return StatusCode(501, new { error = "Checkpoint replay is not supported in the core release." });
     }
 
     /// <summary>
@@ -746,6 +711,7 @@ public class WorkflowsController : ControllerBase
     /// </summary>
     [HttpPost("{id:guid}/execute-node")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<ActionResult<ExecuteSingleNodeResponse>> ExecuteSingleNode(Guid id, [FromBody] ExecuteSingleNodeRequest request)
     {
         var workflow = await _dbContext.Workflows.FindAsync(id);
@@ -762,6 +728,7 @@ public class WorkflowsController : ControllerBase
     /// </summary>
     [HttpPost("execute-node-transient")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<ActionResult<ExecuteSingleNodeResponse>> ExecuteSingleNodeTransient([FromBody] ExecuteSingleNodeRequest request)
     {
         var result = await _singleNodeSvc.ExecuteNodeAsync(request);

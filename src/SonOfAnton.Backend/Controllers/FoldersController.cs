@@ -15,11 +15,13 @@ public class FoldersController : ControllerBase
 {
     private readonly SonOfAntonDbContext _dbContext;
     private readonly ILogger<FoldersController> _logger;
+    private readonly IUserContext _user;
 
-    public FoldersController(SonOfAntonDbContext dbContext, ILogger<FoldersController> logger)
+    public FoldersController(SonOfAntonDbContext dbContext, ILogger<FoldersController> logger, IUserContext user)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _user = user;
     }
 
     /// <summary>
@@ -83,13 +85,18 @@ public class FoldersController : ControllerBase
     [Authorize(Policy = Permissions.FoldersManage)]
     public async Task<ActionResult<FolderDto>> Create([FromBody] CreateFolderRequest request)
     {
+        var workspace = request.WorkspaceId;
+        if (!workspace.HasValue && Guid.TryParse(Request.Headers["X-Workspace-Id"].FirstOrDefault(), out var header)) workspace = header;
+        if (!workspace.HasValue || !await _dbContext.Workspaces.AnyAsync(w => w.Id == workspace)) return Forbid();
+        if (request.ParentFolderId.HasValue && !await _dbContext.Folders.AnyAsync(f => f.Id == request.ParentFolderId && f.WorkspaceId == workspace)) return BadRequest("Invalid parent folder.");
         var folder = new FolderEntity
         {
             Name = request.Name,
             Icon = request.Icon,
             Color = request.Color,
             ParentFolderId = request.ParentFolderId,
-            WorkspaceId = request.WorkspaceId
+            WorkspaceId = workspace,
+            TenantId = _user.TenantId
         };
 
         _dbContext.Folders.Add(folder);
@@ -113,11 +120,24 @@ public class FoldersController : ControllerBase
     /// Klasör güncelle
     /// </summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = Permissions.FoldersManage)]
     public async Task<ActionResult<FolderDto>> Update(Guid id, [FromBody] CreateFolderRequest request)
     {
         var folder = await _dbContext.Folders.FindAsync(id);
         if (folder == null) return NotFound();
 
+        if (request.ParentFolderId.HasValue)
+        {
+            var next = request.ParentFolderId;
+            var visited = new HashSet<Guid> { id };
+            while (next.HasValue)
+            {
+                if (!visited.Add(next.Value)) return BadRequest("Folder cycle.");
+                var parent = await _dbContext.Folders.FirstOrDefaultAsync(f => f.Id == next && f.WorkspaceId == folder.WorkspaceId);
+                if (parent is null) return BadRequest("Invalid parent folder.");
+                next = parent.ParentFolderId;
+            }
+        }
         folder.Name = request.Name;
         folder.Icon = request.Icon;
         folder.Color = request.Color;

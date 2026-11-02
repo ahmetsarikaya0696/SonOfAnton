@@ -550,22 +550,23 @@ public class OllamaTextEmbeddingService : ITextEmbeddingService
         try
         {
             #pragma warning disable SKEXP0001, CS0618
-            var embeddingService = _kernel.GetRequiredService<Microsoft.SemanticKernel.Embeddings.ITextEmbeddingGenerationService>();
-            var embeddings = await embeddingService.GenerateEmbeddingsAsync([text], _kernel, cancellationToken);
+            var embeddingService = _kernel.GetRequiredService<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>();
+            var embeddings = await embeddingService.GenerateAsync([text], cancellationToken: cancellationToken);
+            if (embeddings[0].Vector.Length != Dimension) throw new InvalidOperationException("Unexpected embedding dimensions.");
             #pragma warning restore SKEXP0001, CS0618
             
             sw.Stop();
             
             return new EmbeddingResult
             {
-                Vector = embeddings.First().ToArray(),
+                Vector = embeddings.First().Vector.ToArray(),
                 Model = ModelType,
                 ProcessingTime = sw.Elapsed
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Ollama embedding hatası: {Text}", text.Length > 50 ? text[..50] + "..." : text);
+            _logger.LogError(ex, "Ollama embedding failed.");
             throw;
         }
     }

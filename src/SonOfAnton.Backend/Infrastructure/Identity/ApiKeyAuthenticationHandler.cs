@@ -64,15 +64,18 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
             return AuthenticateResult.Fail("API Anahtarının süresi dolmuş.");
         }
 
-        // Update LastUsedAt (fire & forget to not block request)
-        _ = UpdateLastUsedAsync(apiKeyEntity.Id);
+        // Await the write before the request scope is disposed.
+        await UpdateLastUsedAsync(apiKeyEntity.Id);
 
+        var owner = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == apiKeyEntity.CreatedByUserId && u.IsActive && u.TenantId == apiKeyEntity.TenantId && u.Tenant!.IsActive);
+        if (owner is null) return AuthenticateResult.Fail("API key owner is inactive or missing.");
         // Build claims
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, apiKeyEntity.Id.ToString()),
             new Claim(ClaimTypes.Name, apiKeyEntity.Name),
-            new Claim("TenantId", apiKeyEntity.TenantId ?? string.Empty),
+            new Claim("tenant_id", apiKeyEntity.TenantId ?? string.Empty),
+            new Claim("sonofanton_user_id", owner.Id.ToString()),
             new Claim("AuthMethod", "ApiKey"),
             new Claim("RateLimit", apiKeyEntity.RateLimitPerMinute.ToString())
         };
@@ -87,7 +90,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
                 {
                     foreach (var scope in scopes)
                     {
-                        claims.Add(new Claim("Permission", scope));
+                        claims.Add(new Claim(Permissions.ClaimType, scope));
                     }
                 }
             }

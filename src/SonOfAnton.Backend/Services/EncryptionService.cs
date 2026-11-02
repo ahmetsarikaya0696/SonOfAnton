@@ -9,71 +9,49 @@ public interface IEncryptionService
     string Decrypt(string cipherText);
 }
 
-public class EncryptionService : IEncryptionService
+/// <summary>Versioned authenticated encryption. Legacy data requires an explicit migration key.</summary>
+public sealed class EncryptionService : IEncryptionService
 {
     private readonly byte[] _key;
-
+    private readonly byte[]? _legacyKey;
     public EncryptionService(IConfiguration config)
     {
-        // Require a 256-bit (32 byte) key. If not provided, fallback to a deterministic default for development.
-        var keyString = config["Encryption:Key"] ?? "b14ca5898a4e4133bbce2ea2315a1916"; 
-        _key = Encoding.UTF8.GetBytes(keyString.PadRight(32, '0').Substring(0, 32));
+        var key = config["Encryption:Key"] ?? throw new InvalidOperationException("Encryption:Key must contain a base64-encoded 32-byte key.");
+        _key = Convert.FromBase64String(key);
+        if (_key.Length != 32) throw new InvalidOperationException("Encryption:Key must decode to exactly 32 bytes.");
+        if (config["Encryption:LegacyKey"] is { Length: > 0 } legacy)
+        {
+            _legacyKey = Encoding.UTF8.GetBytes(legacy);
+            if (_legacyKey.Length != 32) throw new InvalidOperationException("LegacyKey must be exactly 32 UTF-8 bytes.");
+        }
     }
-
     public string Encrypt(string plainText)
     {
         if (string.IsNullOrEmpty(plainText)) return plainText;
-
-        using var aes = Aes.Create();
-        aes.Key = _key;
-        aes.GenerateIV();
-
-        var iv = aes.IV;
-        using var encryptor = aes.CreateEncryptor(aes.Key, iv);
-        
-        using var ms = new MemoryStream();
-        ms.Write(iv, 0, iv.Length); // prepend IV
-        
-        using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
-        using (var sw = new StreamWriter(cs))
-        {
-            sw.Write(plainText);
-        }
-
-        return Convert.ToBase64String(ms.ToArray());
+        var nonce = RandomNumberGenerator.GetBytes(12);
+        var plain = Encoding.UTF8.GetBytes(plainText);
+        var cipher = new byte[plain.Length];
+        var tag = new byte[16];
+        using var aes = new AesGcm(_key, 16);
+        aes.Encrypt(nonce, plain, cipher, tag);
+        return "v1:" + Convert.ToBase64String([.. nonce, .. tag, .. cipher]);
     }
-
     public string Decrypt(string cipherText)
     {
         if (string.IsNullOrEmpty(cipherText)) return cipherText;
-
-        try
+        if (!cipherText.StartsWith("v1:", StringComparison.Ordinal))
         {
-            var fullCipher = Convert.FromBase64String(cipherText);
-            
-            using var aes = Aes.Create();
-            aes.Key = _key;
-            
-            var iv = new byte[aes.BlockSize / 8];
-            var cipher = new byte[fullCipher.Length - iv.Length];
-            
-            Buffer.BlockCopy(fullCipher, 0, iv, 0, iv.Length);
-            Buffer.BlockCopy(fullCipher, iv.Length, cipher, 0, cipher.Length);
-            
-            aes.IV = iv;
-
-            using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-            using var ms = new MemoryStream(cipher);
-            using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
-            using var sr = new StreamReader(cs);
-            
-            return sr.ReadToEnd();
+            if (_legacyKey is null) throw new CryptographicException("Legacy ciphertext requires an explicit migration key.");
+            var data = Convert.FromBase64String(cipherText);
+            using var legacy = Aes.Create();
+            legacy.Key = _legacyKey;
+            return Encoding.UTF8.GetString(legacy.DecryptCbc(data.AsSpan(16), data.AsSpan(0,16)));
         }
-        catch
-        {
-            // If it fails to decrypt (e.g. wrong key, tampered data), return raw or throw.
-            // Returning empty string or throwing could be safer.
-            return string.Empty; 
-        }
+        var bytes = Convert.FromBase64String(cipherText[3..]);
+        if (bytes.Length < 28) throw new CryptographicException("Invalid ciphertext.");
+        var plain = new byte[bytes.Length - 28];
+        using var aes = new AesGcm(_key, 16);
+        aes.Decrypt(bytes.AsSpan(0,12), bytes.AsSpan(28), bytes.AsSpan(12,16), plain);
+        return Encoding.UTF8.GetString(plain);
     }
 }

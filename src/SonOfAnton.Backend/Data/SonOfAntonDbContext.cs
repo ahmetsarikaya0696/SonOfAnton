@@ -10,8 +10,18 @@ namespace SonOfAnton.Backend.Data;
 /// </summary>
 public class SonOfAntonDbContext : DbContext
 {
-    public SonOfAntonDbContext(DbContextOptions<SonOfAntonDbContext> options) : base(options)
+    private readonly IHttpContextAccessor? _http;
+    private string? _jobTenant;
+    private Guid? _jobUser;
+    public void SetJobAccess(string tenantId, Guid userId) { _jobTenant = tenantId; _jobUser = userId; }
+    private bool EnforceAccess => _jobUser.HasValue || _http?.HttpContext is not null;
+    private string? TenantId => _jobTenant ?? _http?.HttpContext?.User.FindFirst("tenant_id")?.Value;
+    private Guid UserId => _jobUser ?? (Guid.TryParse(_http?.HttpContext?.User.FindFirst("sonofanton_user_id")?.Value, out var id) ? id : Guid.Empty);
+    private Guid? RequestedWorkspace => Guid.TryParse(_http?.HttpContext?.Request.Headers["X-Workspace-Id"].FirstOrDefault(), out var id) ? id : null;
+
+    public SonOfAntonDbContext(DbContextOptions<SonOfAntonDbContext> options, IHttpContextAccessor? http = null) : base(options)
     {
+        _http = http;
     }
 
     // ─── Identity & Multi-Tenancy ────────────────────────────────
@@ -81,6 +91,19 @@ public class SonOfAntonDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<WorkspaceEntity>().HasQueryFilter(w => !EnforceAccess ||
+            (UserId != Guid.Empty && TenantId != null && w.TenantId == TenantId &&
+             (w.OwnerUserId == UserId || w.Members.Any(m => m.UserId == UserId))));
+        modelBuilder.Entity<WorkflowEntity>().HasQueryFilter(w => !EnforceAccess ||
+            (UserId != Guid.Empty && TenantId != null && w.TenantId == TenantId &&
+             (!RequestedWorkspace.HasValue || w.WorkspaceId == RequestedWorkspace) &&
+             ((w.WorkspaceId == null && w.CreatedByUserId == UserId) || Workspaces.Any(s => s.Id == w.WorkspaceId))));
+        modelBuilder.Entity<FolderEntity>().HasQueryFilter(f => !EnforceAccess ||
+            (TenantId != null && f.TenantId == TenantId && Workspaces.Any(w => w.Id == f.WorkspaceId)));
+        modelBuilder.Entity<ExecutionEntity>().HasQueryFilter(e => !EnforceAccess || Workflows.Any(w => w.Id == e.WorkflowId));
+        modelBuilder.Entity<ExecutionLogEntity>().HasQueryFilter(e => !EnforceAccess || Executions.Any(x => x.Id == e.ExecutionId));
+        modelBuilder.Entity<ExecutionSnapshotEntity>().HasQueryFilter(e => !EnforceAccess || Executions.Any(x => x.Id == e.ExecutionId));
+        modelBuilder.Entity<WorkflowRevisionEntity>().HasQueryFilter(e => !EnforceAccess || Workflows.Any(w => w.Id == e.WorkflowId));
 
         // ─── Chatbots ────────────────────────────────────────────────
         modelBuilder.Entity<ChatbotEntity>(entity =>

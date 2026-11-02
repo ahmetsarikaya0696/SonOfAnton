@@ -64,6 +64,8 @@ public class SseEventService
 {
     private readonly ConcurrentDictionary<Guid, Channel<PrioritizedEvent>> _executionChannels = new();
     private readonly ConcurrentDictionary<string, SseClientSession> _sessions = new();
+    private readonly ConcurrentDictionary<string, Channel<PrioritizedEvent>> _subscriptions = new();
+    private readonly object _gate = new();
     private readonly ILogger<SseEventService> _logger;
     
     private long _sequenceCounter;
@@ -80,18 +82,10 @@ public class SseEventService
     /// </summary>
     public Channel<PrioritizedEvent> CreateChannel(Guid executionId)
     {
-        var channel = Channel.CreateUnbounded<PrioritizedEvent>(new UnboundedChannelOptions
-        {
-            SingleWriter = false,
-            SingleReader = false
-        });
-        
-        _executionChannels[executionId] = channel;
-        
-        _logger.LogDebug("SSE channel oluşturuldu: {ExecutionId}", executionId);
-        return channel;
+        return _executionChannels.GetOrAdd(executionId, _ => Channel.CreateBounded<PrioritizedEvent>(1));
     }
     
+
     /// <summary>
     /// Execution channel'ı alır
     /// </summary>
@@ -111,7 +105,12 @@ public class SseEventService
             SubscribedTopics = topics != null ? new HashSet<string>(topics) : ["*"]
         };
         
-        _sessions[session.SessionId] = session;
+        lock (_gate)
+        {
+            _subscriptions[session.SessionId] = Channel.CreateBounded<PrioritizedEvent>(new BoundedChannelOptions(256)
+            { FullMode = BoundedChannelFullMode.Wait, SingleReader = true, SingleWriter = false });
+            _sessions[session.SessionId] = session;
+        }
         
         _logger.LogDebug("SSE session kaydedildi: {SessionId} -> Execution: {ExecutionId}", 
             session.SessionId, executionId);
@@ -122,11 +121,14 @@ public class SseEventService
     /// <summary>
     /// Client session kaldırır
     /// </summary>
+    public Channel<PrioritizedEvent> GetSessionChannel(string sessionId) => _subscriptions[sessionId];
+
     public void UnregisterSession(string sessionId)
     {
         if (_sessions.TryRemove(sessionId, out var session))
         {
             session.IsActive = false;
+            if (_subscriptions.TryRemove(sessionId, out var channel)) channel.Writer.TryComplete();
             _logger.LogDebug("SSE session kaldırıldı: {SessionId}", sessionId);
         }
     }
@@ -179,29 +181,21 @@ public class SseEventService
     /// <summary>
     /// Event yayınlar (priority ve topic ile)
     /// </summary>
-    public async ValueTask PublishAsync(
-        Guid executionId, 
-        WorkflowEvent evt,
-        SseEventPriority priority = SseEventPriority.Normal,
-        string topic = "execution")
+    public ValueTask PublishAsync(Guid executionId, WorkflowEvent evt,
+        SseEventPriority priority = SseEventPriority.Normal, string topic = "execution")
     {
-        if (!_executionChannels.TryGetValue(executionId, out var channel))
-            return;
-        
-        var sequenceNumber = Interlocked.Increment(ref _sequenceCounter);
-        Interlocked.Increment(ref _totalEventsPublished);
-        
-        var prioritizedEvent = new PrioritizedEvent
+        lock (_gate)
         {
-            Event = evt,
-            Priority = priority,
-            SequenceNumber = sequenceNumber,
-            Topic = topic
-        };
-        
-        await channel.Writer.WriteAsync(prioritizedEvent);
+            var item = new PrioritizedEvent { Event = evt, Priority = priority,
+                SequenceNumber = Interlocked.Increment(ref _sequenceCounter), Topic = topic };
+            Interlocked.Increment(ref _totalEventsPublished);
+            foreach (var session in _sessions.Values.Where(s => s.ExecutionId == executionId))
+                if (_subscriptions.TryGetValue(session.SessionId, out var channel) && !channel.Writer.TryWrite(item))
+                    UnregisterSession(session.SessionId); // Slow clients reconnect and read durable execution/log state.
+        }
+        return ValueTask.CompletedTask;
     }
-    
+
     /// <summary>
     /// Node execution başladı event'i
     /// </summary>
@@ -391,7 +385,7 @@ public static class SseFormatter
             topic = prioritizedEvent.Topic,
             priority = (int)prioritizedEvent.Priority,
             timestamp = DateTime.UtcNow,
-            data = evt
+            data = (object)evt
         };
         
         var data = JsonSerializer.Serialize(envelope, JsonOptions);
@@ -400,18 +394,8 @@ public static class SseFormatter
         sb.Append("id: ").Append(prioritizedEvent.EventId).Append('\n');
         sb.Append("event: ").Append(eventType).Append('\n');
         
-        // Büyük payload'ları compress et
-        if (data.Length > CompressionThreshold)
-        {
-            var compressed = CompressData(data);
-            sb.Append("data: ").Append(compressed).Append('\n');
-            sb.Append("retry: 5000\n");
-        }
-        else
-        {
-            sb.Append("data: ").Append(data).Append('\n');
-        }
-        
+        sb.Append("data: ").Append(data).Append('\n');
+
         sb.Append('\n');
         
         if (session != null)
