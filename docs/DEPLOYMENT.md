@@ -64,3 +64,18 @@ Test DB'si gerçek kullanıcı verisi içermemelidir. Testler migration uygular 
 Çekirdek tek backend instance içindir. Pause/step süreç içindedir; restart'tan sonra checkpoint replay yoktur. Yarım kalmış işleri harici etkilerini incelemeden tekrar başlatmayın. Reverse proxy altında SSE buffering kapalı olmalıdır.
 
 Production dağıtımı yapılmadı. Gerçek ortam TLS/issuer/secrets, yedek–restore, eski üretim verisiyle upgrade, saklama/redaksiyon politikası ve harici entegrasyon kabulü gerekir. Eski tenant'sız/sahipsiz kayıtlar otomatik herkese açılmaz; açık sahiplik taşıma planı gerekir. Kanıt: [VERIFICATION.md](VERIFICATION.md).
+
+## Tarayıcı kabul testi
+
+GitHub Actions `browser` işi ayrı temiz runner'da Compose PostgreSQL/Keycloak, Release backend/frontend ve Chromium başlatır. `tests/browser/core.mjs` gerçek OIDC girişi, editörde kayıt, ardışık çalıştırma ve adım kontrolünü sınar. Ekran görüntüleri ve servis logları `browser-acceptance` artifact'inde tutulur. Playwright yalnız test aracıdır; uygulama runtime bağımlılığı değildir.
+
+Yerelde yalnız izole geliştirme veritabanı/realm ile çalıştırın; test workflow oluşturur. .NET Release build sonrası Node 22+, Docker ve Playwright Chromium gerekir:
+
+```bash
+npm install --no-save --package-lock=false playwright@1.56.1
+npx playwright install --with-deps chromium
+export RUNNER_TEMP="$(mktemp -d)"
+bash tests/browser/run.sh
+```
+
+Test script'i standart geliştirme portlarını kullanır, frontend/backend süreçlerini ve Compose servislerini sonunda durdurur. Aktif geliştirme oturumuyla aynı anda çalıştırmayın.

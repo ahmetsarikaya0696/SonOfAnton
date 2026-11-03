@@ -746,7 +746,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Step hatası: {ex.Message}");
+            _operationError = $"Adım çalıştırılamadı: {ex.Message}";
         }
     }
 

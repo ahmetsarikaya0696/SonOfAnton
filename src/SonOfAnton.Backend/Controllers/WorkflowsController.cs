@@ -375,11 +375,12 @@ public class WorkflowsController : ControllerBase
             BackgroundJob.Delete(execution.HangfireJobId);
         }
         
-        _pauseTokens.ResumeExecution(executionId);
         execution.Status = ExecutionStatus.Cancelled;
         execution.CompletedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
         
+        // Persist cancellation before waking the worker, so it cannot enter the next node.
+        _pauseTokens.ResumeExecution(executionId);
         _logger.LogInformation("Execution iptal edildi: {ExecutionId}", executionId);
 
         return Ok(new { message = "Execution cancelled" });
@@ -520,11 +521,12 @@ public class WorkflowsController : ControllerBase
         if (execution.Status != ExecutionStatus.Paused)
             return BadRequest(new { error = "Only paused executions can be resumed" });
 
+        var token = _pauseTokens.Get(executionId);
+        if (token is null) return Conflict(new { error = "No active worker owns this paused execution" });
         execution.Status = ExecutionStatus.Running;
         await _dbContext.SaveChangesAsync();
 
-        var token = _pauseTokens.Get(executionId);
-        if (token is not null) token.IsStepMode = false;
+        token.IsStepMode = false;
         _pauseTokens.ResumeExecution(executionId);
 
         _logger.LogInformation("Execution devam ettiriliyor: {ExecutionId}", executionId);

@@ -249,8 +249,10 @@ public class WorkflowRunner
             await FailExecution(dbContext, execution, ex.Message);
             _logStream.Complete(executionId);
 
-            // GENEL HATA YAKALAYICI (GLOBAL ERROR HANDLER)
-
+        }
+        finally
+        {
+            _pauseTokens.Remove(executionId);
         }
     }
 

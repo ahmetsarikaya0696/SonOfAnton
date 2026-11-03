@@ -70,3 +70,9 @@ Kaydetme örneği (`workspaceId` gerçek yetkili workspace olmalı):
 İlerleme SSE geçmiş node event'lerini replay etmez; geç abone terminal durumu görür, geçmiş için kalıcı log API'sini kullanır. Yavaş abone ayrılabilir. Tek instance pause/step sınırı geçerlidir.
 
 Marketplace/chatbot/webhook/published/SCIM/A2A/chat/RAG/planlama/veri tablosu/formu/credential API'leri core listesinde değildir. Kimliği doğrulanmış istemci 404 alır; kimliksiz istek önce fallback nedeniyle 401 alabilir. Bunların güvenli biçimde ürünleştirilmesi ayrı iştir.
+
+## Execution kontrol sözleşmesi
+
+`test-run` ilk node öncesinde `Paused` durumunda bekler. `step` yalnız aktif worker'a sahip `Paused` execution için kabul edilir; bir node çalışır ve sonraki node öncesinde yeniden bekler. `resume` adım modunu kapatır ve kalan node'ları normal çalıştırır. Terminal execution üzerinde step/resume 400 döner; başka kullanıcı/tenant kaynağı 404 ile gizlenir. Worker'ın süreç içi pause kaydı kaybolmuşsa resume/step 409 döner; restart sonrası replay sağlanmaz.
+
+İptal durumu worker uyandırılmadan önce kalıcılaştırılır. Pause, çalışmakta olan node'u ortasında kesmez; sonraki node sınırında beklenir.

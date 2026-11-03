@@ -141,10 +141,10 @@ public class ExecutionsController : ControllerBase
         }
 
         if (execution.HangfireJobId is not null) Hangfire.BackgroundJob.Delete(execution.HangfireJobId);
-        HttpContext.RequestServices.GetRequiredService<SonOfAnton.Backend.Execution.PauseTokenRegistry>().ResumeExecution(id);
         execution.Status = ExecutionStatus.Cancelled;
         execution.CompletedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
+        HttpContext.RequestServices.GetRequiredService<SonOfAnton.Backend.Execution.PauseTokenRegistry>().ResumeExecution(id);
 
         return Ok();
     }
