@@ -1,0 +1,40 @@
+import { chromium } from 'playwright';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+
+// Only the isolated Compose development realm is used. Never point this at production.
+const realm = JSON.parse(await readFile('keycloak/sonofanton-realm.json', 'utf8'));
+const user = realm.users[0];
+await mkdir('test-results/browser', { recursive: true });
+const browser = await chromium.launch();
+const page = await browser.newPage({ ignoreHTTPSErrors: true });
+page.setDefaultTimeout(60000);
+const errors = [];
+page.on('pageerror', error => errors.push(error.message));
+try {
+    await page.goto('https://localhost:5001');
+    await page.locator('input[name="username"]').fill(user.username);
+    await page.locator('input[name="password"]').fill(user.credentials.find(c => c.type === 'password').value);
+    await page.locator('input[type="submit"], button[type="submit"]').first().click();
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).waitFor();
+    await page.locator('.palette-node').filter({ hasText: 'Manuel' }).first().click();
+    await page.locator('.workflow-name-input').fill('Browser acceptance');
+    const saved = page.waitForResponse(r => r.url().endsWith('/api/workflows') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    assert.equal((await saved).status(), 200);
+    for (let run = 0; run < 2; run++) {
+        const executed = page.waitForResponse(r => /\/api\/workflows\/[^/]+\/execute$/.test(r.url()) && r.request().method() === 'POST');
+        await page.getByRole('button', { name: 'Çalıştır', exact: true }).click();
+        assert.equal((await executed).status(), 200);
+        await page.getByText('Başarıyla tamamlandı', { exact: true }).waitFor();
+    }
+    await page.screenshot({ path: 'test-results/browser/completed.png', fullPage: true });
+    assert.deepEqual(errors, [], 'Unhandled browser errors');
+    await writeFile('test-results/browser/result.json', JSON.stringify({ success: true, executions: 2 }));
+} catch (error) {
+    await page.screenshot({ path: 'test-results/browser/failure.png', fullPage: true });
+    await writeFile('test-results/browser/failure.txt', `${error.message}\n${errors.join('\n')}\n${await page.locator('body').innerText()}`);
+    throw error;
+} finally {
+    await browser.close();
+}
