@@ -371,7 +371,12 @@ public class WorkflowRunner
         {
             // Duraklatma kontrolü — paused ise bekle
             var pauseToken = _pauseTokens.GetOrCreate(execution.Id);
+            if (pauseToken.IsPaused)
+                await dbContext.Executions.Where(e => e.Id == execution.Id && e.Status == ExecutionStatus.Running)
+                    .ExecuteUpdateAsync(update => update.SetProperty(e => e.Status, ExecutionStatus.Paused), cancellationToken);
             await pauseToken.WaitIfPausedAsync(cancellationToken);
+            await dbContext.Executions.Where(e => e.Id == execution.Id && e.Status == ExecutionStatus.Paused)
+                .ExecuteUpdateAsync(update => update.SetProperty(e => e.Status, ExecutionStatus.Running), cancellationToken);
             await dbContext.Entry(execution).ReloadAsync(cancellationToken);
             if (execution.Status == ExecutionStatus.Cancelled) throw new OperationCanceledException();
 

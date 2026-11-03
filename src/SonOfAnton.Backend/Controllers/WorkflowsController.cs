@@ -292,8 +292,12 @@ public class WorkflowsController : ControllerBase
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<IActionResult> StepExecution(Guid id)
     {
-        if (!await _dbContext.Executions.AnyAsync(e => e.Id == id)) return NotFound();
-        var token = _pauseTokens.GetOrCreate(id);
+        var execution = await _dbContext.Executions.FindAsync(id);
+        if (execution is null) return NotFound();
+        if (execution.Status != ExecutionStatus.Paused)
+            return BadRequest(new { error = "Only paused executions can be stepped" });
+        var token = _pauseTokens.Get(id);
+        if (token is null) return Conflict(new { error = "No active worker owns this paused execution" });
         token.IsStepMode = true;
         token.Resume();
         return Ok();
@@ -519,6 +523,8 @@ public class WorkflowsController : ControllerBase
         execution.Status = ExecutionStatus.Running;
         await _dbContext.SaveChangesAsync();
 
+        var token = _pauseTokens.Get(executionId);
+        if (token is not null) token.IsStepMode = false;
         _pauseTokens.ResumeExecution(executionId);
 
         _logger.LogInformation("Execution devam ettiriliyor: {ExecutionId}", executionId);
