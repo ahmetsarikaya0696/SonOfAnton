@@ -3,6 +3,12 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
+            @if (!CorePages.Contains(routeData.PageType))
+            {
+                <LayoutView Layout="@typeof(MainLayout)"><div style="padding:3rem"><h1>Bu özellik henüz kullanıma açık değil</h1><a href="/">Workflow editörüne dön</a></div></LayoutView>
+            }
+            else
+            {
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                 <NotAuthorized>
                     @if (context.User.Identity?.IsAuthenticated != true)
@@ -20,7 +26,12 @@
                     </div>
                 </Authorizing>
             </AuthorizeRouteView>
+            }
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
     </Router>
 </CascadingAuthenticationState>
+
+@code {
+    private static readonly HashSet<Type> CorePages = [typeof(Pages.Home), typeof(Pages.Dashboard), typeof(Pages.Executions), typeof(Pages.ExecutionDetail), typeof(Pages.Workspaces), typeof(Pages.WorkspaceDetail), typeof(Pages.ApiKeys), typeof(Pages.Authentication), typeof(Pages.NotFound)];
+}

@@ -1,19 +1,17 @@
-# SonOfAnton AI Workflow Platform
+# SonOfAnton
 
-SonOfAnton, Blazor WebAssembly üzerinde görsel workflow oluşturmayı ve ASP.NET Core backend üzerinde çalıştırmayı amaçlayan .NET 10 uygulamasıdır. Workflow yürütme, Hangfire ve PostgreSQL kullanır; AI özellikleri Ollama/Semantic Kernel ve embedding bileşenleri etrafında geliştirilir.
+.NET 10, Blazor WebAssembly, ASP.NET Core, PostgreSQL/pgvector ve Hangfire ile görsel workflow uygulaması.
 
-> **Durum: geliştirme/prototip.** 2 Kasım 2026 incelemesi, kimlik doğrulama, tenant izolasyonu ve yürütme güvenilirliği açısından yayın engelleri buldu. Özelliklerin kodda veya menüde bulunması, production'a hazır oldukları anlamına gelmez. [Bulgular ve öncelikli işler](docs/REVIEW.md).
+**Çekirdek kapsam:** workspace içinde workflow oluşturma, graph kaydetme, çalıştırma/zamanlama, execution ve log takibi. [Görev planı](docs/IMPLEMENTATION_PLAN.md) tamamlanan işleri, [doğrulama kaydı](docs/VERIFICATION.md) test kanıtını ve sınırları gösterir. İlk statik inceleme [REVIEW.md](docs/REVIEW.md) içinde tarihsel olarak korunur.
 
-## Başlangıç
+## Çalıştırma
 
-Gereksinimler: .NET **10** SDK, Docker Compose; AI senaryoları için yerel Ollama ve uygun modeller. Compose yalnızca PostgreSQL/pgvector, pgAdmin, Keycloak ve RabbitMQ'yu başlatır. Backend/frontend konteynerleri içermez.
+.NET 10 SDK ve Docker Compose gerekir. Repo kökünde:
 
 ```bash
-git clone https://github.com/ahmetsarikaya0696/SonOfAnton.git
-cd SonOfAnton
-docker compose up -d
+docker compose up -d --wait
 dotnet restore SonOfAnton.slnx
-dotnet build SonOfAnton.slnx --no-restore
+dotnet build SonOfAnton.slnx -m:1 --no-restore
 dotnet dev-certs https --trust
 dotnet run --project src/SonOfAnton.Backend --launch-profile https
 ```
@@ -24,39 +22,32 @@ Ayrı terminalde:
 dotnet run --project src/SonOfAnton.Frontend --launch-profile https
 ```
 
-Frontend: `https://localhost:5001`; backend: `https://localhost:5002`. HTTPS profilleri açıkça seçilmelidir. Ayrıntılar: [çalıştırma kılavuzu](docs/DEPLOYMENT.md).
+Editör `https://localhost:5001`, backend `https://localhost:5002`. Geliştirme hesabı ve mevcut Keycloak realm güncellemesi: [kurulum](docs/DEPLOYMENT.md).
 
-Backend başlangıçta migration uygular; hata durumunda loglayıp devam eder. ONNX model indirme ve Ollama startup servisleri kayıtlıdır; internet/model gereksinimleri ve embedding DI eksikleri nedeniyle AI hazır kabul edilmemelidir. Geliştirme varsayılan parolalarını üretimde kullanmayın.
+Compose PostgreSQL/pgvector ve Keycloak başlatır. pgAdmin `tools` profiline taşındı; RabbitMQ kaldırıldı. Backend/frontend yerel .NET süreçleridir. Migration başarısızsa backend başlamaz; başlangıçta model indirmez veya başka servis başlatmaz.
 
-## Kaynak haritası
+## Doğrulama
 
-| Proje / dizin | Sorumluluk |
-|---|---|
-| `src/SonOfAnton.Backend` | API, EF Core, workflow runner, Hangfire, AI servisleri |
-| `src/SonOfAnton.Frontend` | Blazor WebAssembly editor ve API istemcileri |
-| `src/SonOfAnton.Shared` | Ortak DTO, model, entity ve graph tipleri |
-| `src/SonOfAnton.NodeSdk` | Özel node SDK'sı; solution içinde |
-| `templates/SonOfAnton.NodeTemplate` | Özel node proje şablonu |
-| `src/openapi_test_app` | OpenAPI örnek uygulaması; otomatik test projesi değil |
-| `keycloak/sonofanton-realm.json` | Geliştirme realm import dosyası |
+```bash
+# Yalnız ayrılmış test DB'si kullanın; önce PostgreSQL içinde oluşturun.
+export SONOFANTON_TEST_DB='Host=localhost;Database=sonofanton_test;Username=sonofanton;Password=sonofanton_dev_password'
+dotnet test tests/SonOfAnton.Tests -m:1
+node --test tests/frontend/*.test.mjs
+```
 
-## Kapsam ve sınırlar
+CI build, PostgreSQL entegrasyon testleri, JS stream testleri ve model/migration tutarlılığını kontrol eder. Node yalnız frontend JS testleri içindir; uygulamanın runtime bağımlılığı değildir.
 
-Görsel editor, kalıcı workflow CRUD, execution/log takibi ve node handler altyapısı mevcut. RAG/embedding bağlantısı ve bazı AI handler kayıtları eksik; anonim eski workflow API'si, chatbot yönetimi ve eksik tenant filtreleri düzeltilmeli. Marketplace, A2A, SCIM, özel script, Ralph loop ve veri tabloları/formları genişletilmiş kapsamdır; çekirdek doğrulanana kadar geliştirmelerinin ertelenmesi önerilir.
+## Kapsam
 
-Depoda otomatik test projesi veya CI workflow'u yok. Bu incelemede SDK bulunmadığı için build/test çalıştırılmadı. Çalışan ürün iddiası için [kabul kriterleri](docs/REVIEW.md) tamamlanmalı.
+Node paleti sunucuda kayıtlı handler'lardan gelir. Manuel/zamanlı tetikleyici, dönüşüm, koşul, gecikme ve debug/end çekirdektedir. Ollama node'ları `Features:AI=true` ile isteğe bağlıdır; gerçek model/donanım kabulü ayrıdır.
+
+Marketplace, chatbot, public webhook/published API, SCIM, A2A, Ralph loop, RAG/vector-store, veri tabloları/formları, credential yönetimi, HTTP/özel kod/plugin ve subflow yürütmesi kapalıdır. Kaynakları ve veri/migration geçmişi korunur. Snapshot bilgi amaçlı alınabilir; checkpoint replay henüz desteklenmez. Çekirdeğin doğrulanması bütün eski özelliklerin veya production dağıtımının tamamlandığı anlamına gelmez.
 
 ## Belgeler
 
-- [İnceleme, eksikler ve sadeleştirme planı](docs/REVIEW.md)
-- [Mevcut mimari](docs/ARCHITECTURE.md)
-- [API sözleşmesi ve sınırlamalar](docs/API.md)
-- [Veritabanı ve migration](docs/DATABASE.md)
-- [Kurulum ve dağıtım](docs/DEPLOYMENT.md)
-- [Kullanım rehberi](docs/KULLANIM%20REHBER%C4%B0.md)
+- [Görev ve alt görev planı](docs/IMPLEMENTATION_PLAN.md), [geliştirici talimatları](AGENTS.md)
+- [Mimari](docs/ARCHITECTURE.md), [API](docs/API.md), [veritabanı](docs/DATABASE.md)
+- [Kurulum](docs/DEPLOYMENT.md), [kullanım rehberi](docs/KULLANIM%20REHBER%C4%B0.md)
+- [İlk inceleme](docs/REVIEW.md), [test kanıtı](docs/VERIFICATION.md)
 
-## Katkı ve lisans
-
-Değişiklikleri küçük, amaç odaklı PR'larla gönderin. Davranış değişikliklerine uygun test ve belge güncellemesi ekleyin. Öncelikli çalışma sırası inceleme raporundadır.
-
-İncelenen commit'te `LICENSE` dosyası yok. Önceki README'nin MIT lisansı iddiası doğrulanamadığından kaldırılmıştır; lisansın depo sahibi tarafından açıkça belirlenmesi gerekir.
+Depoda `LICENSE` dosyası yoktur; lisans seçimi depo sahibine aittir.

@@ -29,8 +29,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using SonOfAnton.Backend.Services.Planning;
 using SonOfAnton.Shared.Core;
 
-using MassTransit;
-using SonOfAnton.Backend.Infrastructure.Messaging.Filters;
+using SonOfAnton.Backend.Infrastructure.Security;
+
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
@@ -38,16 +38,18 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+var aiEnabled = builder.Configuration.GetValue<bool>("Features:AI");
 
 // Configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? "Host=localhost;Database=sonofanton_db;Username=sonofanton;Password=sonofanton_dev_password";
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 var ollamaEndpoint = builder.Configuration.GetValue<string>("Ollama:Endpoint") ?? "http://localhost:11434";
 var ollamaModel = builder.Configuration.GetValue<string>("Ollama:Model") ?? "qwen2.5-coder:14b";
 var ollamaEmbeddingModel = builder.Configuration.GetValue<string>("Ollama:EmbeddingModel") ?? "nomic-embed-text";
 
 // Add services
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<WorkspaceAccessFilter>())
+    .ConfigureApplicationPartManager(manager => manager.FeatureProviders.Add(new CoreControllerFeatureProvider()));
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, context, cancellationToken) =>
@@ -67,18 +69,17 @@ builder.Services.AddOpenApi(options =>
                 
                 ## Hızlı Başlangıç
                 1. `GET /api/nodes` ile kullanılabilir node tiplerini keşfedin
-                2. `POST /api/workflow` ile bir workflow oluşturun
-                3. `POST /api/workflow/{id}/execute` ile çalıştırın
+                2. `POST /api/workflows` ile bir workflow oluşturun
+                3. `POST /api/workflows/{id}/execute` ile çalıştırın
                 4. `GET /api/executions/{id}/logs` ile sonuçları görün
                 """,
-            Contact = new() { Name = "SonOfAnton Ekibi" },
-            License = new() { Name = "MIT" }
+            Contact = new() { Name = "SonOfAnton Ekibi" }
         };
         return Task.CompletedTask;
     });
 
     // Dinamik endpointleri dokümante eden transformer
-    options.AddDocumentTransformer<SonOfAnton.Backend.Services.WorkflowApiDocsTransformer>();
+
 });
 builder.Services.AddHttpClient();
 
@@ -87,56 +88,15 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     
-    // Genel API rate limit
-    options.AddPolicy("api", context =>
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 10,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-            }));
-    
-    // Workflow execution rate limit (daha kısıtlı)
-    options.AddPolicy("workflow-execution", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 5
-            }));
-            
-    // API Key bazlı dinamik rate limit
-    options.AddPolicy("apikey", context =>
-    {
-        var apiKeyId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        
-        if (string.IsNullOrEmpty(apiKeyId))
-        {
-            return RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 100,
-                    Window = TimeSpan.FromMinutes(1)
-                });
-        }
-        
-        var limitStr = context.User.FindFirst("RateLimit")?.Value;
-        int limit = int.TryParse(limitStr, out var l) && l > 0 ? l : 60;
-
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: apiKeyId,
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = limit,
-                Window = TimeSpan.FromMinutes(1)
-            });
-    });
+            context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? context.User.FindFirst("sonofanton_user_id")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions {
+                PermitLimit = int.TryParse(context.User.FindFirst("RateLimit")?.Value, out var limit) ? Math.Clamp(limit, 1, 1000) : 100,
+                Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("workflow-execution", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sonofanton_user_id")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 
 // Health Checks
@@ -218,75 +178,28 @@ builder.Services.AddAuthentication(options =>
 .AddJwtBearer(options =>
 {
     var authConfig = builder.Configuration.GetSection("Authentication");
-    options.Authority = authConfig["DefaultAuthority"] ?? "https://login.microsoftonline.com/common/v2.0";
+    options.Authority = authConfig["DefaultAuthority"] ?? throw new InvalidOperationException("Authentication:DefaultAuthority is required.");
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+    options.Audience = authConfig["Audience"] ?? "sonofanton-backend";
+    options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuer = false, // Dev ortamında issuer mismatch (trailing slash vb) sorunlarını engelle
-        ValidateAudience = false, // Keycloak 'aud' claim'i farklı format — dev'de devre dışı
+        ValidateIssuer = true,
+        ValidateAudience = true,
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.FromMinutes(1),
+        ClockSkew = TimeSpan.FromSeconds(30),
         NameClaimType = "preferred_username",
         RoleClaimType = "roles"
     };
-
-    // JIT User Provisioning — İlk token doğrulamasında kullanıcıyı veritabanına kaydet
     options.Events = new JwtBearerEvents
     {
-        OnMessageReceived = context =>
-        {
-            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-            
-            // 1. Önce query string'den access_token kontrolü (EventSource/SSE için)
-            var accessToken = context.Request.Query["access_token"];
-            var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && 
-                (path.StartsWithSegments("/api/notifications/stream") || 
-                 path.StartsWithSegments("/api/workflow/execution")))
-            {
-                context.Token = accessToken;
-                logger.LogInformation("Query string 'access_token' parameter used for SSE authentication on {Path}", path);
-                return Task.CompletedTask;
-            }
-
-            // 2. Normal Authorization header kontrolü
-            if (context.Request.Headers.ContainsKey("Authorization"))
-            {
-                var authHeader = context.Request.Headers["Authorization"].ToString();
-                logger.LogInformation("Authorization header alındı: {HeaderPrefix}...", 
-                    authHeader.Length > 15 ? authHeader.Substring(0, 15) : authHeader);
-            }
-            else
-            {
-                logger.LogWarning("Request'te Authorization header YOK! Endpoint: {Path}", context.Request.Path);
-            }
-            return Task.CompletedTask;
-        },
-        OnAuthenticationFailed = context =>
-        {
-            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError(context.Exception, "JWT kimlik doğrulama BAŞARISIZ OLDU. Endpoint: {Path}", context.HttpContext.Request.Path);
-            return Task.CompletedTask;
-        },
         OnTokenValidated = async context =>
         {
-            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            var jit = context.HttpContext.RequestServices.GetRequiredService<JitUserProvisioningService>();
             if (context.Principal is not null)
             {
-                logger.LogInformation("--- JWT BARIYERI GECILDI! TOKEN'DAKI BUTUN CLAIMLER: ---");
-                foreach (var claim in context.Principal.Claims)
-                {
-                    logger.LogInformation("CLAIM >> [{Type}] : {Value}", claim.Type, claim.Value);
-                }
-                logger.LogInformation("---------------------------------------------------------");
-            }
-
-            var jitService = context.HttpContext.RequestServices.GetRequiredService<JitUserProvisioningService>();
-            var tenantId = context.Principal?.FindFirst("tenant_id")?.Value ?? "default";
-
-            if (context.Principal is not null)
-            {
-                await jitService.ProvisionUserAsync(context.Principal, tenantId);
+                try { await jit.ProvisionUserAsync(context.Principal, context.Principal.FindFirst("tenant_id")?.Value ?? "default"); }
+                catch (InvalidOperationException) { context.Fail("User or tenant is not authorized."); }
             }
         }
     };
@@ -310,7 +223,7 @@ builder.Services.AddAuthentication(options =>
 // Authorization: Permission-based policy provider
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 // EF Core + PostgreSQL + pgvector
 builder.Services.AddDbContext<SonOfAntonDbContext>(options =>
@@ -335,7 +248,7 @@ builder.Services.AddHangfire(config =>
 builder.Services.AddHangfireServer(options =>
 {
     options.Queues = new[] { "default", "workflows", "critical" };
-    options.WorkerCount = Environment.ProcessorCount * 2;
+    options.WorkerCount = 4;
 });
 
 // Semantic Kernel with Ollama
@@ -357,7 +270,7 @@ builder.Services.AddSingleton(sp =>
 });
 
 // Ollama Startup Service - Uygulama balarken Ollama'y kontrol et/balat
-builder.Services.AddHostedService<OllamaStartupService>();
+// AI is opt-in; core startup never launches external processes or downloads models.
 
 // Log Stream Service (Singleton - SSE iin)
 builder.Services.AddSingleton<LogStreamService>();
@@ -376,33 +289,44 @@ builder.Services.AddSingleton<IVectorDatabaseService>(sp =>
 });
 
 // Node Handlers (Strategy Pattern)
-builder.Services.AddScoped<INodeHandler, ErrorTriggerHandler>();
+
 builder.Services.AddScoped<INodeHandler, ManualTriggerHandler>();
-builder.Services.AddScoped<INodeHandler, WebhookTriggerHandler>();
+
 builder.Services.AddScoped<INodeHandler, ScheduleTriggerHandler>();
-builder.Services.AddScoped<INodeHandler, HttpRequestHandler>();
+
 builder.Services.AddScoped<INodeHandler, SetValueHandler>();
 builder.Services.AddScoped<INodeHandler, FilterHandler>();
-builder.Services.AddScoped<INodeHandler, CodeHandler>();
+// Arbitrary scripts are excluded from the supported core.
 builder.Services.AddScoped<INodeHandler, TemplateHandler>();
 builder.Services.AddScoped<INodeHandler, AggregateHandler>();
 builder.Services.AddScoped<INodeHandler, IfHandler>();
 builder.Services.AddScoped<INodeHandler, SwitchHandler>();
-builder.Services.AddScoped<INodeHandler, MergeHandler>();
+
 builder.Services.AddScoped<INodeHandler, DelayHandler>();
-builder.Services.AddScoped<INodeHandler, LoopHandler>();
+
 builder.Services.AddScoped<INodeHandler, DebugHandler>();
 builder.Services.AddScoped<INodeHandler, EndHandler>();
-builder.Services.AddScoped<INodeHandler, LLMHandler>();
-builder.Services.AddScoped<INodeHandler, DatabaseHandler>();
-builder.Services.AddScoped<INodeHandler, EmailHandler>();
-builder.Services.AddScoped<INodeHandler, SlackHandler>();
+if (aiEnabled)
+{
+    builder.Services.AddScoped<INodeHandler, LLMHandler>();
+    builder.Services.AddScoped<INodeHandler, SentimentAnalysisHandler>();
+    builder.Services.AddScoped<INodeHandler, TextClassificationHandler>();
+    builder.Services.AddScoped<INodeHandler, ImageAnalysisHandler>();
+    builder.Services.AddScoped<INodeHandler, AIAgentHandler>();
+    builder.Services.AddScoped<ITextEmbeddingService, OllamaTextEmbeddingService>();
+}
+// Arbitrary database connections are excluded from the supported core.
 
-// Vector Node Handlers
-builder.Services.AddScoped<INodeHandler, GenerateEmbeddingHandler>();
-builder.Services.AddScoped<INodeHandler, VectorStoreHandler>();
-builder.Services.AddScoped<INodeHandler, VectorSearchHandler>();
-builder.Services.AddScoped<INodeHandler, VectorDeleteHandler>();
+
+
+// Vector nodes require the configured Ollama embedding model (768 dimensions).
+if (aiEnabled)
+{
+    builder.Services.AddScoped<INodeHandler, GenerateEmbeddingHandler>();
+    
+    
+    
+}
 
 // Workflow Runner
 builder.Services.AddScoped<WorkflowRunner>();
@@ -414,223 +338,26 @@ builder.Services.AddScoped<WorkflowJobService>();
 // Performance Metrics Service (Singleton - uygulama ömrü boyunca yaşar)
 builder.Services.AddSingleton<PerformanceMetricsService>();
 
-// Model Download Service (ONNX models auto-download)
-builder.Services.AddHostedService<ModelDownloadService>();
-builder.Services.AddSingleton<ModelDownloadService>();
-
-// ─── New Feature Services ──────────────────────────────────────
-
-// YAML Serializer (Shared)
+// Supported core services. Experimental source and migrations remain preserved.
 builder.Services.AddSingleton<WorkflowYamlSerializer>();
-
-// Virtual File System
-builder.Services.AddSingleton<IVirtualFileSystem, InMemoryFileSystem>();
-
-// Agent Services
-builder.Services.AddScoped<AgentService>();
-builder.Services.AddScoped<WorkflowAssistantService>();
-
-// Orchestrator
-builder.Services.AddScoped<ProjectOrchestrator>();
-
-// Workflow Stats Updater
 builder.Services.AddScoped<WorkflowStatsUpdater>();
-
-// Search Services (Full-text + Hybrid)
-builder.Services.AddScoped<FullTextSearchService>();
-builder.Services.AddScoped<HybridSearchService>();
-
-// Snapshot Service
 builder.Services.AddScoped<SnapshotService>();
-
-// Encryption Service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
-
-// State Recovery Repository
 builder.Services.AddScoped<SonOfAnton.Backend.Services.State.IStateRepository, SonOfAnton.Backend.Services.State.WorkflowStateRepository>();
-
-// Pause/Resume Registry (Singleton)
 builder.Services.AddSingleton<PauseTokenRegistry>();
-
-// HNSW Config
-builder.Services.AddSingleton(HnswConfig.FromConfiguration(builder.Configuration));
-
-// A2A Protocol Services
-builder.Services.AddSingleton<AgentRegistry>();
-builder.Services.AddSingleton<A2ATaskManager>();
-
-// Subflow Node Handlers
-builder.Services.AddScoped<INodeHandler, ForEachLoopHandler>();
-builder.Services.AddScoped<INodeHandler, WhileLoopHandler>();
-builder.Services.AddScoped<INodeHandler, ParallelHandler>();
-builder.Services.AddScoped<INodeHandler, BreakHandler>();
-builder.Services.AddScoped<INodeHandler, ContinueHandler>();
-builder.Services.AddScoped<INodeHandler, TryCatchHandler>();
-
-// Custom Node & Marketplace Services
-builder.Services.AddScoped<INodeHandler, CustomNodeHandler>();
-builder.Services.AddScoped<CustomNodeService>();
-builder.Services.AddScoped<MarketplaceService>();
-builder.Services.AddSingleton<PluginLoaderService>();
-
-// Data Store Service
-builder.Services.AddScoped<IDataStoreService, DataStoreService>();
-builder.Services.AddScoped<IDataTableService, DataTableService>();
-builder.Services.AddScoped<IDataFormService, DataFormService>();
-
-// Data Store Node Handlers
-builder.Services.AddScoped<INodeHandler, StateSetHandler>();
-builder.Services.AddScoped<INodeHandler, StateGetHandler>();
-builder.Services.AddScoped<INodeHandler, StateDeleteHandler>();
-builder.Services.AddScoped<INodeHandler, StateGetAllHandler>();
-
-// Workflow API Publishing Service
-builder.Services.AddScoped<WorkflowApiService>();
-builder.Services.AddTransient<SonOfAnton.Backend.Services.WorkflowApiDocsTransformer>();
-
-// Workspace Service
 builder.Services.AddScoped<WorkspaceService>();
-
-// Chatbot Service
-builder.Services.AddScoped<ChatbotService>();
-
-// ─── AI Infrastructure (Task 1) ────────────────────────────────
-
-// Hardware Config
-builder.Services.Configure<SonOfAnton.Backend.Services.AI.HardwareConfig>(
-    builder.Configuration.GetSection("AI:Hardware"));
-
-// Local AI Service (Ollama via Semantic Kernel)
-builder.Services.AddScoped<SonOfAnton.Shared.Core.ILocalAIService, SonOfAnton.Backend.Services.AI.LocalAIService>();
-
-// Censorship Engine
-builder.Services.AddSingleton<SonOfAnton.Backend.Services.AI.Censorship.SensitiveDataDetector>();
-builder.Services.AddSingleton<SonOfAnton.Backend.Services.AI.Censorship.NerEntityDetector>();
-builder.Services.AddScoped<SonOfAnton.Shared.Core.ICensorshipEngine, SonOfAnton.Backend.Services.AI.Censorship.CensorshipEngine>();
-
-// External AI Gateway & Provider Adapters
-builder.Services.AddScoped<SonOfAnton.Backend.Services.AI.External.IProviderAdapter, SonOfAnton.Backend.Services.AI.External.OpenAIProviderAdapter>();
-builder.Services.AddScoped<SonOfAnton.Backend.Services.AI.External.IProviderAdapter, SonOfAnton.Backend.Services.AI.External.ClaudeProviderAdapter>();
-builder.Services.AddScoped<SonOfAnton.Backend.Services.AI.External.IProviderAdapter, SonOfAnton.Backend.Services.AI.External.GeminiProviderAdapter>();
-builder.Services.AddScoped<SonOfAnton.Shared.Core.IExternalAIGateway, SonOfAnton.Backend.Services.AI.External.ExternalAIGateway>();
-
-// Secret Manager (API key management)
-builder.Services.AddScoped<SonOfAnton.Shared.Core.ISecretManager, SonOfAnton.Backend.Services.AI.SecretManagerService>();
-
-// Quota Service
 builder.Services.AddScoped<IQuotaService, QuotaService>();
-
-// ─── Planning & Execution Framework (Task 2) ───────────────────
-
-// Concurrent File Access Guard (Singleton — process-level locks)
-builder.Services.AddSingleton<ConcurrentFileAccessGuard>();
-
-// Markdown Planning Service
-builder.Services.AddScoped<IMarkdownPlanningService, MarkdownPlanningService>();
-
-// Planning File Watcher (BackgroundService — FileSystemWatcher event handling)
-builder.Services.AddHostedService<PlanningFileWatcherService>();
-
-// Loop State Store (PostgreSQL + MemoryCache hybrid)
-builder.Services.AddScoped<ILoopStateStore, LoopStateStore>();
-
-// Ralph Loop Engine (BackgroundService + Hangfire integration)
-builder.Services.AddHostedService<RalphLoopEngine>();
-builder.Services.AddSingleton<RalphLoopEngine>();
-
-// Loop Exit Validators (strategy pattern — chained evaluation)
-builder.Services.AddScoped<ILoopExitValidator, TimeoutValidator>();
-builder.Services.AddScoped<ILoopExitValidator, MaxIterationValidator>();
-builder.Services.AddScoped<ILoopExitValidator, TaskCompletionValidator>();
-builder.Services.AddScoped<ILoopExitValidator, CustomConditionValidator>();
-
-// Notifications Service
 builder.Services.AddSingleton<NotificationStreamService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
-// ─── Memory & RAG Pipeline (Task 3) ────────────────────────────
-
-// Memory Embedding Service (wraps ITextEmbeddingService)
-builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemoryEmbeddingService, SonOfAnton.Backend.Services.Memory.MemoryEmbeddingService>();
-
-// Text Chunking Service (Singleton — stateless)
-builder.Services.AddSingleton<SonOfAnton.Backend.Services.Memory.ITextChunkingService, SonOfAnton.Backend.Services.Memory.TextChunkingService>();
-
-// Memory Search Service (pgvector cosine similarity)
-builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemorySearchService, SonOfAnton.Backend.Services.Memory.MemorySearchService>();
-
-// RAG Prompt Builder (search + context + prompt generation)
-builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IRagPromptBuilder, SonOfAnton.Backend.Services.Memory.RagPromptBuilder>();
-
-// Memory Service (CRUD + Search + Chunking pipeline orchestrator)
-builder.Services.AddScoped<SonOfAnton.Backend.Services.Memory.IMemoryService, SonOfAnton.Backend.Services.Memory.MemoryService>();
-
-// ─── MassTransit & RabbitMQ (Task 5) ───────────────────────────
-builder.Services.AddMassTransit(x =>
-{
-    // Define endpoints dynamically or register specific consumers here later
-
-    x.UsingRabbitMq((context, cfg) =>
-    {
-        var rabbitConfig = builder.Configuration.GetSection("RabbitMQ");
-        var host = rabbitConfig["Host"] ?? "localhost";
-        var port = int.TryParse(rabbitConfig["Port"], out int p) ? p : 5672;
-        var user = rabbitConfig["Username"] ?? "sonofanton";
-        var pass = rabbitConfig["Password"] ?? "sonofanton_dev_password";
-
-        cfg.Host(host, (ushort)port, "/", h =>
-        {
-            h.Username(user);
-            h.Password(pass);
-        });
-
-        // Egress Filter (Publish)
-        cfg.UsePublishFilter(typeof(CensorshipPublishFilter<>), context);
-
-        // Ingress Filter (Consume)
-        cfg.UseConsumeFilter(typeof(CensorshipConsumeFilter<>), context);
-
-        cfg.ConfigureEndpoints(context);
-    });
-});
-
 var app = builder.Build();
 
-// Docker servislerini otomatik baslat (PostgreSQL vb.)
-if (app.Environment.IsDevelopment())
-{
-    var dockerLogger = app.Services.GetRequiredService<ILogger<Program>>();
-    await SonOfAnton.Backend.Infrastructure.DockerHelper.EnsureDockerServicesRunningAsync(dockerLogger);
-}
-
-// Auto-migrate database
+// Fail startup on schema errors instead of serving a partially initialized application.
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
-    
-    try 
-    {
-        // Migrasyonları otomatik uygula
-        await dbContext.Database.MigrateAsync();
-    }
-    catch (Exception ex)
-    {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Veritabanı migrasyonu sırasında hata oluştu.");
-    }
-
-    // A2A Agent'ları kaydet
-    var registry = app.Services.GetRequiredService<AgentRegistry>();
-    var agentService = scope.ServiceProvider.GetRequiredService<AgentService>();
-    registry.Register(new AnalystA2AAgent(agentService));
-    registry.Register(new CoderA2AAgent(agentService));
-    registry.Register(new AuditorA2AAgent(agentService));
-    registry.Register(new VisualizerA2AAgent(agentService));
+    var db = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
+    await db.Database.MigrateAsync();
 }
-
-// Plugin node'larını tara (startup)
-var pluginLoader = app.Services.GetRequiredService<PluginLoaderService>();
-pluginLoader.ScanPlugins();
 
 // Configure the HTTP request pipeline
 
@@ -639,7 +366,7 @@ app.UseResponseCompression();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapScalarApiReference(options =>
     {
         options.Title = "SonOfAnton Workflow Engine API";
@@ -649,7 +376,7 @@ if (app.Environment.IsDevelopment())
         {
             PreferredSecuritySchemes = ["ApiKey"]
         };
-    });
+    }).AllowAnonymous();
 }
 
 // Global exception handler
@@ -657,7 +384,8 @@ app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
     {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        var error = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        context.Response.StatusCode = error is UnauthorizedAccessException ? 403 : 500;
         context.Response.ContentType = "application/json";
         
         var response = new { error = "Sunucu hatası oluştu", requestId = context.TraceIdentifier };
@@ -677,19 +405,28 @@ app.Use(async (context, next) =>
 
 app.UseCors("BlazorWasm");
 app.UseHttpsRedirection();
-app.UseRateLimiter();
+
 
 // Multi-tenant çözümleme (Authentication'dan ÖNCE)
-app.UseTenantResolution();
+
 
 // Authentication & Authorization
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    var requestedTenant = context.Request.Headers["X-Tenant-ID"].FirstOrDefault();
+    var tenant = context.User.FindFirst("tenant_id")?.Value;
+    if (context.User.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(requestedTenant) && requestedTenant != tenant)
+    { context.Response.StatusCode = 403; return; }
+    await next();
+});
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // Dinamik Endpoint Routing Middleware
 // (Auth'dan sonra, Controller'lardan önce çalışmalı ki [Authorize] endpointleri engellenmesin
 // ama kendi auth mantığını da yapabilsin)
-app.UseMiddleware<SonOfAnton.Backend.Infrastructure.DynamicWorkflowEndpointMiddleware>();
+// Published endpoints remain unavailable until their resource/scope contract is audited.
 
 // Health Check Endpoints
 app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -700,7 +437,7 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new { status = "alive", timestamp = DateTime.UtcNow });
     }
-});
+}).AllowAnonymous();
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
@@ -722,109 +459,63 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
         };
         await context.Response.WriteAsJsonAsync(result);
     }
-});
+}).AllowAnonymous();
 
-// Hangfire Dashboard (Basic Auth ile güvenli hale getirilebilir)
-app.UseHangfireDashboard("/hangfire", new DashboardOptions
-{
-    Authorization = app.Environment.IsDevelopment() 
-        ? [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
-        : []
-});
-
-// SSE Endpoint - Workflow execution events stream (enhanced with session tracking, topic filtering)
+// Hangfire dashboard is disabled by default.
+// One bounded subscription and one writer per client. DB ownership precedes subscription.
 app.MapGet("/api/workflow/execution/{executionId:guid}/stream", async (
-    Guid executionId,
-    SseEventService sseService,
-    [Microsoft.AspNetCore.Mvc.FromQuery] string? topics,
-    CancellationToken cancellationToken) =>
+    Guid executionId, SseEventService events, SonOfAntonDbContext db, HttpContext http, CancellationToken ct) =>
 {
-    var channel = sseService.GetChannel(executionId);
-    if (channel == null)
-    {
-        return Results.NotFound(new { error = "Execution not found or already completed" });
-    }
-    
-    // Client session oluştur
-    var topicList = topics?.Split(',', StringSplitOptions.RemoveEmptyEntries);
-    var session = sseService.RegisterSession(executionId, topicList);
-    
+    if (!await db.Executions.AnyAsync(e => e.Id == executionId, ct)) return Results.NotFound();
+    var session = events.RegisterSession(executionId);
+    var channel = events.GetSessionChannel(session.SessionId);
+    http.Response.Headers.CacheControl = "no-cache";
+    http.Response.Headers["X-Accel-Buffering"] = "no";
     return Results.Stream(async stream =>
     {
-        var writer = new StreamWriter(stream) { AutoFlush = true };
-        
-        // Initial connection event
-        await writer.WriteAsync(SseFormatter.FormatComment($"connected session={session.SessionId}"));
-        
-        // Heartbeat timer
-        using var heartbeatTimer = new PeriodicTimer(TimeSpan.FromSeconds(15));
-        var heartbeatTask = Task.Run(async () =>
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                if (!await heartbeatTimer.WaitForNextTickAsync(cancellationToken))
-                    break;
-                await writer.WriteAsync(SseFormatter.FormatHeartbeat());
-                sseService.UpdateSessionHeartbeat(session.SessionId);
-            }
-        }, cancellationToken);
-        
+        await using var writer = new StreamWriter(stream, leaveOpen: true);
         try
         {
-            await foreach (var prioritizedEvent in channel.Reader.ReadAllAsync(cancellationToken))
+            while (!ct.IsCancellationRequested)
             {
-                var sseFormatted = SseFormatter.FormatPrioritizedEvent(prioritizedEvent, session);
-                
-                // Topic filtresi tarafından atlandıysa boş string döner
-                if (string.IsNullOrEmpty(sseFormatted))
-                    continue;
-                
-                await writer.WriteAsync(sseFormatted);
-                sseService.TrackBytesTransferred(sseFormatted.Length * 2); // UTF-16
-                
-                // Workflow tamamlandıysa stream'i kapat
-                if (prioritizedEvent.Event is WorkflowCompletedEvent)
+                while (channel.Reader.TryRead(out var evt))
+                    await writer.WriteAsync(SseFormatter.FormatPrioritizedEvent(evt, session));
+                var execution = await db.Executions.AsNoTracking().FirstOrDefaultAsync(e => e.Id == executionId, ct);
+                if (execution is null) break;
+                if (execution.Status is SonOfAnton.Shared.Enums.ExecutionStatus.Completed or SonOfAnton.Shared.Enums.ExecutionStatus.Failed or SonOfAnton.Shared.Enums.ExecutionStatus.Cancelled)
                 {
+                    var result = JsonSerializer.Serialize(new { executionId, success = execution.Status == SonOfAnton.Shared.Enums.ExecutionStatus.Completed, error = execution.ErrorMessage, timestamp = execution.CompletedAt });
+                    await writer.WriteAsync($"event: workflow-completed\ndata: {result}\n\n");
                     break;
                 }
+                if (channel.Reader.Completion.IsCompleted) break;
+                await writer.WriteAsync(SseFormatter.FormatComment("heartbeat"));
+                await writer.FlushAsync(ct);
+                await Task.Delay(500, ct);
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Client disconnected
-        }
-        finally
-        {
-            sseService.UnregisterSession(session.SessionId);
-        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        finally { events.UnregisterSession(session.SessionId); }
     }, "text/event-stream");
-}).WithName("StreamWorkflowExecution");
+}).RequireAuthorization(Permissions.WorkflowsRead);
 
 // SSE Statistics endpoint
 app.MapGet("/api/sse/stats", (SseEventService sseService) =>
 {
     return Results.Ok(sseService.GetStatistics());
-}).WithName("GetSseStatistics");
+}).WithName("GetSseStatistics").RequireAuthorization(Permissions.SystemAdmin);
 
 // Performance Metrics endpoint
 app.MapGet("/api/metrics", (PerformanceMetricsService metricsService) =>
 {
     return Results.Ok(metricsService.GetSummary());
-}).WithName("GetPerformanceMetrics");
+}).WithName("GetPerformanceMetrics").RequireAuthorization(Permissions.SystemAdmin);
 
 app.MapControllers();
 
-// A2A Well-known endpoint
-app.MapGet("/.well-known/agent.json", (AgentRegistry agentRegistry) =>
-{
-    var cards = agentRegistry.GetAllCards();
-    return Results.Ok(new
-    {
-        agents = cards,
-        protocol = "a2a",
-        version = "1.0",
-        endpoint = "/api/a2a"
-    });
-}).WithName("A2AAgentCard");
+app.MapGet("/api/capabilities", () => new { ai = aiEnabled, chat = false, experimental = false })
+    .RequireAuthorization();
 
 app.Run();
+
+public partial class Program { }

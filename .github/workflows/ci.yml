@@ -1,0 +1,39 @@
+name: Core verification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: sonofanton
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: sonofanton_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sonofanton -d sonofanton_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SONOFANTON_TEST_DB: Host=localhost;Database=sonofanton_test;Username=sonofanton;Password=ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: dotnet restore SonOfAnton.slnx
+      - run: dotnet build SonOfAnton.slnx -c Release --no-restore -m:1
+      - run: dotnet test tests/SonOfAnton.Tests -c Release --no-build -m:1 --logger trx
+      - run: node --test tests/frontend/*.test.mjs
+      - run: dotnet tool restore
+      - run: dotnet ef migrations has-pending-model-changes --project src/SonOfAnton.Backend --no-build --configuration Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: tests/SonOfAnton.Tests/TestResults/*.trx

@@ -97,6 +97,125 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("api_keys", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.CensorshipAuditLogEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("DetectedItemsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("detected_items_json");
+
+                    b.Property<string>("OriginalTextHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("original_text_hash");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<string>("TriggeredRuleIdsJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("triggered_rule_ids_json");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("Timestamp");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("censorship_audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.CensorshipRuleEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Pattern")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("pattern");
+
+                    b.Property<string>("ReplacementText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("replacement_text");
+
+                    b.Property<string>("RuleType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("rule_type");
+
+                    b.Property<int>("Severity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3)
+                        .HasColumnName("severity");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("censorship_rules", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatHistoryEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -916,6 +1035,83 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("linked_accounts", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.LoopExecutionStateEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("ContextJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("context_json");
+
+                    b.Property<int>("CurrentIteration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("current_iteration");
+
+                    b.Property<string>("ExitMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("exit_message");
+
+                    b.Property<string>("ExitReason")
+                        .HasColumnType("text")
+                        .HasColumnName("exit_reason");
+
+                    b.Property<string>("HangfireJobId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("hangfire_job_id");
+
+                    b.Property<DateTime>("LastHeartbeatAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_heartbeat_at");
+
+                    b.Property<string>("LoopId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("loop_id");
+
+                    b.Property<int>("MaxIterations")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(100)
+                        .HasColumnName("max_iterations");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoopId")
+                        .IsUnique();
+
+                    b.HasIndex("State");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("loop_execution_states", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceInstallEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1097,6 +1293,156 @@ namespace SonOfAnton.Backend.Migrations
                     b.ToTable("marketplace_reviews", (string)null);
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MemoryCollectionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DefaultSectorType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("default_sector_type");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("EmbeddingDimension")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(384)
+                        .HasColumnName("embedding_dimension");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("memory_collections", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MemoryEntryEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AccessCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("access_count");
+
+                    b.Property<int>("ChunkIndex")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("chunk_index");
+
+                    b.Property<Guid>("CollectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("collection_id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(384)")
+                        .HasColumnName("embedding");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<float>("Importance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("real")
+                        .HasDefaultValue(0.5f)
+                        .HasColumnName("importance");
+
+                    b.Property<DateTime?>("LastAccessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_accessed_at");
+
+                    b.Property<JsonDocument>("Metadata")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata");
+
+                    b.Property<string>("SectorType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sector_type");
+
+                    b.Property<string>("SourceDocumentId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("source_document_id");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("summary");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Embedding")
+                        .HasAnnotation("Npgsql:StorageParameter:lists", 100);
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "ivfflat");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
+
+                    b.HasIndex("SectorType");
+
+                    b.HasIndex("SourceDocumentId");
+
+                    b.ToTable("memory_entries", (string)null);
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.NotificationEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1153,6 +1499,63 @@ namespace SonOfAnton.Backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.PlanningDocumentEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("agent_id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FilePath")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("file_path");
+
+                    b.Property<string>("FileType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_type");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("AgentId", "FileType")
+                        .IsUnique();
+
+                    b.ToTable("planning_documents", (string)null);
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantEntity", b =>
@@ -1823,6 +2226,33 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.CensorshipAuditLogEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.UserEntity", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.CensorshipRuleEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.ChatHistoryEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.WorkflowEntity", "Workflow")
@@ -2072,6 +2502,16 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.LoopExecutionStateEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.MarketplaceInstallEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.MarketplaceItemEntity", "Item")
@@ -2128,6 +2568,34 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MemoryCollectionEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SonOfAnton.Shared.Entities.WorkspaceEntity", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Tenant");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MemoryEntryEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.MemoryCollectionEntity", "Collection")
+                        .WithMany("Entries")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Collection");
+                });
+
             modelBuilder.Entity("SonOfAnton.Shared.Entities.NotificationEntity", b =>
                 {
                     b.HasOne("SonOfAnton.Shared.Entities.UserEntity", null)
@@ -2135,6 +2603,16 @@ namespace SonOfAnton.Backend.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.PlanningDocumentEntity", b =>
+                {
+                    b.HasOne("SonOfAnton.Shared.Entities.TenantEntity", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantRoleEntity", b =>
@@ -2332,6 +2810,11 @@ namespace SonOfAnton.Backend.Migrations
                     b.Navigation("Installs");
 
                     b.Navigation("Reviews");
+                });
+
+            modelBuilder.Entity("SonOfAnton.Shared.Entities.MemoryCollectionEntity", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("SonOfAnton.Shared.Entities.TenantEntity", b =>

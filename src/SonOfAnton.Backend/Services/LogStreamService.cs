@@ -4,113 +4,38 @@ using SonOfAnton.Shared.DTOs;
 
 namespace SonOfAnton.Backend.Services;
 
-/// <summary>
-/// In-memory log stream servisi - SSE için
-/// ConcurrentDictionary ile thread-safe, stale channel temizleme
-/// </summary>
-public class LogStreamService
+// Logs are durable in PostgreSQL. Memory only fans out to currently connected clients.
+public sealed class LogStreamService
 {
-    private readonly ConcurrentDictionary<Guid, ChannelEntry> _channels = new();
-
-    /// <summary>
-    /// Aktif channel sayısı
-    /// </summary>
-    public int ActiveChannelCount => _channels.Count;
-
-    /// <summary>
-    /// Execution için channel oluştur veya var olanı getir
-    /// </summary>
-    public Channel<LogEventDto> GetOrCreateChannel(Guid executionId)
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Channel<LogEventDto>>> _subscribers = new();
+    public int ActiveChannelCount => _subscribers.Count;
+    public Task WriteAsync(Guid executionId, LogEventDto log)
     {
-        var entry = _channels.GetOrAdd(executionId, _ => new ChannelEntry
-        {
-            Channel = Channel.CreateUnbounded<LogEventDto>(new UnboundedChannelOptions
-            {
-                SingleReader = false,
-                SingleWriter = false
-            }),
-            CreatedAt = DateTime.UtcNow
-        });
-        
-        entry.LastAccessedAt = DateTime.UtcNow;
-        return entry.Channel;
+        if (_subscribers.TryGetValue(executionId, out var listeners))
+            foreach (var (id, channel) in listeners)
+                if (!channel.Writer.TryWrite(log) && listeners.TryRemove(id, out _)) channel.Writer.TryComplete();
+        return Task.CompletedTask;
     }
-
-    /// <summary>
-    /// Log yaz (Writer tarafı - Hangfire job'ları)
-    /// </summary>
-    public async Task WriteAsync(Guid executionId, LogEventDto logEvent)
-    {
-        var channel = GetOrCreateChannel(executionId);
-        await channel.Writer.WriteAsync(logEvent);
-    }
-
-    /// <summary>
-    /// Log oku (Reader tarafı - SSE endpoint)
-    /// </summary>
-    public async IAsyncEnumerable<LogEventDto> ReadAsync(
-        Guid executionId,
+    public async IAsyncEnumerable<LogEventDto> ReadAsync(Guid executionId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var channel = GetOrCreateChannel(executionId);
-
-        await foreach (var log in channel.Reader.ReadAllAsync(cancellationToken))
+        var id = Guid.NewGuid();
+        var channel = Channel.CreateBounded<LogEventDto>(256);
+        var listeners = _subscribers.GetOrAdd(executionId, _ => new());
+        listeners[id] = channel;
+        try { await foreach (var log in channel.Reader.ReadAllAsync(cancellationToken)) yield return log; }
+        finally
         {
-            yield return log;
+            listeners.TryRemove(id, out _);
+            channel.Writer.TryComplete();
+            if (listeners.IsEmpty) _subscribers.TryRemove(new KeyValuePair<Guid, ConcurrentDictionary<Guid, Channel<LogEventDto>>>(executionId, listeners));
         }
     }
-
-    /// <summary>
-    /// Channel'ı tamamla (execution bittiğinde)
-    /// </summary>
     public void Complete(Guid executionId)
     {
-        if (_channels.TryGetValue(executionId, out var entry))
-        {
-            entry.Channel.Writer.TryComplete();
-            entry.CompletedAt = DateTime.UtcNow;
-        }
+        if (_subscribers.TryRemove(executionId, out var listeners))
+            foreach (var channel in listeners.Values) channel.Writer.TryComplete();
     }
-
-    /// <summary>
-    /// Channel'ı temizle (bellek yönetimi için)
-    /// </summary>
-    public void Remove(Guid executionId)
-    {
-        if (_channels.TryRemove(executionId, out var entry))
-        {
-            entry.Channel.Writer.TryComplete();
-        }
-    }
-
-    /// <summary>
-    /// Eski tamamlanmış channel'ları temizle
-    /// </summary>
-    public int CleanupStaleChannels(TimeSpan maxAge)
-    {
-        var cutoff = DateTime.UtcNow - maxAge;
-        var removed = 0;
-
-        foreach (var kvp in _channels)
-        {
-            if (kvp.Value.CompletedAt.HasValue && kvp.Value.CompletedAt.Value < cutoff)
-            {
-                if (_channels.TryRemove(kvp.Key, out _))
-                {
-                    removed++;
-                }
-            }
-        }
-
-        return removed;
-    }
-
-    private class ChannelEntry
-    {
-        public required Channel<LogEventDto> Channel { get; init; }
-        public DateTime CreatedAt { get; init; }
-        public DateTime LastAccessedAt { get; set; }
-        public DateTime? CompletedAt { get; set; }
-    }
+    public void Remove(Guid executionId) => Complete(executionId);
+    public int CleanupStaleChannels(TimeSpan maxAge) => 0;
 }
-

@@ -5,4 +5,7 @@
     <Project Path="src/SonOfAnton.Shared/SonOfAnton.Shared.csproj" />
     <Project Path="src/SonOfAnton.NodeSdk/SonOfAnton.NodeSdk.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SonOfAnton.Tests/SonOfAnton.Tests.csproj" />
+  </Folder>
 </Solution>

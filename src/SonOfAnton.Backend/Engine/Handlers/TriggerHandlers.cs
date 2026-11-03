@@ -11,7 +11,7 @@ public class ManualTriggerHandler : INodeHandler
     {
         context.Log("Manuel tetikleyici ba�lat�ld�", Shared.Enums.LogLevel.Info, null);
         
-        return Task.FromResult(NodeExecutionResult.Ok(new
+        return Task.FromResult(NodeExecutionResult.Ok(context.InputData ?? new
         {
             triggered = true,
             timestamp = DateTime.UtcNow,
@@ -54,7 +54,7 @@ public class ScheduleTriggerHandler : INodeHandler
         
         context.Log($"Zamanl� tetikleyici �al��t� (cron: {cron})", Shared.Enums.LogLevel.Info, null);
         
-        return Task.FromResult(NodeExecutionResult.Ok(new
+        return Task.FromResult(NodeExecutionResult.Ok(context.InputData ?? new
         {
             triggered = true,
             timestamp = DateTime.UtcNow,

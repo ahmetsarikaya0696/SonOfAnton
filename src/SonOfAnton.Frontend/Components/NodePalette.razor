@@ -1,3 +1,4 @@
+@inject HttpClient Http
 @using SonOfAnton.Shared.Models
 
 <div class="node-palette">
@@ -10,6 +11,7 @@
                @bind:event="oninput" />
     </div>
     
+    @if (_loadError is not null) { <p role="alert">@_loadError</p> }
     <div class="palette-categories">
         @foreach (var category in FilteredNodes)
         {
@@ -50,6 +52,17 @@
 [Parameter] public EventCallback<NodeDefinition> OnNodeSelected { get; set; }
 [Parameter] public EventCallback<(NodeDefinition Node, double X, double Y)> OnNodeDrop { get; set; }
     
+private HashSet<string> _supported = [];
+protected override async Task OnInitializedAsync()
+{
+    try
+    {
+        var nodes = await Http.GetFromJsonAsync<List<SonOfAnton.Shared.DTOs.NodeDefinitionDto>>("api/nodes");
+        _supported = nodes?.Select(n => n.Type).ToHashSet() ?? [];
+    }
+    catch (HttpRequestException) { _loadError = "Node listesi yüklenemedi. Bağlantınızı kontrol edip sayfayı yenileyin."; }
+}
+private string? _loadError;
 private string searchTerm = string.Empty;
 private HashSet<string> expandedCategories = ["Tetikleyiciler", "HTTP", "Donusum"];
 
@@ -61,7 +74,7 @@ public static NodeDefinition? DraggedNode { get; private set; }
     {
         get
         {
-            var allNodes = NodeRegistry.GetNodesByCategory();
+            var allNodes = NodeRegistry.GetNodesByCategory().ToDictionary(k => k.Key, k => k.Value.Where(n => _supported.Contains(n.Type)).ToList()).Where(k => k.Value.Count > 0).ToDictionary(k => k.Key, k => k.Value);
             
             if (string.IsNullOrWhiteSpace(searchTerm))
                 return allNodes;

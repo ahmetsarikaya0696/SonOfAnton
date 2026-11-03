@@ -127,17 +127,21 @@ public class ExecutionsController : ControllerBase
     /// Execution'ı iptal et
     /// </summary>
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<IActionResult> Cancel(Guid id)
     {
         var execution = await _dbContext.Executions.FindAsync(id);
         if (execution == null)
             return NotFound();
 
-        if (execution.Status != ExecutionStatus.Running && execution.Status != ExecutionStatus.Queued)
+        if (execution.Status != ExecutionStatus.Running && execution.Status != ExecutionStatus.Queued && execution.Status != ExecutionStatus.Paused)
         {
             return BadRequest("Bu execution iptal edilemez");
         }
 
+        if (execution.HangfireJobId is not null) Hangfire.BackgroundJob.Delete(execution.HangfireJobId);
+        HttpContext.RequestServices.GetRequiredService<SonOfAnton.Backend.Execution.PauseTokenRegistry>().ResumeExecution(id);
         execution.Status = ExecutionStatus.Cancelled;
         execution.CompletedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
@@ -150,9 +154,12 @@ public class ExecutionsController : ControllerBase
     /// </summary>
     [HttpPost("run/{workflowId:guid}")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
-    public ActionResult RunWorkflow(Guid workflowId, [FromBody] object? triggerData = null)
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public async Task<ActionResult> RunWorkflow(Guid workflowId, [FromBody] object? triggerData = null)
     {
-        var executionId = _jobService.EnqueueWorkflow(workflowId, triggerData);
+        if (!await _dbContext.Workflows.AnyAsync(w => w.Id == workflowId)) return NotFound();
+        var execution = await _jobService.StartAsync(workflowId, triggerData);
+        var executionId = execution.Id;
         return Ok(new { executionId, message = "Workflow kuyruğa eklendi" });
     }
     
@@ -161,10 +168,14 @@ public class ExecutionsController : ControllerBase
     /// </summary>
     [HttpPost("schedule/{workflowId:guid}")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
-    public ActionResult ScheduleWorkflow(Guid workflowId, [FromQuery] int delaySeconds, [FromBody] object? triggerData = null)
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public async Task<ActionResult> ScheduleWorkflow(Guid workflowId, [FromQuery] int delaySeconds, [FromBody] object? triggerData = null)
     {
-        var jobId = _jobService.ScheduleWorkflow(workflowId, TimeSpan.FromSeconds(delaySeconds), triggerData);
-        return Ok(new { jobId, message = $"{delaySeconds} saniye sonra çalıştırılacak" });
+        if (!await _dbContext.Workflows.AnyAsync(w => w.Id == workflowId)) return NotFound();
+        if (delaySeconds < 0 || delaySeconds > 2592000) return BadRequest("Delay must be between 0 and 30 days.");
+        var execution = await _jobService.StartAsync(workflowId, triggerData, TimeSpan.FromSeconds(delaySeconds));
+        var jobId = execution.HangfireJobId;
+        return Ok(new { jobId, executionId = execution.Id, message = $"{delaySeconds} saniye sonra çalıştırılacak" });
     }
     
     /// <summary>
@@ -172,8 +183,10 @@ public class ExecutionsController : ControllerBase
     /// </summary>
     [HttpPost("recurring/{workflowId:guid}")]
     [Authorize(Policy = Permissions.WorkflowsExecute)]
-    public ActionResult AddRecurring(Guid workflowId, [FromQuery] string cron, [FromQuery] string? jobName = null)
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public async Task<ActionResult> AddRecurring(Guid workflowId, [FromQuery] string cron, [FromQuery] string? jobName = null)
     {
+        if (!await _dbContext.Workflows.AnyAsync(w => w.Id == workflowId)) return NotFound();
         var result = _jobService.AddRecurringWorkflow(workflowId, cron, jobName);
         if (!result.IsValid)
         {
@@ -186,8 +199,11 @@ public class ExecutionsController : ControllerBase
     /// Recurring workflow kaldırır
     /// </summary>
     [HttpDelete("recurring/{jobName}")]
-    public ActionResult RemoveRecurring(string jobName)
+    [Authorize(Policy = Permissions.WorkflowsExecute)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
+    public async Task<ActionResult> RemoveRecurring(string jobName)
     {
+        if (!jobName.StartsWith("workflow_") || !Guid.TryParse(jobName[9..], out var workflowId) || !await _dbContext.Workflows.AnyAsync(w => w.Id == workflowId)) return NotFound();
         _jobService.RemoveRecurringWorkflow(jobName);
         return Ok(new { message = "Recurring workflow kaldırıldı" });
     }
@@ -206,12 +222,12 @@ public class ExecutionsController : ControllerBase
     /// Job bilgisini getirir
     /// </summary>
     [HttpGet("job/{jobId}")]
+    [Authorize(Policy = Permissions.SystemAdmin)]
     public ActionResult GetJobInfo(string jobId)
     {
-        var info = _jobService.GetJobInfo(jobId);
-        if (info == null)
-            return NotFound();
-        return Ok(info);
+        using var connection = Hangfire.JobStorage.Current.GetConnection();
+        var info = connection.GetJobData(jobId);
+        return info is null ? NotFound() : Ok(new { info.State, info.CreatedAt });
     }
 }
 

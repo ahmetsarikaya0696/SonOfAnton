@@ -146,6 +146,16 @@
         SseClient.OnWorkflowCompleted += HandleWorkflowCompleted;
     }
     
+    [Parameter] public EventCallback<bool> OnWorkflowFinished { get; set; }
+    private Guid? _connectedExecution;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ExecutionId == _connectedExecution) return;
+        if (_connectedExecution.HasValue) await SseClient.DisconnectAsync(_connectedExecution.Value.ToString());
+        _connectedExecution = ExecutionId;
+        await ConnectAsync();
+    }
+
     public async Task ConnectAsync()
     {
         if (ExecutionId.HasValue)
@@ -251,6 +261,7 @@
         InvokeAsync(() =>
         {
             _workflowCompleted = true;
+            _ = OnWorkflowFinished.InvokeAsync(evt.Success);
             _workflowSuccess = evt.Success;
             _totalDurationMs = evt.TotalDurationMs;
             
@@ -301,7 +312,7 @@
         SseClient.OnLog -= HandleLog;
         SseClient.OnWorkflowCompleted -= HandleWorkflowCompleted;
         
-        await SseClient.DisposeAsync();
+        await DisconnectAsync();
     }
     
     private class NodeStatusInfo

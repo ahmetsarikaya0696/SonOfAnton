@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Components.WebAssembly.Http;
 using System.Threading.Channels;
 using SonOfAnton.Shared.DTOs;
 
@@ -39,7 +40,7 @@ public class LogStreamService
         Guid executionId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var channel = Channel.CreateUnbounded<LogEventDto>(new UnboundedChannelOptions
+        var channel = Channel.CreateBounded<LogEventDto>(new BoundedChannelOptions(256)
         {
             SingleReader = true,
             SingleWriter = true
@@ -47,6 +48,7 @@ public class LogStreamService
         
         _ = Task.Run(async () =>
         {
+            string? lastEventId = null;
             RetryAttempt = 0;
             const int maxRetries = 5;
             const int baseDelayMs = 500;
@@ -60,7 +62,9 @@ public class LogStreamService
                 {
                     var url = $"api/logs/{executionId}";
                     
-                    var request = new HttpRequestMessage(HttpMethod.Get, url);
+                    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                    request.SetBrowserResponseStreamingEnabled(true);
+                    if (lastEventId is not null) request.Headers.TryAddWithoutValidation("Last-Event-ID", lastEventId);
                     request.Headers.Accept.ParseAdd("text/event-stream");
                     
                     response = await _httpClient.SendAsync(
@@ -83,6 +87,7 @@ public class LogStreamService
                         if (string.IsNullOrWhiteSpace(line))
                             continue;
 
+                        if (line.StartsWith("id: ")) { lastEventId = line[4..]; continue; }
                         if (line.StartsWith("data: "))
                         {
                             var json = line[6..].Trim();

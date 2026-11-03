@@ -37,7 +37,7 @@ public class ApiKeysController : ControllerBase
         var tenantId = _userContext.TenantId;
         
         var keys = await _dbContext.Set<ApiKeyEntity>()
-            .Where(k => k.TenantId == tenantId)
+            .Where(k => k.TenantId == tenantId && k.CreatedByUserId == _userContext.CurrentUserId)
             .OrderByDescending(k => k.CreatedAt)
             .Select(k => new ApiKeyDto
             {
@@ -61,6 +61,7 @@ public class ApiKeysController : ControllerBase
     {
         var tenantId = _userContext.TenantId;
         
+        if (request.Scopes.Any(scope => !_userContext.HasPermission(scope))) return Forbid();
         // Generate random secure token
         var plainKey = "sk_" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .Replace("+", "-")
@@ -105,7 +106,7 @@ public class ApiKeysController : ControllerBase
     {
         var tenantId = _userContext.TenantId;
         var key = await _dbContext.Set<ApiKeyEntity>()
-            .FirstOrDefaultAsync(k => k.Id == id && k.TenantId == tenantId);
+            .FirstOrDefaultAsync(k => k.Id == id && k.TenantId == tenantId && k.CreatedByUserId == _userContext.CurrentUserId);
 
         if (key == null) return NotFound();
 
@@ -120,7 +121,7 @@ public class ApiKeysController : ControllerBase
     {
         var tenantId = _userContext.TenantId;
         var key = await _dbContext.Set<ApiKeyEntity>()
-            .FirstOrDefaultAsync(k => k.Id == id && k.TenantId == tenantId);
+            .FirstOrDefaultAsync(k => k.Id == id && k.TenantId == tenantId && k.CreatedByUserId == _userContext.CurrentUserId);
 
         if (key == null) return NotFound();
 
@@ -135,10 +136,11 @@ public class ApiKeysController : ControllerBase
     {
         var tenantId = _userContext.TenantId;
         var key = await _dbContext.Set<ApiKeyEntity>()
-            .FirstOrDefaultAsync(k => k.Id == id && k.TenantId == tenantId);
+            .FirstOrDefaultAsync(k => k.Id == id && k.TenantId == tenantId && k.CreatedByUserId == _userContext.CurrentUserId);
 
         if (key == null) return NotFound();
 
+        if (request.Scopes.Any(scope => !_userContext.HasPermission(scope))) return Forbid();
         key.Scopes = request.Scopes.Any() ? JsonSerializer.SerializeToDocument(request.Scopes) : null;
         await _dbContext.SaveChangesAsync();
 

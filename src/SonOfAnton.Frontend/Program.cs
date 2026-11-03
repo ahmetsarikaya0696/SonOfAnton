@@ -58,6 +58,8 @@ builder.Services.AddHttpClient("BackendApi",
         return handler;
     });
 
+builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("BackendApi"));
+
 // ─── Typed HttpClients — tüm API servisleri authenticated "BackendApi" client kullanır ───
 builder.Services.AddHttpClient<WorkflowApiService>("BackendApi");
 builder.Services.AddHttpClient<NotificationApiService>("BackendApi");

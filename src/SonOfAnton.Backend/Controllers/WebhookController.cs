@@ -87,7 +87,7 @@ public class WebhookController : ControllerBase
         };
         
         // Workflow'u tetikle
-        var executionId = _jobService.EnqueueWorkflow(webhook.WorkflowId, triggerData);
+        var executionId = (await _jobService.StartAsync(webhook.WorkflowId, triggerData)).Id.ToString();
         
         // Webhook istatistiklerini güncelle
         webhook.LastTriggeredAt = DateTime.UtcNow;

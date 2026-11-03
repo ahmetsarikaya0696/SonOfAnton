@@ -25,6 +25,7 @@ public class WorkflowRunner
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<WorkflowRunner> _logger;
     private readonly LogStreamService _logStream;
+    private readonly SseEventService _events;
     private readonly PerformanceMetricsService _metrics;
     private readonly PauseTokenRegistry _pauseTokens;
     private readonly Dictionary<string, INodeHandler> _handlers;
@@ -39,12 +40,13 @@ public class WorkflowRunner
     /// <summary>
     /// Node başına maksimum retry sayısı
     /// </summary>
-    private const int MaxNodeRetries = 3;
+    private const int MaxNodeRetries = 0;
 
     public WorkflowRunner(
         IServiceProvider serviceProvider,
         ILogger<WorkflowRunner> logger,
         LogStreamService logStream,
+        SseEventService events,
         PerformanceMetricsService metrics,
         PauseTokenRegistry pauseTokens,
         IEnumerable<INodeHandler> handlers,
@@ -53,6 +55,7 @@ public class WorkflowRunner
         _serviceProvider = serviceProvider;
         _logger = logger;
         _logStream = logStream;
+        _events = events;
         _metrics = metrics;
         _pauseTokens = pauseTokens;
         _handlers = handlers.ToDictionary(h => h.NodeType, h => h);
@@ -62,10 +65,13 @@ public class WorkflowRunner
     /// <summary>
     /// Execution'ı çalıştır - Hangfire tarafından çağrılır
     /// </summary>
-    public async Task RunAsync(Guid executionId, CancellationToken cancellationToken = default)
+    [Hangfire.AutomaticRetry(Attempts = 0)]
+    [Hangfire.DisableConcurrentExecution(timeoutInSeconds: 60)]
+    public async Task RunAsync(Guid executionId, string tenantId, Guid userId, CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<SonOfAntonDbContext>();
+        dbContext.SetJobAccess(tenantId, userId);
 
         var execution = await dbContext.Executions
             .Include(e => e.Workflow)
@@ -77,6 +83,11 @@ public class WorkflowRunner
             return;
         }
 
+        if (execution.Status != ExecutionStatus.Queued) return;
+        var claimed = await dbContext.Executions.Where(e => e.Id == executionId && e.Status == ExecutionStatus.Queued)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(e => e.Status, ExecutionStatus.Running), cancellationToken);
+        if (claimed == 0) return;
+        execution.Status = ExecutionStatus.Running;
         var workflow = execution.Workflow;
         if (workflow.GraphData == null)
         {
@@ -137,6 +148,8 @@ public class WorkflowRunner
                 }
             }
 
+            var graphError = WorkflowGraphValidation.Validate(graph, _handlers.Values);
+            if (graphError is not null) { await FailExecution(dbContext, execution, graphError); return; }
             // Döngüsel bağımlılık kontrolü (Visited Nodes)
             var visitedNodes = new HashSet<Guid>();
 
@@ -156,11 +169,13 @@ public class WorkflowRunner
             {
                 await ExecuteNodeChainAsync(
                     dbContext, execution, graph, triggerNode,
-                    null, memory, visitedNodes, cancellationToken);
+                    JsonSerializer.SerializeToElement(memory), memory, visitedNodes, cancellationToken);
             }
 
             sw.Stop();
 
+            await dbContext.Entry(execution).ReloadAsync(cancellationToken);
+            if (execution.Status == ExecutionStatus.Cancelled) throw new OperationCanceledException();
             // Başarılı tamamla
             await _dbLock.WaitAsync(cancellationToken);
             try
@@ -194,7 +209,9 @@ public class WorkflowRunner
             _metrics.RecordWorkflowFailed(execution.WorkflowId, "İptal edildi", sw.ElapsedMilliseconds);
             var statsUpdater = scope.ServiceProvider.GetRequiredService<WorkflowStatsUpdater>();
             await statsUpdater.RecordExecutionAsync(execution.WorkflowId, false, sw.ElapsedMilliseconds);
-            await FailExecution(dbContext, execution, $"İptal edildi ({sw.ElapsedMilliseconds}ms)");
+            execution.Status = ExecutionStatus.Cancelled;
+            execution.CompletedAt = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(CancellationToken.None);
             _logStream.Complete(executionId);
         }
         catch (SuspendExecutionException ex)
@@ -233,26 +250,7 @@ public class WorkflowRunner
             _logStream.Complete(executionId);
 
             // GENEL HATA YAKALAYICI (GLOBAL ERROR HANDLER)
-            if (workflow.GlobalErrorWorkflowId.HasValue)
-            {
-                try
-                {
-                    var jobService = scope.ServiceProvider.GetRequiredService<WorkflowJobService>();
-                    var errorData = new {
-                        sourceWorkflowId = workflow.Id,
-                        sourceWorkflowName = workflow.Name,
-                        executionId = execution.Id,
-                        errorMessage = ex.Message,
-                        failedNodeId = execution.CurrentNodeId
-                    };
-                    jobService.EnqueueWorkflow(workflow.GlobalErrorWorkflowId.Value, errorData);
-                    _logger.LogInformation("Global Error Workflow tetiklendi: {ErrorWorkflowId}", workflow.GlobalErrorWorkflowId.Value);
-                }
-                catch (Exception handlerEx)
-                {
-                    _logger.LogError(handlerEx, "Global Error Workflow tetiklenirken hata oluştu.");
-                }
-            }
+
         }
     }
 
@@ -358,6 +356,9 @@ public class WorkflowRunner
         HashSet<Guid> visitedNodes,
         CancellationToken cancellationToken)
     {
+        await dbContext.Entry(execution).ReloadAsync(cancellationToken);
+        if (execution.Status == ExecutionStatus.Cancelled) throw new OperationCanceledException();
+
         // Çevrimsel bağımlılık kontrolü
         if (!visitedNodes.Add(node.Id))
         {
@@ -371,6 +372,8 @@ public class WorkflowRunner
             // Duraklatma kontrolü — paused ise bekle
             var pauseToken = _pauseTokens.GetOrCreate(execution.Id);
             await pauseToken.WaitIfPausedAsync(cancellationToken);
+            await dbContext.Entry(execution).ReloadAsync(cancellationToken);
+            if (execution.Status == ExecutionStatus.Cancelled) throw new OperationCanceledException();
 
             // Mevcut node bilgisini güncelle
             await _dbLock.WaitAsync(cancellationToken);
@@ -387,22 +390,9 @@ public class WorkflowRunner
             await WriteLog(dbContext, execution, node.Id, LogLevel.Info, 
                 $"Node çalıştırılıyor: {node.Name} ({node.Type})");
 
+            await _events.PublishNodeStartedAsync(execution.Id, node.Id, node.Name, node.Type);
             // İşleyiciyi (Handler) bul
-            if (!_handlers.TryGetValue(node.Type, out var handler))
-            {
-                // Custom node fallback — custom.* veya DB'de tanımlı olanlar
-                if (_handlers.TryGetValue("custom.*", out var customHandler))
-                {
-                    handler = customHandler;
-                }
-                else
-                {
-                    _logger.LogWarning("Handler bulunamadı: {NodeType}, veri geçiriliyor", node.Type);
-                    await ExecuteNextNodes(dbContext, execution, graph, node, inputData, "output", 
-                        memory, visitedNodes, cancellationToken);
-                    return;
-                }
-            }
+            if (!_handlers.TryGetValue(node.Type, out var handler)) throw new InvalidOperationException($"Unsupported node type: {node.Type}");
 
             // Yeniden deneme mekanizması (Retry) ile node çalıştır
             // Önce parametrelerdeki {{...}} ifadelerini resolve et
@@ -424,9 +414,11 @@ public class WorkflowRunner
                 SubflowType = node.SubflowType
             };
 
+            var nodeStopwatch = Stopwatch.StartNew();
             var result = await ExecuteNodeWithRetryAsync(
                 dbContext, execution, handler, resolvedNode, inputData, memory, cancellationToken);
 
+            await _events.PublishNodeCompletedAsync(execution.Id, node.Id, result.Success, result.Error, nodeStopwatch.Elapsed);
             if (!result.Success)
             {
                 // 'continueOnError' (Hatada devam et) parametresini kontrol et
@@ -462,10 +454,10 @@ public class WorkflowRunner
             }
 
             // Çıktıyı belleğe (Memory) yaz
-            memory[$"node_{node.Id}"] = result.OutputData;
+            memory[$"node_{node.Id}"] = result.OutputData is null ? null : JsonSerializer.SerializeToElement(result.OutputData);
 
             // Sonraki node'ları çalıştır
-            await ExecuteNextNodes(dbContext, execution, graph, node, result.OutputData, 
+            await ExecuteNextNodes(dbContext, execution, graph, node, memory[$"node_{node.Id}"], 
                 result.OutputPort, memory, visitedNodes, cancellationToken);
         }
         finally
@@ -492,16 +484,11 @@ public class WorkflowRunner
         if (node.Parameters.TryGetValue("timeout", out var timeoutParam) 
             && int.TryParse(timeoutParam?.ToString(), out var timeoutMs))
         {
-            nodeTimeout = TimeSpan.FromMilliseconds(timeoutMs);
+            nodeTimeout = TimeSpan.FromMilliseconds(Math.Clamp(timeoutMs, 100, 300000));
         }
 
         // Node'a özgü yeniden deneme (retry) sayısı
         var maxRetries = MaxNodeRetries;
-        if (node.Parameters.TryGetValue("retries", out var retryParam) 
-            && int.TryParse(retryParam?.ToString(), out var retryCount))
-        {
-            maxRetries = Math.Min(retryCount, 5); // En fazla 5 deneme
-        }
 
         for (int attempt = 0; attempt <= maxRetries; attempt++)
         {
@@ -685,6 +672,7 @@ public class WorkflowRunner
             };
             
             await _logStream.WriteAsync(execution.Id, logEvent);
+            await _events.PublishLogAsync(execution.Id, nodeId, level.ToString().ToLowerInvariant(), message);
         }
         finally
         {

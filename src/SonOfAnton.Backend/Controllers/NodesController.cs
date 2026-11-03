@@ -16,64 +16,19 @@ namespace SonOfAnton.Backend.Controllers;
 [Produces("application/json")]
 public class NodesController : ControllerBase
 {
-    private readonly CustomNodeService _customNodeService;
-    private readonly IUserContext _userContext;
-    private readonly PluginLoaderService _pluginLoader;
+    private readonly HashSet<string> _supported;
+    public NodesController(IEnumerable<SonOfAnton.Backend.Engine.INodeHandler> handlers)
+        => _supported = handlers.Select(h => h.NodeType).ToHashSet(StringComparer.Ordinal);
 
-    public NodesController(
-        CustomNodeService customNodeService,
-        IUserContext userContext,
-        PluginLoaderService pluginLoader)
-    {
-        _customNodeService = customNodeService;
-        _userContext = userContext;
-        _pluginLoader = pluginLoader;
-    }
-
-    /// <summary>
-    /// Kullanılabilir tüm node tiplerini listele (built-in + custom + plugin).
-    /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(List<NodeDefinitionDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<NodeDefinitionDto>>> GetAll()
-    {
-        var builtInNodes = NodeRegistry.GetAllNodes();
-        var tenantId = _userContext.TenantId ?? "default";
-        var customNodes = await _customNodeService.GetAsNodeDefinitionsAsync(tenantId);
-        var pluginNodes = _pluginLoader.GetPluginNodes();
+    public ActionResult<List<NodeDefinitionDto>> GetAll()
+        => Ok(NodeRegistry.GetAllNodes().Where(n => _supported.Contains(n.Type)).Select(MapToDto).ToList());
 
-        var allNodes = builtInNodes
-            .Concat(customNodes)
-            .Concat(pluginNodes)
-            .ToList();
-
-        return Ok(allNodes.Select(MapToDto).ToList());
-    }
-
-    /// <summary>
-    /// Belirli bir node tipinin detayını getir.
-    /// </summary>
     [HttpGet("{type}")]
-    [ProducesResponseType(typeof(NodeDefinitionDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<NodeDefinitionDto>> Get(string type)
+    public ActionResult<NodeDefinitionDto> Get(string type)
     {
         var node = NodeRegistry.GetNode(type);
-
-        if (node == null)
-        {
-            var tenantId = _userContext.TenantId ?? "default";
-            var customNodes = await _customNodeService.GetAsNodeDefinitionsAsync(tenantId);
-            node = customNodes.FirstOrDefault(n => n.Type == type);
-        }
-
-        if (node == null)
-            node = _pluginLoader.GetPluginNodes().FirstOrDefault(n => n.Type == type);
-
-        if (node == null)
-            return NotFound();
-
-        return Ok(MapToDto(node));
+        return node is null || !_supported.Contains(type) ? NotFound() : Ok(MapToDto(node));
     }
 
     private static NodeDefinitionDto MapToDto(NodeDefinition n) => new()
