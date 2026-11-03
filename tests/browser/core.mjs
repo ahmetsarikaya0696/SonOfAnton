@@ -10,6 +10,14 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ ignoreHTTPSErrors: true });
 page.setDefaultTimeout(60000);
 const errors = [];
+const apiFailures = [];
+page.on('response', async response => {
+    if (response.url().startsWith('https://localhost:5002/') && response.status() >= 400) {
+        apiFailures.push({ path: new URL(response.url()).pathname, status: response.status(),
+            hasBearer: Boolean(await response.request().headerValue('authorization')),
+            challenge: response.headers()['www-authenticate'] });
+    }
+});
 page.on('pageerror', error => errors.push(error.message));
 try {
     await page.goto('https://localhost:5001');
@@ -50,6 +58,7 @@ try {
     assert.deepEqual(errors, [], 'Unhandled browser errors');
     await writeFile('test-results/browser/result.json', JSON.stringify({ success: true, executions: 4 }));
 } catch (error) {
+    console.error('API diagnostics:', JSON.stringify(apiFailures));
     await page.screenshot({ path: 'test-results/browser/failure.png', fullPage: true });
     await writeFile('test-results/browser/failure.txt', `${error.message}\n${errors.join('\n')}\n${await page.locator('body').innerText()}`);
     throw error;
