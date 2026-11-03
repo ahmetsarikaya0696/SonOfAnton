@@ -183,6 +183,13 @@ public sealed class ApplicationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await _alice.PostAsync($"/api/workflows/execution/{run.Id}/resume", null)).StatusCode);
         await WaitForStatus(run.Id, ExecutionStatus.Completed);
         Assert.Equal(HttpStatusCode.BadRequest, (await _alice.PostAsync($"/api/workflows/execution/{run.Id}/step", null)).StatusCode);
+        var cancelledResponse = await _alice.PostAsJsonAsync($"/api/workflows/{workflow.Id}/test-run", new StartExecutionRequest());
+        cancelledResponse.EnsureSuccessStatusCode();
+        var cancelled = (await cancelledResponse.Content.ReadFromJsonAsync<ExecutionDto>())!;
+        await WaitForStatus(cancelled.Id, ExecutionStatus.Paused);
+        Assert.Equal(HttpStatusCode.OK, (await _alice.PostAsync($"/api/workflows/execution/{cancelled.Id}/cancel", null)).StatusCode);
+        await WaitForStatus(cancelled.Id, ExecutionStatus.Cancelled);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _alice.PostAsync($"/api/workflows/execution/{cancelled.Id}/resume", null)).StatusCode);
     }
 
     private async Task WaitForStatus(Guid id, ExecutionStatus expected)

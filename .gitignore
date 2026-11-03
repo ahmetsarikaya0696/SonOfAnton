@@ -362,3 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /.roo
+
+# Browser acceptance output and test-only npm install
+/test-results/
+/node_modules/

@@ -28,9 +28,27 @@ try {
         assert.equal((await executed).status(), 200);
         await page.getByText('Başarıyla tamamlandı', { exact: true }).waitFor();
     }
+    for (const control of ['İleri Sar', 'Normal Hız']) {
+        const started = page.waitForResponse(r => r.url().endsWith('/test-run') && r.request().method() === 'POST');
+        await page.getByRole('button', { name: 'Test Et', exact: true }).click();
+        const response = await started;
+        assert.equal(response.status(), 200);
+        const execution = await response.json();
+        const authorization = await response.request().headerValue('authorization');
+        let paused = false;
+        for (let attempt = 0; attempt < 150; attempt++) {
+            const state = await page.request.get(`https://localhost:5002/api/executions/${execution.id}`, { headers: { Authorization: authorization } });
+            assert.equal(state.status(), 200);
+            if ((await state.json()).status === 5) { paused = true; break; }
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        assert.equal(paused, true, 'Test execution must reach Paused');
+        await page.getByRole('button', { name: control, exact: true }).click();
+        await page.getByText('Başarıyla tamamlandı', { exact: true }).waitFor();
+    }
     await page.screenshot({ path: 'test-results/browser/completed.png', fullPage: true });
     assert.deepEqual(errors, [], 'Unhandled browser errors');
-    await writeFile('test-results/browser/result.json', JSON.stringify({ success: true, executions: 2 }));
+    await writeFile('test-results/browser/result.json', JSON.stringify({ success: true, executions: 4 }));
 } catch (error) {
     await page.screenshot({ path: 'test-results/browser/failure.png', fullPage: true });
     await writeFile('test-results/browser/failure.txt', `${error.message}\n${errors.join('\n')}\n${await page.locator('body').innerText()}`);

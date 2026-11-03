@@ -575,7 +575,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Test çalıştırma hatası: {ex.Message}");
+            _operationError = $"Test başlatılamadı: {ex.Message}";
             _isExecuting = false;
             _isTestMode = false;
         }
@@ -694,8 +694,6 @@
         {
             if (_isTestMode)
             {
-                // Normal hıza çevirmek için Resume yapıp step modundan çıkmayı simüle edebiliriz, 
-                // ama şimdilik sadece Resume yapıyor
                 await ApiService.ResumeExecutionAsync(_currentExecutionId.Value);
                 _isTestMode = false; 
                 _isPaused = false;
@@ -715,7 +713,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Pause/Resume hatası: {ex.Message}");
+            _operationError = $"Duraklatma/devam işlemi başarısız: {ex.Message}";
         }
     }
 
