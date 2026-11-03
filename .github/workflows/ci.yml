@@ -1,5 +1,11 @@
 name: Core verification
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
+concurrency:
+  group: core-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
