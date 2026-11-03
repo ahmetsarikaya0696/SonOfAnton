@@ -20,11 +20,17 @@ page.on('response', async response => {
 });
 page.on('pageerror', error => errors.push(error.message));
 try {
+    const firstApiRequest = page.waitForRequest(r => r.url().startsWith('https://localhost:5002/') && r.headers()['authorization']);
     await page.goto('https://localhost:5001');
     await page.locator('input[name="username"]').fill(user.username);
     await page.locator('input[name="password"]').fill(user.credentials.find(c => c.type === 'password').value);
     await page.locator('input[type="submit"], button[type="submit"]').first().click();
     await page.getByRole('button', { name: 'Kaydet', exact: true }).waitFor();
+    const apiRequest = await firstApiRequest;
+    const bearer = await apiRequest.headerValue('authorization');
+    const claims = JSON.parse(Buffer.from(bearer.split('.')[1], 'base64url').toString());
+    assert.equal(typeof claims.sub, 'string', 'Access token must contain subject');
+    assert.ok([claims.aud].flat().includes('sonofanton-backend'), 'Access token must target backend');
     await page.locator('.palette-node').filter({ hasText: 'Manuel' }).first().click();
     await page.locator('.workflow-name-input').fill('Browser acceptance');
     const saved = page.waitForResponse(r => r.url().endsWith('/api/workflows') && r.request().method() === 'POST');

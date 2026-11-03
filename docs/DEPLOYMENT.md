@@ -26,7 +26,7 @@ Compose yalnız altyapıyı başlatır; backend/frontend logları kendi terminal
 
 Geliştirme hesabı `dev@sonofanton.local`; parolası `keycloak/sonofanton-realm.json` içindeki `users[].credentials[].value` alanındadır. Gerçek kullanıcı parolalarını repoya eklemeyin.
 
-Fresh import frontend client için `sonofanton-backend` audience mapper içerir. **Mevcut realm import ile üzerine yazılmaz.** Keycloak client mapper ayarına `oidc-audience-mapper`, `included.client.audience=sonofanton-backend`, `access.token.claim=true` ekleyip yeniden giriş yapın. Mevcut volume/veri silinmez.
+Fresh import frontend client için `sonofanton-backend` audience mapper içerir. **Mevcut realm import ile üzerine yazılmaz.** Keycloak client mapper ayarına `oidc-audience-mapper`, `included.client.audience=sonofanton-backend`, `access.token.claim=true` ekleyip yeniden giriş yapın. Ayrıca frontend client dedicated scope içine `Subject (sub)` (`oidc-sub-mapper`) ekleyip `Add to access token` ayarını açın. Özel realm scope listesi Keycloak 26 varsayılan `basic` scope'unu içermediğinden bu mapper açıkça tanımlanır. Mevcut volume/veri silinmez.
 
 ## Yapılandırma
 
