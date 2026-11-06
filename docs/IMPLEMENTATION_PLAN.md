@@ -31,7 +31,8 @@ Başlangıç: 2 Kasım 2026. Referans: [statik inceleme](REVIEW.md). Amaç: güv
   - [x] Aynı job tekrar geldiğinde yeni kayıt veya otomatik yan etki tekrarı oluşturma.
   - [x] Başlangıç verisini node'a taşı; terminal durumları koru.
   - [x] İptal ve schedule davranışlarını düzelt; entegrasyon testiyle doğrula.
-  - [ ] Süreç içi pause/step/resume akışının tarayıcı kabul testini tamamla.
+  - [x] Adımlı bekleme, step ve normal devam akışını gerçek tarayıcıda doğrula; duraklatılmış işi iptal etmeyi API entegrasyonuyla doğrula.
+  - [ ] Normal koşum sırasında Duraklat/Devam ve çok node çizimini tarayıcı kabulüne ekle.
 - [x] 3.2 SSE'yi abone başına bounded yayın ve tek writer ile düzelt.
 - [x] 3.3 Node kayıtlarını doğrula; AI/embedding yalnızca etkinse bağla.
 - [x] 3.4 Migration hatasında startup'ı durdur.
@@ -47,13 +48,13 @@ Başlangıç: 2 Kasım 2026. Referans: [statik inceleme](REVIEW.md). Amaç: güv
 ## 5. Kabul ve belgeler
 
 - [x] 5.1 Minimal workflow oluştur/kaydet/çalıştır/sonuç/log senaryosunu API ve gerçek Hangfire/PostgreSQL üzerinden doğrula.
-  - [ ] Keycloak girişi → editör → kaydet → çalıştır → sonuç akışını gerçek tarayıcıda doğrula. Chromium ortamın socket kısıtı nedeniyle başlayamadı.
+  - [x] Keycloak girişi → editör → node ekle → kaydet → çalıştır → sonuç/log akışını gerçek Chromium ile CI'da doğrula.
 - [x] 5.2 Anonim, başka tenant/workspace ve read-only negatif testleri.
 - [x] 5.3 Tekrar çalıştırma ve çok istemcili SSE testleri.
 - [x] 5.4 README, API, deployment ve geliştirici talimatlarını gerçek davranışa göre güncelle.
 - [x] 5.5 Test kanıtını ve doğrulanamayan sınırları kaydet; amaç odaklı commit'ler oluştur.
   - [x] Değişiklikleri GitHub inceleme dalına yükle.
-  - [ ] Tarayıcı kabulü ve CI sonuçlarından sonra PR'ı merge için hazır say.
+  - [x] Çekirdek tarayıcı kabulü ve CI sonucunu doğrula; PR'ı incelemeye hazırla.
 
 ## Çekirdek sürümün dışında
 
@@ -61,4 +62,4 @@ Gerçek harici AI sağlayıcıları, güvensiz kod sandbox'ı, tam SCIM/A2A uyum
 
 ## Doğrulama durumu
 
-11 .NET ve 2 JavaScript testi başarılı; solution build ve EF model kontrolü başarılı. Ayrıntılar ve ortam sınırlaması: [VERIFICATION.md](VERIFICATION.md). Açık kabul maddeleri varken bütün uygulama veya production hazırlığı tamamlanmış sayılmaz.
+6 Kasım 2026: 12 .NET ve 2 JavaScript testi, temiz Release build, EF model kontrolü ve dört execution içeren Chromium kabulü başarılı. Ayrıntılar ve ortam sınırlaması: [VERIFICATION.md](VERIFICATION.md). Açık kabul maddeleri varken bütün uygulama veya production hazırlığı tamamlanmış sayılmaz.

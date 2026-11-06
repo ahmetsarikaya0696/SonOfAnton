@@ -41,7 +41,10 @@ try {
     for (let run = 0; run < 2; run++) {
         const executed = page.waitForResponse(r => /\/api\/workflows\/[^/]+\/execute$/.test(r.url()) && r.request().method() === 'POST');
         await page.getByRole('button', { name: 'Çalıştır', exact: true }).click();
-        assert.equal((await executed).status(), 200);
+        const executeResponse = await executed;
+        assert.equal(executeResponse.status(), 200);
+        const run = await executeResponse.json();
+        await page.locator('.execution-id').filter({ hasText: run.id.slice(0, 8) }).waitFor();
         await page.getByText('Başarıyla tamamlandı', { exact: true }).waitFor();
     }
     for (const control of ['İleri Sar', 'Normal Hız']) {
