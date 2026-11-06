@@ -154,6 +154,57 @@ public sealed class ApplicationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Step_mode_waits_between_nodes_and_resume_finishes_remaining_nodes()
+    {
+        var first = Guid.NewGuid(); var second = Guid.NewGuid(); var third = Guid.NewGuid();
+        var graph = new WorkflowGraphDto { Nodes = [
+            new() { Id=first, Type="trigger.manual", Name="Start" },
+            new() { Id=second, Type="debug", Name="Middle" },
+            new() { Id=third, Type="debug", Name="End" }],
+            Connections = [new() { SourceNodeId=first, TargetNodeId=second }, new() { SourceNodeId=second, TargetNodeId=third }] };
+        var saved = await _alice.PostAsJsonAsync("/api/workflows", new SaveWorkflowRequest { Name="Step acceptance", WorkspaceId=_workspace, Graph=graph });
+        saved.EnsureSuccessStatusCode();
+        var workflow = (await saved.Content.ReadFromJsonAsync<WorkflowDto>())!;
+        var response = await _alice.PostAsJsonAsync($"/api/workflows/{workflow.Id}/test-run", new StartExecutionRequest());
+        response.EnsureSuccessStatusCode();
+        var run = (await response.Content.ReadFromJsonAsync<ExecutionDto>())!;
+        await WaitForStatus(run.Id, ExecutionStatus.Paused);
+        Assert.Equal(HttpStatusCode.NotFound, (await _bob.PostAsync($"/api/workflows/execution/{run.Id}/step", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _alice.PostAsync($"/api/workflows/execution/{run.Id}/step", null)).StatusCode);
+        // Wait for the first node to finish, not merely the initial paused status.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (true)
+        {
+            var logs = await _alice.GetFromJsonAsync<List<LogEventDto>>($"/api/executions/{run.Id}/logs", timeout.Token);
+            if (logs!.Any(l => l.NodeId == first)) break;
+            await Task.Delay(100, timeout.Token);
+        }
+        await WaitForStatus(run.Id, ExecutionStatus.Paused);
+        Assert.Equal(HttpStatusCode.OK, (await _alice.PostAsync($"/api/workflows/execution/{run.Id}/resume", null)).StatusCode);
+        await WaitForStatus(run.Id, ExecutionStatus.Completed);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _alice.PostAsync($"/api/workflows/execution/{run.Id}/step", null)).StatusCode);
+        var cancelledResponse = await _alice.PostAsJsonAsync($"/api/workflows/{workflow.Id}/test-run", new StartExecutionRequest());
+        cancelledResponse.EnsureSuccessStatusCode();
+        var cancelled = (await cancelledResponse.Content.ReadFromJsonAsync<ExecutionDto>())!;
+        await WaitForStatus(cancelled.Id, ExecutionStatus.Paused);
+        Assert.Equal(HttpStatusCode.OK, (await _alice.PostAsync($"/api/workflows/execution/{cancelled.Id}/cancel", null)).StatusCode);
+        await WaitForStatus(cancelled.Id, ExecutionStatus.Cancelled);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _alice.PostAsync($"/api/workflows/execution/{cancelled.Id}/resume", null)).StatusCode);
+    }
+
+    private async Task WaitForStatus(Guid id, ExecutionStatus expected)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (true)
+        {
+            var status = await _alice.GetFromJsonAsync<ExecutionDto>($"/api/executions/{id}", timeout.Token);
+            if (status!.Status == expected) return;
+            Assert.NotEqual(ExecutionStatus.Failed, status.Status);
+            await Task.Delay(100, timeout.Token);
+        }
+    }
+
+    [Fact]
     public async Task Anonymous_and_experimental_surfaces_are_closed()
     {
         using var anonymous=_app.CreateClient(new(){BaseAddress=new Uri("https://localhost")});

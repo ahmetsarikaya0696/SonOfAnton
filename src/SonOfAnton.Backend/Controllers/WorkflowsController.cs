@@ -292,8 +292,12 @@ public class WorkflowsController : ControllerBase
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("workflow-execution")]
     public async Task<IActionResult> StepExecution(Guid id)
     {
-        if (!await _dbContext.Executions.AnyAsync(e => e.Id == id)) return NotFound();
-        var token = _pauseTokens.GetOrCreate(id);
+        var execution = await _dbContext.Executions.FindAsync(id);
+        if (execution is null) return NotFound();
+        if (execution.Status != ExecutionStatus.Paused)
+            return BadRequest(new { error = "Only paused executions can be stepped" });
+        var token = _pauseTokens.Get(id);
+        if (token is null) return Conflict(new { error = "No active worker owns this paused execution" });
         token.IsStepMode = true;
         token.Resume();
         return Ok();
@@ -371,11 +375,12 @@ public class WorkflowsController : ControllerBase
             BackgroundJob.Delete(execution.HangfireJobId);
         }
         
-        _pauseTokens.ResumeExecution(executionId);
         execution.Status = ExecutionStatus.Cancelled;
         execution.CompletedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
         
+        // Persist cancellation before waking the worker, so it cannot enter the next node.
+        _pauseTokens.ResumeExecution(executionId);
         _logger.LogInformation("Execution iptal edildi: {ExecutionId}", executionId);
 
         return Ok(new { message = "Execution cancelled" });
@@ -516,9 +521,12 @@ public class WorkflowsController : ControllerBase
         if (execution.Status != ExecutionStatus.Paused)
             return BadRequest(new { error = "Only paused executions can be resumed" });
 
+        var token = _pauseTokens.Get(executionId);
+        if (token is null) return Conflict(new { error = "No active worker owns this paused execution" });
         execution.Status = ExecutionStatus.Running;
         await _dbContext.SaveChangesAsync();
 
+        token.IsStepMode = false;
         _pauseTokens.ResumeExecution(executionId);
 
         _logger.LogInformation("Execution devam ettiriliyor: {ExecutionId}", executionId);

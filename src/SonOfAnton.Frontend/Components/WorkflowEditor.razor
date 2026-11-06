@@ -214,7 +214,7 @@
             </div>
         }
 
-        <NodePalette OnNodeDrop="HandleNodeDrop" />
+        <NodePalette OnNodeSelected="HandleNodeSelected" OnNodeDrop="HandleNodeDrop" />
         
         <div class="canvas-container" 
              @ondragover="HandleDragOver" 
@@ -575,7 +575,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Test çalıştırma hatası: {ex.Message}");
+            _operationError = $"Test başlatılamadı: {ex.Message}";
             _isExecuting = false;
             _isTestMode = false;
         }
@@ -636,6 +636,12 @@
         // Bu basit bir kontrol, gerçek uygulamada SSE event'i ile yapılır
     }
 
+    private void HandleNodeSelected(SonOfAnton.Shared.Models.NodeDefinition node)
+    {
+        var offset = DiagramState.Diagram.Nodes.Count * 30;
+        HandleNodeDrop((node, 100 + offset, 100 + offset));
+    }
+
     private void HandleNodeDrop((SonOfAnton.Shared.Models.NodeDefinition Node, double X, double Y) args)
     {
         _showConnectionHint = false;
@@ -694,8 +700,6 @@
         {
             if (_isTestMode)
             {
-                // Normal hıza çevirmek için Resume yapıp step modundan çıkmayı simüle edebiliriz, 
-                // ama şimdilik sadece Resume yapıyor
                 await ApiService.ResumeExecutionAsync(_currentExecutionId.Value);
                 _isTestMode = false; 
                 _isPaused = false;
@@ -715,7 +719,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Pause/Resume hatası: {ex.Message}");
+            _operationError = $"Duraklatma/devam işlemi başarısız: {ex.Message}";
         }
     }
 
@@ -748,7 +752,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Step hatası: {ex.Message}");
+            _operationError = $"Adım çalıştırılamadı: {ex.Message}";
         }
     }
 

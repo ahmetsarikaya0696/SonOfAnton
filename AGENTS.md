@@ -19,3 +19,6 @@
 - SSE token'ını URL'ye koyma. Abone kuyruğunu sınırla, tek writer kullan ve bağlantı kapandığında aboneliği kaldır.
 - Doğrulama: `node --test tests/frontend/*.test.mjs`, `dotnet tool restore`, `dotnet ef migrations has-pending-model-changes --project src/SonOfAnton.Backend`.
 - Yerel araç paketine uygulanan ortam workaround'unu ürün düzeltmesi veya temiz CI sonucu diye sunma. Tarayıcı açılmadıysa UI kabulünü tamamlandı işaretleme.
+
+- Frontend kabulü `tests/browser/core.mjs` ile gerçek Keycloak/Chromium üzerinde yapılır. Testte force-click kullanarak üst üste binen kontrolleri veya boş graph'ı başarı sayma; gerçek etkileşimi ve kaydedilen node'ları doğrula.
+- Geliştirme realm değişikliklerinde access token `sub` ve backend audience sözleşmesini koru. Mevcut realm import ile güncellenmez; taşıma adımını deployment belgesine yaz.
