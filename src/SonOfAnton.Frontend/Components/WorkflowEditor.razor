@@ -214,7 +214,7 @@
             </div>
         }
 
-        <NodePalette OnNodeDrop="HandleNodeDrop" />
+        <NodePalette OnNodeSelected="HandleNodeSelected" OnNodeDrop="HandleNodeDrop" />
         
         <div class="canvas-container" 
              @ondragover="HandleDragOver" 
@@ -634,6 +634,12 @@
         
         // Tüm node'lar tamamlandıysa execution'ı bitir
         // Bu basit bir kontrol, gerçek uygulamada SSE event'i ile yapılır
+    }
+
+    private void HandleNodeSelected(SonOfAnton.Shared.Models.NodeDefinition node)
+    {
+        var offset = DiagramState.Diagram.Nodes.Count * 30;
+        HandleNodeDrop((node, 100 + offset, 100 + offset));
     }
 
     private void HandleNodeDrop((SonOfAnton.Shared.Models.NodeDefinition Node, double X, double Y) args)

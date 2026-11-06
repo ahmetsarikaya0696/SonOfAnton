@@ -3,8 +3,7 @@
 @using SonOfAnton.Shared.Enums
 @using System.Text.Json
 @using Microsoft.JSInterop
-@inject IJSRuntime JS
-@inject IConfiguration Configuration
+@inject LogStreamService LogStream
 @implements IAsyncDisposable
 
 <div class="log-console @(_isOpen ? "open" : "")">
@@ -28,6 +27,7 @@
             </label>
         </div>
 
+        @if (_streamError is not null) { <p role="alert">@_streamError</p> }
         <div class="console-body" @ref="_logContainer">
             @if (_logs.Count == 0)
             {
@@ -63,77 +63,50 @@
     private List<LogEventDto> _logs = [];
     private ElementReference _logContainer;
     private Guid? _lastExecutionId;
-    private string? _currentConnectionId;
-    private DotNetObjectReference<LogConsole>? _dotNetRef;
+    private CancellationTokenSource? _streamCancellation;
+    private Task _streamTask = Task.CompletedTask;
+    private string? _streamError;
 
     protected override async Task OnParametersSetAsync()
     {
-        Console.WriteLine($"[LogConsole] OnParametersSetAsync - ExecutionId: {ExecutionId}, LastExecutionId: {_lastExecutionId}");
-        
-        if (ExecutionId.HasValue && ExecutionId != Guid.Empty && ExecutionId != _lastExecutionId)
-        {
-            Console.WriteLine($"[LogConsole] Starting streaming for: {ExecutionId}");
-            _lastExecutionId = ExecutionId;
-            await StartStreaming(ExecutionId.Value);
-        }
-    }
-
-    private async Task StartStreaming(Guid executionId)
-    {
-        Console.WriteLine($"[LogConsole] StartStreaming called: {executionId}");
-        
-        // Önceki bağlantıyı kapat
-        if (_currentConnectionId != null)
-        {
-            await JS.InvokeVoidAsync("sseHelper.disconnect", _currentConnectionId);
-        }
-        
-        // Yeni execution için logları temizle
+        if (ExecutionId == _lastExecutionId) return;
+        await StopStreamingAsync();
+        _lastExecutionId = ExecutionId;
         _logs.Clear();
-        StateHasChanged();
-
-        // Yeni bağlantı başlat
-        _currentConnectionId = Guid.NewGuid().ToString();
-        _dotNetRef = DotNetObjectReference.Create(this);
-        
-        var backendUrl = Configuration.GetValue<string>("BackendUrl") ?? "https://localhost:5002";
-        var sseUrl = $"{backendUrl}/api/logs/{executionId}";
-        
-        Console.WriteLine($"[LogConsole] Connecting to SSE: {sseUrl}");
-        
-        await JS.InvokeVoidAsync("sseHelper.connect", _dotNetRef, _currentConnectionId, sseUrl);
+        _streamError = null;
+        if (ExecutionId is { } id && id != Guid.Empty)
+        {
+            _streamCancellation = new CancellationTokenSource();
+            _streamTask = ReadLogsAsync(id, _streamCancellation.Token);
+        }
     }
 
-    [JSInvokable]
-    public async Task OnLogReceived(string jsonData)
+    private async Task ReadLogsAsync(Guid executionId, CancellationToken cancellationToken)
     {
         try
         {
-            Console.WriteLine($"[LogConsole] OnLogReceived: {jsonData[..Math.Min(100, jsonData.Length)]}");
-            
-            var logEvent = JsonSerializer.Deserialize<LogEventDto>(jsonData, new JsonSerializerOptions
+            await foreach (var log in LogStream.StreamLogsAsync(executionId, cancellationToken))
             {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (logEvent != null)
-            {
-                _logs.Add(logEvent);
+                if (cancellationToken.IsCancellationRequested) break;
+                _logs.Add(log);
+                if (_logs.Count > 200) _logs.RemoveAt(0);
                 await InvokeAsync(StateHasChanged);
             }
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception)
         {
-            Console.WriteLine($"[LogConsole] Parse error: {ex.Message}");
+            _streamError = "Log bağlantısı kesildi. Execution ayrıntısından kayıtlı logları açabilirsiniz.";
+            await InvokeAsync(StateHasChanged);
         }
     }
 
-    [JSInvokable]
-    public Task OnStreamComplete()
+    private async Task StopStreamingAsync()
     {
-        Console.WriteLine("[LogConsole] Stream completed");
-        _currentConnectionId = null;
-        return Task.CompletedTask;
+        _streamCancellation?.Cancel();
+        await _streamTask;
+        _streamCancellation?.Dispose();
+        _streamCancellation = null;
     }
 
     private void ToggleConsole()
@@ -155,13 +128,5 @@
         _ => "📝"
     };
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_currentConnectionId != null)
-        {
-            await JS.InvokeVoidAsync("sseHelper.disconnect", _currentConnectionId);
-        }
-        _dotNetRef?.Dispose();
-    }
+    public async ValueTask DisposeAsync() => await StopStreamingAsync();
 }
-

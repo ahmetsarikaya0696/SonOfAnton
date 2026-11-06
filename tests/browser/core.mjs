@@ -35,7 +35,9 @@ try {
     await page.locator('.workflow-name-input').fill('Browser acceptance');
     const saved = page.waitForResponse(r => r.url().endsWith('/api/workflows') && r.request().method() === 'POST');
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
-    assert.equal((await saved).status(), 200);
+    const saveResponse = await saved;
+    assert.equal(saveResponse.status(), 200);
+    assert.equal((await saveResponse.json()).graph.nodes.length, 1, 'Palette click must persist one node');
     for (let run = 0; run < 2; run++) {
         const executed = page.waitForResponse(r => /\/api\/workflows\/[^/]+\/execute$/.test(r.url()) && r.request().method() === 'POST');
         await page.getByRole('button', { name: 'Çalıştır', exact: true }).click();
@@ -62,6 +64,8 @@ try {
     }
     await page.screenshot({ path: 'test-results/browser/completed.png', fullPage: true });
     assert.deepEqual(errors, [], 'Unhandled browser errors');
+    assert.deepEqual(apiFailures, [], 'Core UI must not issue failing API requests');
+    await page.locator('.log-console .log-entry').first().waitFor();
     await writeFile('test-results/browser/result.json', JSON.stringify({ success: true, executions: 4 }));
 } catch (error) {
     console.error('API diagnostics:', JSON.stringify(apiFailures));
