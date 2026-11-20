@@ -22,3 +22,9 @@
 
 - Frontend kabulü `tests/browser/core.mjs` ile gerçek Keycloak/Chromium üzerinde yapılır. Testte force-click kullanarak üst üste binen kontrolleri veya boş graph'ı başarı sayma; gerçek etkileşimi ve kaydedilen node'ları doğrula.
 - Geliştirme realm değişikliklerinde access token `sub` ve backend audience sözleşmesini koru. Mevcut realm import ile güncellenmez; taşıma adımını deployment belgesine yaz.
+
+## Vercel dağıtımı
+
+- API container'ında Hangfire worker kapalı, daemon'da açık olmalıdır. Kontrol komutları PostgreSQL'de atomik güncellenir; süreç içi pause registry yeniden eklenmez.
+- `tests/browser/run.sh` API ve worker'ı ayrı süreçlerde çalıştırır. Docker image derlemesi ve canlı OIDC kabulü olmadan production deploy tamamlandı denmez.
+- Canlı issuer/client eksikse localhost veya geliştirme hesabıyla doldurma. Production secret'larını preview'a taşımama kuralını koru.

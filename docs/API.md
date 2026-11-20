@@ -18,7 +18,7 @@ Genel limit JWT kullanıcısı için 100/dakika, API key için kayıtlı değere
 | POST `/api/workflows/{id}/execute` | `StartExecutionRequest`; `ExecutionDto` döner |
 | POST `/api/workflows/{id}/test-run` | Adımlı yürütme |
 | POST `/api/workflows/execution/{id}/step` | Bir sonraki node'a izin ver |
-| POST `/api/workflows/execution/{id}/cancel`, `/pause`, `/resume` | İptal / aynı süreçte dur–devam |
+| POST `/api/workflows/execution/{id}/cancel`, `/pause`, `/resume` | İptal / PostgreSQL üzerinden dur–devam |
 | GET `/api/workflows/{id}/executions` | Çalıştırma geçmişi |
 | PATCH `/api/workflows/{id}/move` | Aynı workspace klasörüne taşı |
 | GET `/api/workflows/stats`, `/{id}/stats` | Kapsamlanmış istatistik |
@@ -73,6 +73,6 @@ Marketplace/chatbot/webhook/published/SCIM/A2A/chat/RAG/planlama/veri tablosu/fo
 
 ## Execution kontrol sözleşmesi
 
-`test-run` ilk node öncesinde `Paused` durumunda bekler. `step` yalnız aktif worker'a sahip `Paused` execution için kabul edilir; bir node çalışır ve sonraki node öncesinde yeniden bekler. `resume` adım modunu kapatır ve kalan node'ları normal çalıştırır. Terminal execution üzerinde step/resume 400 döner; başka kullanıcı/tenant kaynağı 404 ile gizlenir. Worker'ın süreç içi pause kaydı kaybolmuşsa resume/step 409 döner; restart sonrası replay sağlanmaz.
+`test-run` ilk node öncesinde `Paused` durumunda bekler. `step` yalnız `Paused` execution için kabul edilir; bir node çalışır ve sonraki node öncesinde yeniden bekler. `resume` adım modunu kapatır ve kalan node'ları normal çalıştırır. Terminal execution üzerinde step/resume 400 döner; başka kullanıcı/tenant kaynağı 404 ile gizlenir. Kontrol komutları PostgreSQL üzerinde atomik olarak kaydedilir; yarışan komutlardan koşulu artık karşılamayan 409 alır. API ve worker farklı süreçlerde olabilir. Worker restart sonrası checkpoint replay sağlanmaz; komutun kabul edilmesi worker canlılık garantisi değildir.
 
-İptal durumu worker uyandırılmadan önce kalıcılaştırılır. Pause, çalışmakta olan node'u ortasında kesmez; sonraki node sınırında beklenir.
+İptal durumu kalıcılaştırılır; worker bunu node sınırında ve duraklama sırasında kontrol eder. Pause, çalışmakta olan node'u ortasında kesmez; sonraki node sınırında beklenir.

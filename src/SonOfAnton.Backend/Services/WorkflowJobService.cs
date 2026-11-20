@@ -2,7 +2,6 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using SonOfAnton.Backend.Data;
 using SonOfAnton.Backend.Engine;
-using SonOfAnton.Backend.Execution;
 using SonOfAnton.Shared.Core.Identity;
 using SonOfAnton.Shared.Entities;
 using SonOfAnton.Shared.Enums;
@@ -22,7 +21,7 @@ public class CronValidationResult
 
 // One persisted execution and one queue entry for all supported API entry points.
 public sealed class WorkflowJobService(SonOfAntonDbContext db, IUserContext user,
-    IBackgroundJobClient jobs, WorkflowRunner runner, PauseTokenRegistry pauses)
+    IBackgroundJobClient jobs, WorkflowRunner runner)
 {
     public async Task<ExecutionEntity> StartAsync(Guid workflowId, object? input = null, TimeSpan? delay = null, bool stepMode = false)
     {
@@ -30,11 +29,10 @@ public sealed class WorkflowJobService(SonOfAntonDbContext db, IUserContext user
         var tenant = user.TenantId ?? throw new UnauthorizedAccessException();
         var userId = user.CurrentUserId;
         if (!await CanExecuteAsync(workflow, tenant, userId)) throw new UnauthorizedAccessException();
-        var execution = new ExecutionEntity { WorkflowId = workflowId,
+        var execution = new ExecutionEntity { WorkflowId = workflowId, StepMode = stepMode,
             Memory = input is null ? null : JsonSerializer.SerializeToDocument(input) };
         db.Executions.Add(execution);
         await db.SaveChangesAsync();
-        if (stepMode) { var token = pauses.GetOrCreate(execution.Id); token.IsStepMode = true; token.Pause(); }
         try
         {
             execution.HangfireJobId = delay.HasValue
