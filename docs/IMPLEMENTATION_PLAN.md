@@ -63,3 +63,14 @@ Gerçek harici AI sağlayıcıları, güvensiz kod sandbox'ı, tam SCIM/A2A uyum
 ## Doğrulama durumu
 
 6 Kasım 2026: 12 .NET ve 2 JavaScript testi, temiz Release build, EF model kontrolü ve dört execution içeren Chromium kabulü başarılı. Ayrıntılar ve ortam sınırlaması: [VERIFICATION.md](VERIFICATION.md). Açık kabul maddeleri varken bütün uygulama veya production hazırlığı tamamlanmış sayılmaz.
+
+
+## 8. Vercel + Neon canlı dağıtım
+- [x] 8.1 Ayrılmış Vercel projesi ve Neon production DB oluştur.
+- [x] 8.2 DB bağlantısı ve şifreleme anahtarını production secret olarak kaydet.
+- [ ] 8.3 Container servislerini ve ayrı Hangfire daemon'ını doğrula.
+  - [ ] 8.3.1 PostgreSQL kontrol komutları için .NET ve ayrı süreç browser testlerini geçir.
+  - [ ] 8.3.2 Her iki Docker image'ını temiz CI'da derle.
+- [ ] 8.4 Canlı OIDC issuer/public client ayarlarını tamamla (geliştirme Keycloak'u kullanılmaz).
+- [ ] 8.5 Production build, migration ve uçtan uca canlı kabulü gerçekleştir.
+- [ ] 8.6 Domain'i doğrulanmış deployment'a bağla; release kanıtını kaydet.

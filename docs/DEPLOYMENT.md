@@ -61,7 +61,7 @@ Test DB'si gerçek kullanıcı verisi içermemelidir. Testler migration uygular 
 
 ## Dağıtım sınırları
 
-Çekirdek tek backend instance içindir. Pause/step süreç içindedir; restart'tan sonra checkpoint replay yoktur. Yarım kalmış işleri harici etkilerini incelemeden tekrar başlatmayın. Reverse proxy altında SSE buffering kapalı olmalıdır.
+API ve Hangfire worker ayrı süreçlerde çalışabilir. Pause/step komutları PostgreSQL üzerinden paylaşılır; restart'tan sonra checkpoint replay yoktur. Üretim yapılandırması tek Hangfire daemon kullanır. Yarım kalmış işleri harici etkilerini incelemeden tekrar başlatmayın. Reverse proxy altında SSE buffering kapalı olmalıdır.
 
 Production dağıtımı yapılmadı. Gerçek ortam TLS/issuer/secrets, yedek–restore, eski üretim verisiyle upgrade, saklama/redaksiyon politikası ve harici entegrasyon kabulü gerekir. Eski tenant'sız/sahipsiz kayıtlar otomatik herkese açılmaz; açık sahiplik taşıma planı gerekir. Kanıt: [VERIFICATION.md](VERIFICATION.md).
 
@@ -79,3 +79,33 @@ bash tests/browser/run.sh
 ```
 
 Test script'i standart geliştirme portlarını kullanır, frontend/backend süreçlerini ve Compose servislerini sonunda durdurur. Aktif geliştirme oturumuyla aynı anda çalıştırmayın.
+
+## Vercel + Neon hazırlığı (20 Kasım 2026)
+
+**Durum: production release yapılmadı.** Canlı HTTPS OIDC issuer ve PKCE public client eksik. Repo içindeki `start-dev`, örnek hesaplar veya parolalar production'a taşınmaz. Keycloak'u serverless container'a doğrudan koymak güvenilir bir auth-session/cluster çözümü değildir. Mevcut canlı OIDC sunucusu sağlanmalı; başka kimlik sağlayıcısına geçiş ayrıca uygulanıp doğrulanmalıdır.
+
+Hazırlanan kaynaklar:
+
+- Vercel: `ahmetsarikaya0696-8994/sonofanton`, proje `prj_YYnJLmBhw3zaQWKFZtOjLJPBUvvL`.
+- Neon: `super-meadow-44563899`, production branch `br-silent-pond-b9dlxhw4`, PostgreSQL 16, `aws-eu-central-1`, database `sonofanton`.
+- Production secret'ları: `ConnectionStrings__DefaultConnection`, `Encryption__Key`, `PORT`. Değerleri repoya veya browser config'e yazılmaz.
+- Neon suspend süresini değiştirme denemesi hesap politikası tarafından HTTP 412 ile reddedildi; plan yükseltilmedi.
+
+`vercel.json` iki container service ve bir `fra1` daemon tanımlar. Services/container/daemons Vercel beta özellikleridir. `/api/*` ve `/health/*` API'ye, diğer yollar Blazor statik servis girişine gider. API image'ında Hangfire worker kapalıdır; daemon komutu aynı binary'de `Execution:WorkerEnabled=true` kullanır. `Hosting:PlatformTls=true` yalnız Vercel TLS ingress arkasında kullanılır; doğrudan HTTP yayın için değildir.
+
+Tamamlanması gereken production değişkenleri:
+
+| Değişken | Değer |
+|---|---|
+| `Authentication__DefaultAuthority` | Güvenilen HTTPS OIDC issuer |
+| `Authentication__Audience` | Access token API audience; varsayılan `sonofanton-backend` |
+| `PUBLIC_OIDC_AUTHORITY` | Aynı HTTPS issuer; browser tarafından görülebilir |
+| `PUBLIC_OIDC_CLIENT_ID` | Authorization Code + PKCE public client; secret içermez |
+
+Public client redirect adresi production origin + `/authentication/login-callback`, logout adresi production origin olmalıdır. Access token `sub`, API audience, `preferred_username`, `email` ve mevcut izin eşlemesine uygun `roles` claim'lerini içermelidir. Gizli client credential'ı frontend'e verilmez.
+
+Frontend container başlarken yalnız public OIDC alanlarını `appsettings.json` içine yazar; issuer/client eksikse başlamayı reddeder. Backend adresi aynı origin'dir. Appsettings cache edilmez. Secret'lar yalnız production hedefindedir; preview'u production DB'ye bağlamayın. Hangfire/advisory lock uyumluluğu için Npgsql doğrudan Neon endpoint'i ve küçük bağlantı havuzu kullanır.
+
+Dağıtım sırası: CI doğrulaması → production OIDC client ayarları → staging production build → health/OIDC/kayıt/çok node çalıştırma/adımlama/iptal kabulü → domain ataması. Migration additive'dir; mevcut veriler silinmez. API ve worker başlangıçta EF migration uygular. Sadece health=200 uygulama kabulü değildir. Canlı kaynaklarla kabul tamamlanmadan release başarılı sayılmaz.
+
+SSE completion ve log replay DB üzerinden işler. Süreç içi node-progress event yayınları API/worker arasında taşınmaz; anlık node animasyonları için ayrıca kalıcı event akışı gerekir. Restart sonrası yarım kalan işlerin otomatik replay'i kapsam dışıdır.
