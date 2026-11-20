@@ -9,7 +9,8 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // Backend API URL (development)
-var backendUrl = builder.Configuration.GetValue<string>("BackendUrl") ?? "https://localhost:5002";
+var backendUrl = new Uri(new Uri(builder.HostEnvironment.BaseAddress),
+    builder.Configuration.GetValue<string>("BackendUrl") ?? "https://localhost:5002").AbsoluteUri;
 
 // ─── OIDC Authentication ────────────────────────────────────────
 builder.Services.AddOidcAuthentication(options =>

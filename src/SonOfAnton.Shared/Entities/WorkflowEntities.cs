@@ -66,6 +66,10 @@ public class WorkflowEntity
 /// </summary>
 public class ExecutionEntity
 {
+    public bool PauseRequested { get; set; }
+    public bool StepMode { get; set; }
+    public int StepsRemaining { get; set; }
+
     public Guid Id { get; set; } = Guid.NewGuid();
     
     public Guid WorkflowId { get; set; }

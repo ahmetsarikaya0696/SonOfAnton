@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "frontend": { "root": ".", "runtime": "container", "entrypoint": "deployment/Dockerfile.frontend" },
+    "api": { "root": ".", "runtime": "container", "entrypoint": "deployment/Dockerfile.api" }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/health/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ],
+  "daemons": {
+    "workflow-worker": {
+      "root": ".",
+      "entrypoint": "deployment/Dockerfile.api",
+      "command": ["dotnet", "SonOfAnton.Backend.dll", "--Execution:WorkerEnabled=true"],
+      "instances": { "fra1": 1 },
+      "livenessProbe": { "httpGet": { "port": 8080, "path": "/health/live" }, "initialDelaySeconds": 60 }
+    }
+  }
+}

@@ -22,7 +22,6 @@ public class WorkflowsController : ControllerBase
     private readonly SonOfAntonDbContext _dbContext;
     private readonly IUserContext _user;
     private readonly WorkflowJobService _jobs;
-    private readonly PauseTokenRegistry _pauseTokens;
     private readonly ISingleNodeExecutionService _singleNodeSvc;
     private readonly ILogger<WorkflowsController> _logger;
 
@@ -30,14 +29,12 @@ public class WorkflowsController : ControllerBase
         SonOfAntonDbContext dbContext,
         IUserContext user,
         WorkflowJobService jobs,
-        PauseTokenRegistry pauseTokens,
         ISingleNodeExecutionService singleNodeSvc,
         ILogger<WorkflowsController> logger)
     {
         _dbContext = dbContext;
         _user = user;
         _jobs = jobs;
-        _pauseTokens = pauseTokens;
         _singleNodeSvc = singleNodeSvc;
         _logger = logger;
     }
@@ -296,10 +293,11 @@ public class WorkflowsController : ControllerBase
         if (execution is null) return NotFound();
         if (execution.Status != ExecutionStatus.Paused)
             return BadRequest(new { error = "Only paused executions can be stepped" });
-        var token = _pauseTokens.Get(id);
-        if (token is null) return Conflict(new { error = "No active worker owns this paused execution" });
-        token.IsStepMode = true;
-        token.Resume();
+        var changed = await _dbContext.Executions.Where(e => e.Id == id && e.Status == ExecutionStatus.Paused)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.StepMode, true)
+                .SetProperty(e => e.PauseRequested, false).SetProperty(e => e.StepsRemaining, 1)
+                .SetProperty(e => e.Status, ExecutionStatus.Running));
+        if (changed == 0) return Conflict();
         return Ok();
     }
     
@@ -380,7 +378,6 @@ public class WorkflowsController : ControllerBase
         await _dbContext.SaveChangesAsync();
         
         // Persist cancellation before waking the worker, so it cannot enter the next node.
-        _pauseTokens.ResumeExecution(executionId);
         _logger.LogInformation("Execution iptal edildi: {ExecutionId}", executionId);
 
         return Ok(new { message = "Execution cancelled" });
@@ -498,10 +495,10 @@ public class WorkflowsController : ControllerBase
         if (execution.Status != ExecutionStatus.Running)
             return BadRequest(new { error = "Only running executions can be paused" });
 
-        execution.Status = ExecutionStatus.Paused;
-        await _dbContext.SaveChangesAsync();
+        var changed = await _dbContext.Executions.Where(e => e.Id == executionId && e.Status == ExecutionStatus.Running)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.PauseRequested, true));
+        if (changed == 0) return Conflict();
 
-        _pauseTokens.PauseExecution(executionId);
 
         _logger.LogInformation("Execution duraklatıldı: {ExecutionId}", executionId);
         return Ok(new { message = "Execution paused" });
@@ -521,13 +518,11 @@ public class WorkflowsController : ControllerBase
         if (execution.Status != ExecutionStatus.Paused)
             return BadRequest(new { error = "Only paused executions can be resumed" });
 
-        var token = _pauseTokens.Get(executionId);
-        if (token is null) return Conflict(new { error = "No active worker owns this paused execution" });
-        execution.Status = ExecutionStatus.Running;
-        await _dbContext.SaveChangesAsync();
-
-        token.IsStepMode = false;
-        _pauseTokens.ResumeExecution(executionId);
+        var changed = await _dbContext.Executions.Where(e => e.Id == executionId && e.Status == ExecutionStatus.Paused)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.PauseRequested, false)
+                .SetProperty(e => e.StepMode, false).SetProperty(e => e.StepsRemaining, 0)
+                .SetProperty(e => e.Status, ExecutionStatus.Running));
+        if (changed == 0) return Conflict();
 
         _logger.LogInformation("Execution devam ettiriliyor: {ExecutionId}", executionId);
         return Ok(new { message = "Execution resuming" });

@@ -27,7 +27,6 @@ public class WorkflowRunner
     private readonly LogStreamService _logStream;
     private readonly SseEventService _events;
     private readonly PerformanceMetricsService _metrics;
-    private readonly PauseTokenRegistry _pauseTokens;
     private readonly Dictionary<string, INodeHandler> _handlers;
     private readonly SemaphoreSlim _dbLock = new(1, 1);
     private readonly IStateRepository _stateRepository;
@@ -48,7 +47,6 @@ public class WorkflowRunner
         LogStreamService logStream,
         SseEventService events,
         PerformanceMetricsService metrics,
-        PauseTokenRegistry pauseTokens,
         IEnumerable<INodeHandler> handlers,
         IStateRepository stateRepository)
     {
@@ -57,7 +55,6 @@ public class WorkflowRunner
         _logStream = logStream;
         _events = events;
         _metrics = metrics;
-        _pauseTokens = pauseTokens;
         _handlers = handlers.ToDictionary(h => h.NodeType, h => h);
         _stateRepository = stateRepository;
     }
@@ -250,10 +247,6 @@ public class WorkflowRunner
             _logStream.Complete(executionId);
 
         }
-        finally
-        {
-            _pauseTokens.Remove(executionId);
-        }
     }
 
     /// <summary>
@@ -371,14 +364,22 @@ public class WorkflowRunner
 
         try
         {
-            // Duraklatma kontrolü — paused ise bekle
-            var pauseToken = _pauseTokens.GetOrCreate(execution.Id);
-            if (pauseToken.IsPaused)
-                await dbContext.Executions.Where(e => e.Id == execution.Id && e.Status == ExecutionStatus.Running)
-                    .ExecuteUpdateAsync(update => update.SetProperty(e => e.Status, ExecutionStatus.Paused), cancellationToken);
-            await pauseToken.WaitIfPausedAsync(cancellationToken);
-            await dbContext.Executions.Where(e => e.Id == execution.Id && e.Status == ExecutionStatus.Paused)
-                .ExecuteUpdateAsync(update => update.SetProperty(e => e.Status, ExecutionStatus.Running), cancellationToken);
+            // PostgreSQL is the control channel between API containers and the worker.
+            while (true)
+            {
+                await dbContext.Entry(execution).ReloadAsync(cancellationToken);
+                if (execution.Status == ExecutionStatus.Cancelled) throw new OperationCanceledException();
+                var allowed = await dbContext.Executions.Where(e => e.Id == execution.Id &&
+                    (e.Status == ExecutionStatus.Running || e.Status == ExecutionStatus.Paused) &&
+                    !e.PauseRequested && (!e.StepMode || e.StepsRemaining > 0))
+                    .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, ExecutionStatus.Running)
+                        .SetProperty(e => e.StepsRemaining, e => e.StepMode ? e.StepsRemaining - 1 : 0), cancellationToken);
+                if (allowed == 1) break;
+                await dbContext.Executions.Where(e => e.Id == execution.Id && e.Status == ExecutionStatus.Running &&
+                    (e.PauseRequested || (e.StepMode && e.StepsRemaining == 0)))
+                    .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, ExecutionStatus.Paused), cancellationToken);
+                await Task.Delay(250, cancellationToken);
+            }
             await dbContext.Entry(execution).ReloadAsync(cancellationToken);
             if (execution.Status == ExecutionStatus.Cancelled) throw new OperationCanceledException();
 

@@ -817,6 +817,10 @@ namespace SonOfAnton.Backend.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("memory");
 
+                    b.Property<bool>("PauseRequested").HasColumnType("boolean").HasColumnName("pause_requested");
+                    b.Property<bool>("StepMode").HasColumnType("boolean").HasColumnName("step_mode");
+                    b.Property<int>("StepsRemaining").HasColumnType("integer").HasColumnName("steps_remaining");
+
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");

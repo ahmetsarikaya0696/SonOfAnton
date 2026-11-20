@@ -288,6 +288,9 @@ public class SonOfAntonDbContext : DbContext
             entity.Property(e => e.CurrentNodeId).HasColumnName("current_node_id");
             entity.Property(e => e.Memory).HasColumnName("memory").HasColumnType("jsonb");
             entity.Property(e => e.ErrorMessage).HasColumnName("error_message").HasMaxLength(4000);
+            entity.Property(e => e.PauseRequested).HasColumnName("pause_requested");
+            entity.Property(e => e.StepMode).HasColumnName("step_mode");
+            entity.Property(e => e.StepsRemaining).HasColumnName("steps_remaining");
             entity.Property(e => e.HangfireJobId).HasColumnName("hangfire_job_id").HasMaxLength(100);
             entity.Property(e => e.StartedAt).HasColumnName("started_at");
             entity.Property(e => e.CompletedAt).HasColumnName("completed_at");

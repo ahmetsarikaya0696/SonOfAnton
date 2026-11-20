@@ -144,7 +144,6 @@ public class ExecutionsController : ControllerBase
         execution.Status = ExecutionStatus.Cancelled;
         execution.CompletedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
-        HttpContext.RequestServices.GetRequiredService<SonOfAnton.Backend.Execution.PauseTokenRegistry>().ResumeExecution(id);
 
         return Ok();
     }

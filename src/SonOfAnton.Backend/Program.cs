@@ -245,6 +245,7 @@ builder.Services.AddHangfire(config =>
               options.UseNpgsqlConnection(connectionString);
           });
 });
+if (builder.Configuration.GetValue("Execution:WorkerEnabled", true))
 builder.Services.AddHangfireServer(options =>
 {
     options.Queues = new[] { "default", "workflows", "critical" };
@@ -344,7 +345,6 @@ builder.Services.AddScoped<WorkflowStatsUpdater>();
 builder.Services.AddScoped<SnapshotService>();
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddScoped<SonOfAnton.Backend.Services.State.IStateRepository, SonOfAnton.Backend.Services.State.WorkflowStateRepository>();
-builder.Services.AddSingleton<PauseTokenRegistry>();
 builder.Services.AddScoped<WorkspaceService>();
 builder.Services.AddScoped<IQuotaService, QuotaService>();
 builder.Services.AddSingleton<NotificationStreamService>();
@@ -404,7 +404,7 @@ app.Use(async (context, next) =>
 });
 
 app.UseCors("BlazorWasm");
-app.UseHttpsRedirection();
+if (!builder.Configuration.GetValue<bool>("Hosting:PlatformTls")) app.UseHttpsRedirection();
 
 
 // Multi-tenant çözümleme (Authentication'dan ÖNCE)
