@@ -8,6 +8,7 @@
         </button>
     </div>
 
+    @if (_loadError is not null) { <p role="alert">@_loadError</p> }
     @if (_isLoading)
     {
         <div class="tree-loading"><span class="spinner-sm"></span></div>
@@ -30,6 +31,19 @@
                                 OnDelete="DeleteFolder"
                                 OnWorkflowDrop="HandleWorkflowDrop" />
             }
+            <div class="workflow-list" aria-label="Kayıtlı iş akışları">
+                @foreach (var workflow in _workflows.Where(w => _selectedFolderId == null || w.FolderId == _selectedFolderId))
+                {
+                    <button type="button" class="workflow-list-item"
+                            @onclick="() => OnWorkflowSelected.InvokeAsync(workflow)">
+                        <Icon Name="git-branch" Size="14" /> @workflow.Name
+                    </button>
+                }
+                @if (!_workflows.Any(w => _selectedFolderId == null || w.FolderId == _selectedFolderId))
+                {
+                    <p class="empty-workflows">Bu görünümde iş akışı yok.</p>
+                }
+            </div>
         </div>
     }
 
@@ -55,6 +69,8 @@
     [Parameter] public Guid? WorkspaceId { get; set; }
 
     private List<FolderTreeDto> _tree = [];
+    private List<WorkflowDto> _workflows = [];
+    private string? _loadError;
     private Guid? _selectedFolderId;
     private bool _isLoading = true;
     private bool _showCreateDialog;
@@ -70,6 +86,7 @@
         if (WorkspaceId != _lastWorkspaceId)
         {
             _lastWorkspaceId = WorkspaceId;
+            _selectedFolderId = null;
             await LoadTreeAsync();
         }
     }
@@ -81,18 +98,23 @@
         if (WorkspaceId == null)
         {
             _tree = [];
+            _workflows = [];
             _isLoading = false;
             return;
         }
 
         _isLoading = true;
+        _loadError = null;
         try
         {
             _tree = await ApiService.GetWorkspaceFolderTreeAsync(WorkspaceId.Value);
+            _workflows = await ApiService.GetWorkspaceWorkflowsAsync(WorkspaceId.Value);
         }
-        catch
+        catch (HttpRequestException)
         {
             _tree = [];
+            _workflows = [];
+            _loadError = "İş akışları yüklenemedi. Klasörler panelini yeniden açarak tekrar deneyin.";
         }
         finally
         {

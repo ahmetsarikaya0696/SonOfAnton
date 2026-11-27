@@ -434,3 +434,6 @@
         padding-bottom: 2px;
     }
 }
+
+.workflow-link { color: inherit; text-decoration: none; }
+.workflow-link:hover, .workflow-link:focus-visible { background: var(--bg-tertiary); outline: 2px solid var(--accent-color); }

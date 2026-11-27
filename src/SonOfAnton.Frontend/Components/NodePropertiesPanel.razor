@@ -5,6 +5,7 @@
 @implements IDisposable
 
 <div class="properties-panel @(_selectedNode != null ? "open" : "")">
+    @if (_definitionError is not null) { <p role="alert">@_definitionError</p> }
     @if (_selectedNode != null && _nodeDefinition != null)
     {
         <div class="panel-header">
@@ -15,10 +16,11 @@
                 <input type="text" 
                        class="node-name-input" 
                        @bind="_selectedNode.NodeData.Name" 
-                       @bind:event="oninput" />
+                       @bind:event="oninput"
+                       @bind:after="DiagramState.NotifyStateChanged" />
                 <span class="node-type">@_nodeDefinition.Type</span>
             </div>
-            <button class="close-btn" @onclick="Close">?</button>
+            <button class="close-btn" @onclick="Close" aria-label="Node ayarlarını kapat"><Icon Name="x" Size="16" /></button>
         </div>
 
         <div class="panel-tabs" style="display: flex; gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--border-color);">
@@ -131,7 +133,7 @@
 
         <div class="panel-footer">
             <button class="btn-delete" @onclick="DeleteNode">
-                ??? D���m� Sil
+                Düğümü Sil
             </button>
         </div>
     }
@@ -139,7 +141,7 @@
     {
         <div class="no-selection">
             <span class="icon">??</span>
-            <p>D�zenlemek i�in bir d���m se�in</p>
+            <p>Düzenlemek için bir düğüm seçin</p>
         </div>
     }
 </div>
@@ -159,24 +161,30 @@
         DiagramState.OnNodeSelected += HandleNodeSelected;
     }
 
-    private async void HandleNodeSelected(WorkflowNodeModel? node)
+    private bool _disposed;
+    private string? _definitionError;
+
+    private void HandleNodeSelected(WorkflowNodeModel? node) => _ = InvokeAsync(async () =>
     {
         _selectedNode = node;
+        _nodeDefinition = null;
+        _definitionError = null;
         _activeTab = "settings";
         _testOutputJson = "";
         _testError = "";
-        
-        if (node != null)
+        StateHasChanged();
+        if (node is null) return;
+        try
         {
-            _nodeDefinition = await ApiService.GetNodeDefinitionAsync(node.NodeData.Type);
+            var definition = await ApiService.GetNodeDefinitionAsync(node.NodeData.Type);
+            if (!_disposed && ReferenceEquals(_selectedNode, node)) _nodeDefinition = definition;
         }
-        else
+        catch (HttpRequestException)
         {
-            _nodeDefinition = null;
+            if (!_disposed && ReferenceEquals(_selectedNode, node)) _definitionError = "Node ayarları yüklenemedi.";
         }
-        
-        await InvokeAsync(StateHasChanged);
-    }
+        if (!_disposed) StateHasChanged();
+    });
 
     private async Task TestSingleNode()
     {
@@ -284,6 +292,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         DiagramState.OnNodeSelected -= HandleNodeSelected;
     }
 }

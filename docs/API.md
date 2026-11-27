@@ -67,7 +67,9 @@ Kaydetme örneği (`workspaceId` gerçek yetkili workspace olmalı):
 | `/api/sse/stats`, `/api/metrics` | Yalnız yönetici |
 | `/health/live`, `/health/ready` | Anonim sağlık |
 
-İlerleme SSE geçmiş node event'lerini replay etmez; geç abone terminal durumu görür, geçmiş için kalıcı log API'sini kullanır. Yavaş abone ayrılabilir. Tek instance pause/step sınırı geçerlidir.
+İlerleme SSE geçmiş geçici event'leri replay etmez. Terminal `workflow-completed` olayı `totalDurationMs`, `nodesExecuted` ve `nodes` özetini kalıcı execution loglarından oluşturur; geç abone de tamamlanan node'ları görür. `nodes` elemanları `CompletedNodeDto` alanlarını (NodeId, Name, Type, Success, Error, DurationMs, Timestamp) taşır. Canlı `node-completed` olayı `Duration` alanında .NET TimeSpan metni taşır; istemci bunu milisaniyeye çevirir. Ayrıntılı geçmiş için kalıcı log API'sini kullanın. Yavaş abone ayrılabilir. Tek instance pause/step sınırı geçerlidir.
+
+27 Kasım 2026 düzeltmesinden önceki execution loglarında yapılandırılmış node sonuçları bulunmaz; bunlar geriye dönük uydurulmaz. Yeni node özetleri mevcut JSONB log alanında saklanır, migration gerektirmez.
 
 Marketplace/chatbot/webhook/published/SCIM/A2A/chat/RAG/planlama/veri tablosu/formu/credential API'leri core listesinde değildir. Kimliği doğrulanmış istemci 404 alır; kimliksiz istek önce fallback nedeniyle 401 alabilir. Bunların güvenli biçimde ürünleştirilmesi ayrı iştir.
 

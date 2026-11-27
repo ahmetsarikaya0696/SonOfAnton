@@ -1,6 +1,6 @@
 @inject DiagramStateService DiagramState
 @inject YamlSyncService YamlSync
-@inject WorkflowApiService ApiService
+@implements IDisposable
 @inject IJSRuntime JS
 
 <div class="yaml-panel @(IsOpen ? "open" : "")">
@@ -80,29 +80,28 @@
     protected override void OnInitialized()
     {
         DiagramState.OnStateChanged += RefreshYaml;
-        YamlSync.OnValidationErrors += errors =>
-        {
-            _validationErrors = errors;
-            InvokeAsync(StateHasChanged);
-        };
-        YamlSync.OnGraphChanged += graph =>
-        {
-            var workflow = new WorkflowDto
-            {
-                Id = DiagramState.CurrentWorkflow?.Id ?? Guid.Empty,
-                Name = DiagramState.CurrentWorkflow?.Name ?? "Workflow",
-                Graph = graph
-            };
-            DiagramState.LoadWorkflow(workflow);
-        };
+        YamlSync.OnValidationErrors += HandleValidationErrors;
+        YamlSync.OnGraphChanged += HandleGraphChanged;
     }
+
+    private void HandleValidationErrors(List<string> errors) => _ = InvokeAsync(() =>
+    {
+        _validationErrors = errors;
+        StateHasChanged();
+    });
+
+    private void HandleGraphChanged(WorkflowGraphDto graph) => _ = InvokeAsync(() =>
+    {
+        DiagramState.ReplaceGraph(graph);
+    });
+
+    private bool _wasOpen;
 
     protected override void OnParametersSet()
     {
-        if (IsOpen)
-        {
-            RefreshYaml();
-        }
+        if (IsOpen && !_wasOpen) RefreshYaml();
+        if (!IsOpen && _wasOpen) YamlSync.CancelPendingUpdate();
+        _wasOpen = IsOpen;
     }
 
     private void RefreshYaml()
@@ -136,37 +135,17 @@
         StateHasChanged();
     }
 
-    private async Task ImportFromYaml()
+    private void ImportFromYaml()
     {
-        if (string.IsNullOrWhiteSpace(_editableYaml)) return;
-
-        try
-        {
-            var result = await ApiService.ImportYamlAsync(_editableYaml);
-            if (result?.IsValid == true && result.ParsedGraph != null)
-            {
-                var workflow = new WorkflowDto
-                {
-                    Id = DiagramState.CurrentWorkflow?.Id ?? Guid.Empty,
-                    Name = DiagramState.CurrentWorkflow?.Name ?? "Imported Workflow",
-                    Graph = result.ParsedGraph
-                };
-                DiagramState.LoadWorkflow(workflow);
-                _validationErrors = [];
-            }
-            else
-            {
-                _validationErrors = result?.Errors ?? ["YAML geçerli değil"];
-            }
-        }
-        catch (Exception ex)
-        {
-            _validationErrors = [$"İçe aktarma hatası: {ex.Message}"];
-        }
+        if (!string.IsNullOrWhiteSpace(_editableYaml))
+            YamlSync.ImportYaml(_editableYaml);
     }
 
     public void Dispose()
     {
         DiagramState.OnStateChanged -= RefreshYaml;
+        YamlSync.OnValidationErrors -= HandleValidationErrors;
+        YamlSync.OnGraphChanged -= HandleGraphChanged;
+        YamlSync.CancelPendingUpdate();
     }
 }

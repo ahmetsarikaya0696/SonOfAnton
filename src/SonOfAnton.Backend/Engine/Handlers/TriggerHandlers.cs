@@ -1,7 +1,7 @@
 namespace SonOfAnton.Backend.Engine.Handlers;
 
 /// <summary>
-/// Manuel tetikleyici - workflow'u ba�lat�r
+/// Manuel tetikleyici - workflow'u başlatır
 /// </summary>
 public class ManualTriggerHandler : INodeHandler
 {
@@ -9,7 +9,7 @@ public class ManualTriggerHandler : INodeHandler
 
     public Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
     {
-        context.Log("Manuel tetikleyici ba�lat�ld�", Shared.Enums.LogLevel.Info, null);
+        context.Log("Manuel tetikleyici başlatıldı", Shared.Enums.LogLevel.Info, null);
         
         return Task.FromResult(NodeExecutionResult.Ok(context.InputData ?? new
         {
@@ -21,7 +21,7 @@ public class ManualTriggerHandler : INodeHandler
 }
 
 /// <summary>
-/// Webhook tetikleyici - HTTP iste�i ile tetiklenir
+/// Webhook tetikleyici - HTTP isteği ile tetiklenir
 /// </summary>
 public class WebhookTriggerHandler : INodeHandler
 {
@@ -29,7 +29,7 @@ public class WebhookTriggerHandler : INodeHandler
 
     public Task<NodeExecutionResult> ExecuteAsync(NodeExecutionContext context)
     {
-        context.Log("Webhook tetikleyici �al��t�", Shared.Enums.LogLevel.Info, null);
+        context.Log("Webhook tetikleyici çalıştı", Shared.Enums.LogLevel.Info, null);
         
         // Webhook verisi InputData'dan gelir
         return Task.FromResult(NodeExecutionResult.Ok(context.InputData ?? new
@@ -42,7 +42,7 @@ public class WebhookTriggerHandler : INodeHandler
 }
 
 /// <summary>
-/// Zamanl� tetikleyici - Hangfire cron job ile tetiklenir
+/// Zamanlı tetikleyici - Hangfire cron job ile tetiklenir
 /// </summary>
 public class ScheduleTriggerHandler : INodeHandler
 {
@@ -52,7 +52,7 @@ public class ScheduleTriggerHandler : INodeHandler
     {
         var cron = context.Node.Parameters.GetValueOrDefault("cron")?.ToString();
         
-        context.Log($"Zamanl� tetikleyici �al��t� (cron: {cron})", Shared.Enums.LogLevel.Info, null);
+        context.Log($"Zamanlı tetikleyici çalıştı (cron: {cron})", Shared.Enums.LogLevel.Info, null);
         
         return Task.FromResult(NodeExecutionResult.Ok(context.InputData ?? new
         {

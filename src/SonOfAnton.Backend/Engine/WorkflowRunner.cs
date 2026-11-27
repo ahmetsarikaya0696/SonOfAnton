@@ -425,6 +425,17 @@ public class WorkflowRunner
             var result = await ExecuteNodeWithRetryAsync(
                 dbContext, execution, handler, resolvedNode, inputData, memory, cancellationToken);
 
+            nodeStopwatch.Stop();
+            // Persist before announcing completion so reconnecting/late clients see the same outcome.
+            await WriteLog(dbContext, execution, node.Id,
+                result.Success ? LogLevel.Info : LogLevel.Error,
+                result.Success ? $"Node tamamlandı: {node.Name}" : $"Node başarısız: {node.Name}",
+                new { eventType = "node-completed", result = new CompletedNodeDto
+                {
+                    NodeId = node.Id, Name = node.Name, Type = node.Type,
+                    Success = result.Success, Error = result.Error,
+                    DurationMs = nodeStopwatch.Elapsed.TotalMilliseconds, Timestamp = DateTime.UtcNow
+                }});
             await _events.PublishNodeCompletedAsync(execution.Id, node.Id, result.Success, result.Error, nodeStopwatch.Elapsed);
             if (!result.Success)
             {

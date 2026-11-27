@@ -1,4 +1,5 @@
 @inject DiagramStateService DiagramState
+@implements IDisposable
 
 <div class="variables-panel @(IsOpen ? "open" : "")">
     <div class="panel-header">
@@ -132,9 +133,7 @@
 
     private void SyncToGraph()
     {
-        var graph = DiagramState.GetCurrentGraph();
-        graph.Variables = [.. _variables];
-        DiagramState.NotifyStateChanged();
+        DiagramState.UpdateVariables([.. _variables]);
     }
 
     public void Dispose()

@@ -1,7 +1,7 @@
 .workflow-editor {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     background: var(--bg-primary);
     color: var(--text-primary);
     transition: background 0.3s, color 0.3s;
@@ -14,7 +14,6 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    padding-right: 320px; /* LoginDisplay alanı için boşluk - desktop default */
     background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
     border-bottom: 1px solid var(--border-color);
     position: relative;
@@ -23,7 +22,6 @@
 
 @media (max-width: 900px) {
     .toolbar {
-        padding-right: 70px; /* LoginDisplay avatarı için yer tut */
         flex-wrap: wrap;
         gap: 0.5rem;
     }

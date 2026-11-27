@@ -484,7 +484,21 @@ app.MapGet("/api/workflow/execution/{executionId:guid}/stream", async (
                 if (execution is null) break;
                 if (execution.Status is SonOfAnton.Shared.Enums.ExecutionStatus.Completed or SonOfAnton.Shared.Enums.ExecutionStatus.Failed or SonOfAnton.Shared.Enums.ExecutionStatus.Cancelled)
                 {
-                    var result = JsonSerializer.Serialize(new { executionId, success = execution.Status == SonOfAnton.Shared.Enums.ExecutionStatus.Completed, error = execution.ErrorMessage, timestamp = execution.CompletedAt });
+                    var records = await db.ExecutionLogs.AsNoTracking()
+                        .Where(l => l.ExecutionId == executionId && l.NodeId != null && l.Data != null)
+                        .OrderBy(l => l.Timestamp).ThenBy(l => l.Id).Select(l => l.Data).ToListAsync(ct);
+                    var nodes = records.Where(d => d!.RootElement.TryGetProperty("eventType", out var kind)
+                            && kind.GetString() == "node-completed" && d.RootElement.TryGetProperty("result", out _))
+                        .Select(d => d!.RootElement.GetProperty("result").Deserialize<SonOfAnton.Shared.DTOs.CompletedNodeDto>())
+                        .OfType<SonOfAnton.Shared.DTOs.CompletedNodeDto>()
+                        .GroupBy(n => n.NodeId).Select(g => g.Last()).ToList();
+                    var result = JsonSerializer.Serialize(new
+                    {
+                        executionId, success = execution.Status == SonOfAnton.Shared.Enums.ExecutionStatus.Completed,
+                        error = execution.ErrorMessage, timestamp = execution.CompletedAt,
+                        totalDurationMs = Math.Max(0, ((execution.CompletedAt ?? DateTime.UtcNow) - execution.StartedAt).TotalMilliseconds),
+                        nodesExecuted = nodes.Count, nodes
+                    });
                     await writer.WriteAsync($"event: workflow-completed\ndata: {result}\n\n");
                     break;
                 }

@@ -2,6 +2,7 @@
 
 @code {
     [Parameter] public string Name { get; set; } = "circle";
+    [Parameter] public string? Class { get; set; }
     [Parameter] public int Size { get; set; } = 18;
     [Parameter] public string Color { get; set; } = "currentColor";
 
@@ -106,6 +107,6 @@
      stroke-width="2" 
      stroke-linecap="round" 
      stroke-linejoin="round"
-     class="icon icon-@Name">
+     class="icon icon-@Name @Class">
     @((MarkupString)GetIconSvg())
 </svg>
