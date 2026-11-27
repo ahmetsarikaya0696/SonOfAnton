@@ -3,7 +3,7 @@
 @attribute [Authorize]
 @using SonOfAnton.Frontend.Components
 
-<WorkflowEditor WorkflowId="WorkflowId" Template="Template" />
+<WorkflowEditor WorkflowId="WorkflowId" Template="@Template" />
 
 @code {
     [Parameter] public Guid? WorkflowId { get; set; }

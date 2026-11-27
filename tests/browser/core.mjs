@@ -163,9 +163,22 @@ variables: []
     assert.equal(savedWorkflow.graph.connections.length, 1);
     assert.equal(savedWorkflow.graph.nodes.find(n => n.type === 'transform.set').parameters.values, '{"message":"edited in properties"}');
 
+    await page.reload();
+    await page.waitForFunction(() => document.querySelectorAll('.diagram-node').length === 2);
+    const afterGraphReload = saveCount;
+    await page.waitForTimeout(4000);
+    assert.equal(saveCount, afterGraphReload, 'Stable connection IDs must prevent phantom autosaves');
+    await page.locator('.diagram-node').filter({ hasText: 'Set QA' }).click();
+    await page.locator('.properties-panel.open .param-textarea').fill('{"message":"save before execute"}');
+    await page.locator('.properties-panel.open .param-textarea').press('Tab');
+    await page.getByRole('button', { name: 'Node ayarlarını kapat', exact: true }).click();
+    const savedBeforeRun = page.waitForResponse(r => r.url().endsWith('/api/workflows') && r.request().method() === 'POST');
+
     // F6/F9: final totals are correct even for a workflow faster than SSE attachment.
     const executed = page.waitForResponse(r => /\/api\/workflows\/[^/]+\/execute$/.test(r.url()) && r.request().method() === 'POST');
     await page.getByRole('button', { name: 'Çalıştır', exact: true }).click();
+    const latestGraph = await (await savedBeforeRun).json();
+    assert.equal(latestGraph.graph.nodes.find(n => n.type === 'transform.set').parameters.values, '{"message":"save before execute"}');
     assert.equal((await executed).status(), 200);
     await page.getByText('Başarıyla tamamlandı', { exact: true }).waitFor();
     await page.locator('.execution-monitor .progress-text').filter({ hasText: '2 / 2 node' }).waitFor();
@@ -182,6 +195,7 @@ variables: []
     assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.y + bounds.height <= 937);
     await page.locator('.side-panel.open').getByRole('button', { name: 'Diff', exact: true }).first().click();
     await page.locator('.diff-modal').waitFor();
+    await page.getByText('Herhangi bir değişiklik bulunamadı.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Kapat', exact: true }).click();
     await page.locator('.side-panel.open .panel-header button').click();
 

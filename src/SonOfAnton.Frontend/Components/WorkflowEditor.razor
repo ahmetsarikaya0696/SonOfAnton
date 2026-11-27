@@ -116,13 +116,13 @@
             {
                 <button class="btn btn-success"
                         @onclick="TestRunWorkflow"
-                        disabled="@(DiagramState.CurrentWorkflow?.Id == Guid.Empty)"
+                        disabled="@(_isSaving || _isLoadingWorkflow || DiagramState.CurrentWorkflow?.Id == Guid.Empty)"
                         title="Adım Adım Test Run">
                     <Icon Name="terminal" Size="14" /> Test Et
                 </button>
                 <button class="btn btn-warning"
                         @onclick="ExecuteWorkflow"
-                        disabled="@(DiagramState.CurrentWorkflow?.Id == Guid.Empty)">
+                        disabled="@(_isSaving || _isLoadingWorkflow || DiagramState.CurrentWorkflow?.Id == Guid.Empty)">
                     <Icon Name="play" Size="14" /> Çalıştır
                 </button>
             }
@@ -547,8 +547,8 @@
         _isSaving = true;
         _operationError = null;
         var workflow = DiagramState.CurrentWorkflow;
-        var content = CurrentContent();
-        var request = CurrentSaveRequest();
+        var request = System.Text.Json.JsonSerializer.Deserialize<SaveWorkflowRequest>(
+            System.Text.Json.JsonSerializer.Serialize(CurrentSaveRequest()))!;
         try
         {
             var saved = await ApiService.SaveWorkflowAsync(request)
@@ -559,7 +559,11 @@
             workflow.UpdatedAt = saved.UpdatedAt;
             workflow.WorkspaceId = saved.WorkspaceId;
             _selectedWorkspaceId = saved.WorkspaceId;
-            _savedContent = content;
+            // The server may assign the default workspace. Compare against the submitted graph,
+            // not the current graph, so edits made during the request remain dirty.
+            request.WorkspaceId = saved.WorkspaceId;
+            request.Id = null;
+            _savedContent = System.Text.Json.JsonSerializer.Serialize(request);
             _lastSaved = DateTime.Now;
             _loadedWorkflowId = saved.Id;
             _loadedTemplate = null;
@@ -576,8 +580,14 @@
 
     private async Task ExecuteWorkflow()
     {
-        if (_isExecuting || DiagramState.CurrentWorkflow?.Id == null || DiagramState.CurrentWorkflow.Id == Guid.Empty)
+        if (_isExecuting || _isSaving || _isLoadingWorkflow || DiagramState.CurrentWorkflow?.Id == null || DiagramState.CurrentWorkflow.Id == Guid.Empty)
             return;
+
+        if (CurrentContent() != _savedContent)
+        {
+            await SaveWorkflow();
+            if (_operationError is not null) return;
+        }
 
         _isExecuting = true;
         _isTestMode = false;
@@ -607,8 +617,14 @@
     
     private async Task TestRunWorkflow()
     {
-        if (_isExecuting || DiagramState.CurrentWorkflow?.Id == null || DiagramState.CurrentWorkflow.Id == Guid.Empty)
+        if (_isExecuting || _isSaving || _isLoadingWorkflow || DiagramState.CurrentWorkflow?.Id == null || DiagramState.CurrentWorkflow.Id == Guid.Empty)
             return;
+
+        if (CurrentContent() != _savedContent)
+        {
+            await SaveWorkflow();
+            if (_operationError is not null) return;
+        }
 
         _isExecuting = true;
         _isTestMode = true;

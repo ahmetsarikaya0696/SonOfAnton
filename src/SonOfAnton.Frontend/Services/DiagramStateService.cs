@@ -23,6 +23,7 @@ public class DiagramStateService
     private bool _isTrackingState = true;
     private bool _isLoadingGraph;
     private readonly Dictionary<string, Guid> _connectionIds = new();
+    private readonly Dictionary<string, (string Source, string Target)> _connectionPorts = new();
 
     public event Action? OnStateChanged;
     public event Action<WorkflowNodeModel?>? OnNodeSelected;
@@ -81,6 +82,7 @@ public class DiagramStateService
             _currentWorkflow = workflow;
             workflow.Graph ??= new WorkflowGraphDto();
             _connectionIds.Clear();
+            _connectionPorts.Clear();
             Diagram.Batch(() =>
             {
                 Diagram.Links.Clear();
@@ -101,6 +103,7 @@ public class DiagramStateService
                     if (sourcePort is null || targetPort is null) continue;
                     var link = new LinkModel(sourcePort, targetPort);
                     _connectionIds[link.Id] = connection.Id == Guid.Empty ? Guid.NewGuid() : connection.Id;
+                    _connectionPorts[link.Id] = (connection.SourcePort, connection.TargetPort);
                     Diagram.Links.Add(link);
                 }
             });
@@ -185,8 +188,8 @@ public class DiagramStateService
                     Id = GetConnectionId(link),
                     SourceNodeId = sourceNode.NodeData.Id,
                     TargetNodeId = targetNode.NodeData.Id,
-                    SourcePort = "output",
-                    TargetPort = "input"
+                    SourcePort = _connectionPorts.TryGetValue(link.Id, out var ports) ? ports.Source : "output",
+                    TargetPort = _connectionPorts.TryGetValue(link.Id, out ports) ? ports.Target : "input"
                 });
             }
         }

@@ -63,7 +63,7 @@ Test DB'si gerçek kullanıcı verisi içermemelidir. Testler migration uygular 
 
 Çekirdek tek backend instance içindir. Pause/step süreç içindedir; restart'tan sonra checkpoint replay yoktur. Yarım kalmış işleri harici etkilerini incelemeden tekrar başlatmayın. Reverse proxy altında SSE buffering kapalı olmalıdır.
 
-Production dağıtımı yapılmadı. Gerçek ortam TLS/issuer/secrets, yedek–restore, eski üretim verisiyle upgrade, saklama/redaksiyon politikası ve harici entegrasyon kabulü gerekir. Eski tenant'sız/sahipsiz kayıtlar otomatik herkese açılmaz; açık sahiplik taşıma planı gerekir. Kanıt: [VERIFICATION.md](VERIFICATION.md).
+Bu doğrulama canlı ortama dağıtım kanıtı değildir. Gerçek ortam TLS/issuer/secrets, yedek–restore, eski üretim verisiyle upgrade, saklama/redaksiyon politikası ve harici entegrasyon kabulü gerekir. Eski tenant'sız/sahipsiz kayıtlar otomatik herkese açılmaz; açık sahiplik taşıma planı gerekir. Kanıt: [VERIFICATION.md](VERIFICATION.md).
 
 ## Tarayıcı kabul testi
 
