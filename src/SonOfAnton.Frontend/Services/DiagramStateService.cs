@@ -10,7 +10,7 @@ using SonOfAnton.Shared.DTOs;
 namespace SonOfAnton.Frontend.Services;
 
 /// <summary>
-/// Blazor.Diagrams state y�netimi
+/// Blazor.Diagrams durum yönetimi
 /// </summary>
 public class DiagramStateService
 {
@@ -21,6 +21,8 @@ public class DiagramStateService
     private Stack<string> _undoStack = new();
     private Stack<string> _redoStack = new();
     private bool _isTrackingState = true;
+    private bool _isLoadingGraph;
+    private readonly Dictionary<string, Guid> _connectionIds = new();
 
     public event Action? OnStateChanged;
     public event Action<WorkflowNodeModel?>? OnNodeSelected;
@@ -54,125 +56,92 @@ public class DiagramStateService
 
         // Custom node modelini kaydet
         diagram.RegisterComponent<WorkflowNodeModel, Components.WorkflowNodeWidget>();
+        diagram.SelectionChanged += _ =>
+            SetSelectedNode(diagram.GetSelectedModels().OfType<WorkflowNodeModel>().LastOrDefault());
+        // Commit a drag/link gesture once, rather than one undo entry per pointer move.
+        diagram.PointerUp += (_, _) => { if (!_isLoadingGraph) NotifyStateChanged(); };
+        diagram.Nodes.Removed += _ => { if (!_isLoadingGraph) NotifyStateChanged(); };
+        diagram.Links.Removed += _ => { if (!_isLoadingGraph) NotifyStateChanged(); };
 
         return diagram;
     }
 
 
-    public void CreateNewWorkflow()
+    public void CreateNewWorkflow() => LoadWorkflow(new WorkflowDto
     {
-        _currentWorkflow = new WorkflowDto
-        {
-            Name = "Yeni İş Akışı",
-            Graph = new WorkflowGraphDto()
-        };
-        
-        Diagram.Nodes.Clear();
-        Diagram.Links.Clear();
-        
-        _selectedNode = null;
-        NotifyStateChanged();
-    }
+        Name = "Yeni İş Akışı",
+        Graph = new WorkflowGraphDto()
+    });
 
-    public void LoadWorkflow(WorkflowDto workflow)
+    public void LoadWorkflow(WorkflowDto workflow, bool resetHistory = true)
     {
-        _currentWorkflow = workflow;
-        Diagram.Nodes.Clear();
-        Diagram.Links.Clear();
-
-        if (workflow.Graph == null)
-            return;
-
-        // Node'ları ekle
-        var nodeMap = new Dictionary<Guid, WorkflowNodeModel>();
-        foreach (var nodeDto in workflow.Graph.Nodes)
+        _isLoadingGraph = true;
+        try
         {
-            var node = new WorkflowNodeModel(nodeDto, new Point(nodeDto.X, nodeDto.Y));
-            Diagram.Nodes.Add(node);
-            nodeMap[nodeDto.Id] = node;
-        }
-
-        // Bağlantıları ekle
-        foreach (var conn in workflow.Graph.Connections)
-        {
-            if (nodeMap.TryGetValue(conn.SourceNodeId, out var sourceNode) &&
-                nodeMap.TryGetValue(conn.TargetNodeId, out var targetNode))
+            _currentWorkflow = workflow;
+            workflow.Graph ??= new WorkflowGraphDto();
+            _connectionIds.Clear();
+            Diagram.Batch(() =>
             {
-                var sourcePort = sourceNode.GetPort(PortAlignment.Right);
-                var targetPort = targetNode.GetPort(PortAlignment.Left);
-                
-                if (sourcePort != null && targetPort != null)
+                Diagram.Links.Clear();
+                Diagram.Nodes.Clear();
+                var nodeMap = new Dictionary<Guid, WorkflowNodeModel>();
+                foreach (var dto in workflow.Graph.Nodes)
                 {
+                    var node = new WorkflowNodeModel(dto, new Point(dto.X, dto.Y));
+                    Diagram.Nodes.Add(node);
+                    nodeMap[dto.Id] = node;
+                }
+                foreach (var connection in workflow.Graph.Connections)
+                {
+                    if (!nodeMap.TryGetValue(connection.SourceNodeId, out var source) ||
+                        !nodeMap.TryGetValue(connection.TargetNodeId, out var target)) continue;
+                    var sourcePort = source.GetPort(PortAlignment.Right);
+                    var targetPort = target.GetPort(PortAlignment.Left);
+                    if (sourcePort is null || targetPort is null) continue;
                     var link = new LinkModel(sourcePort, targetPort);
+                    _connectionIds[link.Id] = connection.Id == Guid.Empty ? Guid.NewGuid() : connection.Id;
                     Diagram.Links.Add(link);
                 }
+            });
+            SetSelectedNode(null);
+            if (resetHistory)
+            {
+                _undoStack.Clear();
+                _redoStack.Clear();
             }
         }
-
-        _selectedNode = null;
+        finally { _isLoadingGraph = false; }
         if (_isTrackingState) NotifyStateChanged(); else OnStateChanged?.Invoke();
     }
 
-    /// <summary>
-    /// Şablondan yeni workflow oluşturur
-    /// </summary>
+    public void ReplaceGraph(WorkflowGraphDto graph)
+    {
+        if (_currentWorkflow is null) CreateNewWorkflow();
+        _currentWorkflow!.Graph = graph;
+        LoadWorkflow(_currentWorkflow, resetHistory: false);
+    }
+
     public void LoadFromTemplate(SonOfAnton.Shared.Models.WorkflowTemplate template)
     {
-        _currentWorkflow = new WorkflowDto
+        var graph = System.Text.Json.JsonSerializer.Deserialize<WorkflowGraphDto>(
+            System.Text.Json.JsonSerializer.Serialize(template.Graph)) ?? new();
+        var ids = graph.Nodes.ToDictionary(n => n.Id, _ => Guid.NewGuid());
+        foreach (var node in graph.Nodes) node.Id = ids[node.Id];
+        foreach (var connection in graph.Connections)
         {
-            Id = Guid.Empty,
-            Name = template.Name,
-            Description = template.Description,
-            Graph = template.Graph
-        };
-
-        Diagram.Nodes.Clear();
-        Diagram.Links.Clear();
-
-        if (template.Graph == null)
-            return;
-
-        // Node'ları ekle
-        var nodeMap = new Dictionary<Guid, WorkflowNodeModel>();
-        foreach (var nodeDto in template.Graph.Nodes)
-        {
-            // Yeni ID ata (Şablon ID'lerini kullanma)
-            var newNodeDto = new WorkflowNodeDto
-            {
-                Id = Guid.NewGuid(),
-                Type = nodeDto.Type,
-                Name = nodeDto.Name,
-                Icon = nodeDto.Icon,
-                Color = nodeDto.Color,
-                X = nodeDto.X,
-                Y = nodeDto.Y,
-                Parameters = new Dictionary<string, object?>(nodeDto.Parameters)
-            };
-            
-            var node = new WorkflowNodeModel(newNodeDto, new Point(newNodeDto.X, newNodeDto.Y));
-            Diagram.Nodes.Add(node);
-            nodeMap[nodeDto.Id] = node; // Eski ID ile map'le (bağlantılar için)
+            connection.Id = Guid.NewGuid();
+            connection.SourceNodeId = ids[connection.SourceNodeId];
+            connection.TargetNodeId = ids[connection.TargetNodeId];
         }
+        LoadWorkflow(new WorkflowDto { Name = template.Name, Description = template.Description, Graph = graph });
+    }
 
-        // Bağlantıları ekle
-        foreach (var conn in template.Graph.Connections)
-        {
-            if (nodeMap.TryGetValue(conn.SourceNodeId, out var sourceNode) &&
-                nodeMap.TryGetValue(conn.TargetNodeId, out var targetNode))
-            {
-                var sourcePort = sourceNode.GetPort(PortAlignment.Right);
-                var targetPort = targetNode.GetPort(PortAlignment.Left);
-                
-                if (sourcePort != null && targetPort != null)
-                {
-                    var link = new LinkModel(sourcePort, targetPort);
-                    Diagram.Links.Add(link);
-                }
-            }
-        }
-
-        _selectedNode = null;
-        if (_isTrackingState) NotifyStateChanged(); else OnStateChanged?.Invoke();
+    private Guid GetConnectionId(LinkModel link)
+    {
+        if (!_connectionIds.TryGetValue(link.Id, out var id))
+            _connectionIds[link.Id] = id = Guid.NewGuid();
+        return id;
     }
 
     public WorkflowGraphDto GetCurrentGraph()
@@ -213,7 +182,7 @@ public class DiagramStateService
             {
                 graph.Connections.Add(new NodeConnectionDto
                 {
-                    Id = Guid.NewGuid(),
+                    Id = GetConnectionId(link),
                     SourceNodeId = sourceNode.NodeData.Id,
                     TargetNodeId = targetNode.NodeData.Id,
                     SourcePort = "output",
@@ -261,6 +230,14 @@ public class DiagramStateService
 
     public void SelectNode(WorkflowNodeModel? node)
     {
+        if (node is null) Diagram.UnselectAll();
+        else Diagram.SelectModel(node, unselectOthers: true);
+        SetSelectedNode(node);
+    }
+
+    private void SetSelectedNode(WorkflowNodeModel? node)
+    {
+        if (ReferenceEquals(_selectedNode, node)) return;
         _selectedNode = node;
         OnNodeSelected?.Invoke(node);
     }
@@ -328,7 +305,7 @@ public class DiagramStateService
             if (graph != null)
             {
                 _currentWorkflow.Graph = graph;
-                LoadWorkflow(_currentWorkflow);
+                LoadWorkflow(_currentWorkflow, resetHistory: false);
             }
         }
         finally
@@ -346,8 +323,8 @@ public class DiagramStateService
         if (_currentWorkflow != null)
         {
             _currentWorkflow.Graph ??= new WorkflowGraphDto();
-            _currentWorkflow.Graph.Variables = variables;
-            OnStateChanged?.Invoke();
+            _currentWorkflow.Graph.Variables = [.. variables];
+            NotifyStateChanged();
         }
     }
 

@@ -205,13 +205,13 @@
                             {
                                 @foreach (var wf in _workflows)
                                 {
-                                    <div class="content-item">
+                                    <a class="content-item workflow-link" href="@($"/workflows/{wf.Id}")">
                                         <Icon Name="git-branch" Size="14" />
                                         <span>@wf.Name</span>
                                         <span class="content-meta @(wf.IsActive ? "active" : "")">
                                             @(wf.IsActive ? "Aktif" : "Pasif")
                                         </span>
-                                    </div>
+                                    </a>
                                 }
                             }
                         </div>

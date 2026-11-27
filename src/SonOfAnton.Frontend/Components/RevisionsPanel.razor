@@ -125,11 +125,7 @@
         var rev = await ApiService.GetRevisionAsync(DiagramState.CurrentWorkflow.Id, version);
         if (rev?.Graph != null)
         {
-            var workflow = DiagramState.CurrentWorkflow;
-            workflow.Graph = rev.Graph;
-            DiagramState.LoadWorkflow(workflow);
-            
-            DiagramState.NotifyStateChanged();
+            DiagramState.ReplaceGraph(rev.Graph);
             
             await ClosePanel();
         }

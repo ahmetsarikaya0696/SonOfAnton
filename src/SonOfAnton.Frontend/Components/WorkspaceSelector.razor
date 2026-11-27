@@ -70,6 +70,11 @@
         }
     }
 
+    protected override void OnParametersSet()
+    {
+        _selectedWorkspace = _workspaces.FirstOrDefault(w => w.Id == SelectedWorkspaceId);
+    }
+
     private void ToggleDropdown()
     {
         _isOpen = !_isOpen;

@@ -4,6 +4,8 @@
 
 **Çekirdek kapsam:** workspace içinde workflow oluşturma, graph kaydetme, çalıştırma/zamanlama, execution ve log takibi. [Görev planı](docs/IMPLEMENTATION_PLAN.md) tamamlanan işleri, [doğrulama kaydı](docs/VERIFICATION.md) test kanıtını ve sınırları gösterir. İlk statik inceleme [REVIEW.md](docs/REVIEW.md) içinde tarihsel olarak korunur.
 
+Kaydedilen iş akışları `/workflows/{id}` adresinden, klasör panelinden veya workspace içeriğinden tekrar açılır. Otomatik kayıt yalnız içerik değiştiğinde çalışır. Node seçimi ayar panelini açar; değişkenler ve yerel YAML içe aktarma graph ile kaydedilir. YAML düzenleme AI özelliğini gerektirmez.
+
 ## Çalıştırma
 
 .NET 10 SDK ve Docker Compose gerekir. Repo kökünde:

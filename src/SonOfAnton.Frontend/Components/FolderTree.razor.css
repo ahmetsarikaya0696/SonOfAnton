@@ -182,3 +182,8 @@
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+.workflow-list { display: flex; flex-direction: column; gap: .25rem; padding: .5rem; border-top: 1px solid var(--border-color); }
+.workflow-list-item { width: 100%; text-align: left; padding: .6rem; color: var(--text-primary); background: transparent; border: 1px solid transparent; border-radius: .4rem; cursor: pointer; overflow-wrap: anywhere; }
+.workflow-list-item:hover, .workflow-list-item:focus-visible { background: var(--bg-tertiary); border-color: var(--accent-color); }
+.empty-workflows { padding: .5rem; color: var(--text-muted); }

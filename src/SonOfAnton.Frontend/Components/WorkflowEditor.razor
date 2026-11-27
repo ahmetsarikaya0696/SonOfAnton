@@ -7,6 +7,7 @@
 @inject SseClientService SseClient
 @inject ChatDiagramBridge ChatBridge
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 @implements IAsyncDisposable
 
 @if (_operationError is not null) { <div role="alert" style="padding:12px;color:#ef4444">@_operationError</div> }
@@ -74,6 +75,7 @@
                    class="workflow-name-input" 
                    @bind="@_workflowName" 
                    @bind:event="oninput"
+                   @bind:after="HandleNameChanged"
                    placeholder="İş Akışı Adı" />
         </div>
         
@@ -210,7 +212,7 @@
         @if (_isFolderTreeOpen)
         {
             <div class="folder-sidebar">
-                <FolderTree OnFolderSelected="HandleFolderSelected" WorkspaceId="@_selectedWorkspaceId" />
+                <FolderTree OnWorkflowSelected="OpenWorkflow" WorkspaceId="@_selectedWorkspaceId" />
             </div>
         }
 
@@ -278,6 +280,13 @@
 <WorkflowWizard IsVisible="_isWizardOpen" IsVisibleChanged="v => _isWizardOpen = v" OnWizardCompleted="HandleWizardCompleted" />
 
 @code {
+    [Parameter] public Guid? WorkflowId { get; set; }
+    private bool _isLoadingWorkflow = true;
+    private bool _initializedWorkflow;
+    private bool _disposed;
+    private Guid? _loadedWorkflowId;
+    private string? _loadedTemplate;
+    private string? _savedContent;
     private bool _isSaving;
     private string? _operationError;
     private bool _isExecuting;
@@ -355,14 +364,19 @@
 
     private void HandleWorkspaceChanged(WorkspaceDto? workspace)
     {
-        if (DiagramState.CurrentWorkflow != null && DiagramState.CurrentWorkflow.Id == Guid.Empty)
+        if (_isLoadingWorkflow || workspace is null) return;
+        if (DiagramState.CurrentWorkflow?.Id != Guid.Empty &&
+            DiagramState.CurrentWorkflow?.WorkspaceId != workspace.Id)
         {
-            DiagramState.CurrentWorkflow.WorkspaceId = _selectedWorkspaceId;
+            NewWorkflow();
         }
+        _selectedWorkspaceId = workspace.Id;
+        if (DiagramState.CurrentWorkflow is { } workflow) workflow.WorkspaceId = workspace.Id;
+        if (DiagramState.Diagram.Nodes.Count == 0 && DiagramState.CurrentWorkflow?.Id == Guid.Empty)
+            _savedContent = CurrentContent();
     }
 
     [Parameter]
-    [SupplyParameterFromQuery]
     public string? Template { get; set; }
 
     private bool _aiEnabled;
@@ -379,67 +393,115 @@
     protected override void OnInitialized()
     {
         DiagramState.OnStateChanged += HandleStateChanged;
-        
-        // Timer
-        _autoSaveTimer = new System.Timers.Timer(3000);
-        _autoSaveTimer.Elapsed += async (sender, e) => await HandleAutoSaveTimerAsync();
-        _autoSaveTimer.AutoReset = false;
-        
-        if (!string.IsNullOrEmpty(Template))
+        _autoSaveTimer = new System.Timers.Timer(3000) { AutoReset = false };
+        _autoSaveTimer.Elapsed += async (_, _) => await InvokeAsync(HandleAutoSaveTimerAsync);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initializedWorkflow && WorkflowId == _loadedWorkflowId && Template == _loadedTemplate) return;
+        _initializedWorkflow = true;
+        _loadedWorkflowId = WorkflowId;
+        _loadedTemplate = Template;
+        _isLoadingWorkflow = true;
+        _autoSaveTimer?.Stop();
+        _operationError = null;
+        _lastSaved = null;
+        _currentExecutionId = null;
+        _isExecuting = false;
+        _isTestMode = false;
+        try
         {
-            var template = WorkflowTemplates.GetTemplateById(Template);
-            if (template != null)
+            if (WorkflowId.HasValue)
+            {
+                var workflow = await ApiService.GetWorkflowAsync(WorkflowId.Value)
+                    ?? throw new InvalidOperationException("İş akışı bulunamadı.");
+                DiagramState.LoadWorkflow(workflow);
+                _selectedWorkspaceId = workflow.WorkspaceId;
+            }
+            else if (!string.IsNullOrEmpty(Template) && WorkflowTemplates.GetTemplateById(Template) is { } template)
             {
                 DiagramState.LoadFromTemplate(template);
-                _workflowName = template.Name;
             }
             else
             {
                 DiagramState.CreateNewWorkflow();
-                _workflowName = "Yeni İş Akışı";
             }
-        }
-        else
-        {
-            DiagramState.CreateNewWorkflow();
             _workflowName = DiagramState.CurrentWorkflow?.Name ?? "Yeni İş Akışı";
+            _savedContent = CurrentContent();
+            _showConnectionHint = DiagramState.Diagram.Nodes.Count == 0;
         }
+        catch (Exception ex)
+        {
+            // A failed load must not expose an editable copy of the previous workflow.
+            DiagramState.CreateNewWorkflow();
+            _workflowName = "Yeni İş Akışı";
+            _savedContent = CurrentContent();
+            _operationError = $"İş akışı yüklenemedi: {ex.Message}";
+        }
+        finally { _isLoadingWorkflow = false; }
     }
-    
+
+    private SaveWorkflowRequest CurrentSaveRequest() => new()
+    {
+        Id = DiagramState.CurrentWorkflow?.Id is Guid id && id != Guid.Empty ? id : null,
+        Name = _workflowName,
+        Description = DiagramState.CurrentWorkflow?.Description,
+        TriggerType = DiagramState.CurrentWorkflow?.TriggerType ?? SonOfAnton.Shared.Enums.TriggerType.Manual,
+        IsActive = DiagramState.CurrentWorkflow?.IsActive ?? false,
+        GlobalErrorWorkflowId = DiagramState.CurrentWorkflow?.GlobalErrorWorkflowId,
+        FolderId = DiagramState.CurrentWorkflow?.FolderId,
+        WorkspaceId = DiagramState.CurrentWorkflow?.WorkspaceId ?? _selectedWorkspaceId,
+        Graph = DiagramState.GetCurrentGraph()
+    };
+
+    private string CurrentContent()
+    {
+        var request = CurrentSaveRequest();
+        request.Id = null;
+        return System.Text.Json.JsonSerializer.Serialize(request);
+    }
+
+    private void HandleNameChanged()
+    {
+        if (DiagramState.CurrentWorkflow is { } workflow) workflow.Name = _workflowName;
+        HandleStateChanged();
+    }
+
     private void HandleStateChanged()
     {
-        // Workflow değiştiğinde adı güncelle
-        if (DiagramState.CurrentWorkflow != null && 
-            DiagramState.CurrentWorkflow.Name != _workflowName)
-        {
-            _workflowName = DiagramState.CurrentWorkflow.Name;
-        }
-        
-        // Autosave Timer reset
+        if (_disposed) return;
+        if (DiagramState.CurrentWorkflow is { } workflow) _workflowName = workflow.Name;
         _autoSaveTimer?.Stop();
-        _autoSaveTimer?.Start();
-        
-        StateHasChanged();
+        if (!_isLoadingWorkflow && CurrentContent() != _savedContent) _autoSaveTimer?.Start();
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async Task HandleAutoSaveTimerAsync()
     {
+        if (_disposed || _isLoadingWorkflow || CurrentContent() == _savedContent) return;
         _isAutoSaving = true;
-        await InvokeAsync(StateHasChanged);
-        
-        await SaveWorkflow();
-        
-        _isAutoSaving = false;
-        await InvokeAsync(StateHasChanged);
+        try { await SaveWorkflow(); }
+        finally { _isAutoSaving = false; }
+        StateHasChanged();
     }
 
     private void NewWorkflow()
     {
+        _autoSaveTimer?.Stop();
+        _isLoadingWorkflow = true;
         DiagramState.CreateNewWorkflow();
+        if (DiagramState.CurrentWorkflow is { } workflow) workflow.WorkspaceId = _selectedWorkspaceId;
         _workflowName = "Yeni İş Akışı";
+        _savedContent = CurrentContent();
+        _lastSaved = null;
         _currentExecutionId = null;
         _isExecuting = false;
         _isTestMode = false;
+        _loadedWorkflowId = null;
+        _loadedTemplate = null;
+        _isLoadingWorkflow = false;
+        Navigation.NavigateTo("/");
     }
 
     private void HandleWizardCompleted()
@@ -448,12 +510,18 @@
         _currentExecutionId = null;
         _isExecuting = false;
         _isTestMode = false;
-        StateHasChanged();
+        HandleStateChanged();
     }
 
-    private void HandleFolderSelected(Guid? folderId)
+    private async Task OpenWorkflow(WorkflowDto workflow)
     {
-        Console.WriteLine($"Folder selected: {folderId}");
+        if (_isSaving || _isLoadingWorkflow) return;
+        if (CurrentContent() != _savedContent)
+        {
+            await SaveWorkflow();
+            if (_operationError is not null) return;
+        }
+        Navigation.NavigateTo($"/workflows/{workflow.Id}");
     }
 
     private void HandleGlobalKeyDown(KeyboardEventArgs e)
@@ -474,48 +542,35 @@
 
     private async Task SaveWorkflow()
     {
-        if (_isSaving) return;
+        if (_isSaving || _isLoadingWorkflow || DiagramState.CurrentWorkflow is null) return;
+        _autoSaveTimer?.Stop();
         _isSaving = true;
         _operationError = null;
-
+        var workflow = DiagramState.CurrentWorkflow;
+        var content = CurrentContent();
+        var request = CurrentSaveRequest();
         try
         {
-            // Workflow adını güncelle
-            if (DiagramState.CurrentWorkflow != null)
-            {
-                DiagramState.CurrentWorkflow.Name = _workflowName;
-            }
-            
-            var request = new SonOfAnton.Shared.DTOs.SaveWorkflowRequest
-            {
-                Id = DiagramState.CurrentWorkflow?.Id != Guid.Empty ? DiagramState.CurrentWorkflow?.Id : null,
-                Name = _workflowName,
-                Description = DiagramState.CurrentWorkflow?.Description,
-                TriggerType = DiagramState.CurrentWorkflow?.TriggerType ?? SonOfAnton.Shared.Enums.TriggerType.Manual,
-                IsActive = DiagramState.CurrentWorkflow?.IsActive ?? false,
-                Graph = DiagramState.GetCurrentGraph(),
-                WorkspaceId = _selectedWorkspaceId
-            };
-
-            var saved = await ApiService.SaveWorkflowAsync(request);
-            if (saved != null)
-            {
-                // Grafikte radikal değişikleri önlemek için yeniden load etmeyiz eğer aynı graph ise.
-                if (DiagramState.CurrentWorkflow?.Id != saved.Id) 
-                {
-                    DiagramState.LoadWorkflow(saved);
-                }
-                _workflowName = saved.Name;
-                _lastSaved = DateTime.Now;
-            }
+            var saved = await ApiService.SaveWorkflowAsync(request)
+                ?? throw new InvalidOperationException("Sunucu kayıt sonucunu döndürmedi.");
+            if (!ReferenceEquals(workflow, DiagramState.CurrentWorkflow)) return;
+            // Preserve edits made while the request was in flight.
+            workflow.Id = saved.Id;
+            workflow.UpdatedAt = saved.UpdatedAt;
+            workflow.WorkspaceId = saved.WorkspaceId;
+            _selectedWorkspaceId = saved.WorkspaceId;
+            _savedContent = content;
+            _lastSaved = DateTime.Now;
+            _loadedWorkflowId = saved.Id;
+            _loadedTemplate = null;
+            Navigation.NavigateTo($"/workflows/{saved.Id}", replace: true);
         }
-        catch (Exception ex)
-        {
-            _operationError = $"Kaydedilemedi: {ex.Message}";
-        }
+        catch (Exception ex) { _operationError = $"Kaydedilemedi: {ex.Message}"; }
         finally
         {
             _isSaving = false;
+            if (!_disposed && _operationError is null && CurrentContent() != _savedContent)
+                _autoSaveTimer?.Start();
         }
     }
 
@@ -758,6 +813,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         DiagramState.OnStateChanged -= HandleStateChanged;
         
         if (_autoSaveTimer != null)

@@ -67,7 +67,7 @@
                 @foreach (var log in _logs)
                 {
                     <div class="log-entry @log.LevelClass">
-                        <span class="log-time">@log.Timestamp.ToString("HH:mm:ss.fff")</span>
+                        <span class="log-time">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
                         <span class="log-level">[@log.Level]</span>
                         @if (!string.IsNullOrEmpty(log.NodeName))
                         {
@@ -117,7 +117,7 @@
     private double _totalDurationMs;
     
     public int NodesCompleted => _nodeStatuses.Values.Count(n => n.IsCompleted);
-    public int TotalNodes => _nodeStatuses.Count > 0 ? _nodeStatuses.Count : 1;
+    public int TotalNodes => _nodeStatuses.Count;
     public int ProgressPercentage => TotalNodes > 0 ? (int)(NodesCompleted * 100.0 / TotalNodes) : 0;
     
     public string ConnectionStateClass => SseClient.ConnectionState switch
@@ -193,6 +193,7 @@
     {
         InvokeAsync(() =>
         {
+            if (evt.ExecutionId != ExecutionId) return;
             _nodeStatuses[evt.NodeId] = new NodeStatusInfo
             {
                 Id = evt.NodeId,
@@ -213,14 +214,17 @@
     {
         InvokeAsync(() =>
         {
-            if (_nodeStatuses.TryGetValue(evt.NodeId, out var status))
+            if (evt.ExecutionId != ExecutionId) return;
+            if (!_nodeStatuses.TryGetValue(evt.NodeId, out var status))
             {
-                status.IsExecuting = false;
-                status.IsCompleted = true;
-                status.HasError = !evt.Success;
-                status.DurationMs = evt.DurationMs;
-                status.Error = evt.Error;
+                status = new NodeStatusInfo { Id = evt.NodeId, Name = evt.NodeId.ToString()[..8], Order = _nodeOrder++ };
+                _nodeStatuses[evt.NodeId] = status;
             }
+            status.IsExecuting = false;
+            status.IsCompleted = true;
+            status.HasError = !evt.Success;
+            status.DurationMs = evt.DurationMs;
+            status.Error = evt.Error;
             
             var level = evt.Success ? "info" : "error";
             var message = evt.Success 
@@ -237,6 +241,7 @@
     {
         InvokeAsync(() =>
         {
+            if (evt.ExecutionId != ExecutionId) return;
             if (!string.IsNullOrEmpty(evt.Message))
             {
                 var nodeName = _nodeStatuses.GetValueOrDefault(evt.NodeId)?.Name;
@@ -250,6 +255,7 @@
     {
         InvokeAsync(() =>
         {
+            if (evt.ExecutionId != ExecutionId) return;
             var nodeName = evt.NodeId.HasValue ? _nodeStatuses.GetValueOrDefault(evt.NodeId.Value)?.Name : null;
             AddLog(evt.Level, evt.Message, nodeName, evt.Timestamp);
             StateHasChanged();
@@ -260,6 +266,21 @@
     {
         InvokeAsync(() =>
         {
+            if (evt.ExecutionId != ExecutionId) return;
+            // The terminal snapshot is authoritative even if the initial node events were missed.
+            foreach (var node in evt.Nodes)
+            {
+                _nodeStatuses[node.NodeId] = new NodeStatusInfo
+                {
+                    Id = node.NodeId, Name = node.Name, Type = node.Type,
+                    IsCompleted = true, HasError = !node.Success, Error = node.Error,
+                    DurationMs = node.DurationMs, Order = _nodeStatuses.GetValueOrDefault(node.NodeId)?.Order ?? _nodeOrder++
+                };
+                _ = OnNodeCompleted.InvokeAsync((node.NodeId, node.Success));
+            }
+            foreach (var node in _nodeStatuses.Values) node.IsExecuting = false;
+            _totalDurationMs = evt.TotalDurationMs;
+            if (_workflowCompleted) { StateHasChanged(); return; }
             _workflowCompleted = true;
             _ = OnWorkflowFinished.InvokeAsync(evt.Success);
             _workflowSuccess = evt.Success;

@@ -135,7 +135,18 @@ public sealed class ApplicationTests : IAsyncLifetime
         var streams = await Task.WhenAll(_alice.GetStringAsync($"/api/logs/{run.Id}"),_alice.GetStringAsync($"/api/logs/{run.Id}"));
         Assert.All(streams,text=>{ Assert.Contains("event: complete",text); Assert.Contains("id: ",text); });
         Assert.Equal(streams[0],streams[1]);
-        Assert.Contains("workflow-completed",await _alice.GetStringAsync($"/api/workflow/execution/{run.Id}/stream"));
+        // Subscribe after the run finished: no in-memory node event is available to this client.
+        var lateStream = await _alice.GetStringAsync($"/api/workflow/execution/{run.Id}/stream");
+        var terminal = lateStream.Split("\n\n").Single(frame => frame.StartsWith("event: workflow-completed"));
+        using var completed = JsonDocument.Parse(terminal.Split('\n').Single(line => line.StartsWith("data: "))[6..]);
+        var summary = completed.RootElement;
+        Assert.Equal(3, summary.GetProperty("nodesExecuted").GetInt32());
+        Assert.True(summary.GetProperty("totalDurationMs").GetDouble() > 0);
+        var completedNodes = summary.GetProperty("nodes").Deserialize<List<CompletedNodeDto>>()!;
+        Assert.Equal(new[] { trigger, set, debug }.Order(), completedNodes.Select(n => n.NodeId).Order());
+        Assert.All(completedNodes, node => { Assert.True(node.Success); Assert.True(node.DurationMs > 0); });
+        Assert.Contains(logs!, log => log.Message.Contains("Manuel") && log.Message.Contains("başlatıldı"));
+        Assert.DoesNotContain(logs!, log => log.Message.Contains('\uFFFD'));
         Assert.Equal(HttpStatusCode.NotFound,(await _bob.GetAsync($"/api/workflow/execution/{run.Id}/stream")).StatusCode);
         var scheduled=await _alice.PostAsJsonAsync($"/api/executions/schedule/{saved.Id}?delaySeconds=3600",new{});
         scheduled.EnsureSuccessStatusCode();

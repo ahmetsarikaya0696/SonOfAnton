@@ -1,7 +1,11 @@
 @page "/"
+@page "/workflows/{WorkflowId:guid}"
 @attribute [Authorize]
 @using SonOfAnton.Frontend.Components
 
-<WorkflowEditor />
+<WorkflowEditor WorkflowId="WorkflowId" Template="Template" />
 
-
+@code {
+    [Parameter] public Guid? WorkflowId { get; set; }
+    [SupplyParameterFromQuery] public string? Template { get; set; }
+}

@@ -568,7 +568,8 @@ public record NodeCompletedEvent
     public Guid NodeId { get; init; }
     public bool Success { get; init; }
     public string? Error { get; init; }
-    public double DurationMs { get; init; }
+    public TimeSpan Duration { get; init; }
+    public double DurationMs => Duration.TotalMilliseconds;
     public object? OutputPreview { get; init; }
     public DateTime Timestamp { get; init; }
 }
@@ -602,6 +603,7 @@ public record WorkflowCompletedEventDto
     public string? Error { get; init; }
     public double TotalDurationMs { get; init; }
     public int NodesExecuted { get; init; }
+    public List<SonOfAnton.Shared.DTOs.CompletedNodeDto> Nodes { get; init; } = [];
     public DateTime Timestamp { get; init; }
 }
 

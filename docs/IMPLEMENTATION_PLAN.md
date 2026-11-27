@@ -62,4 +62,14 @@ Gerçek harici AI sağlayıcıları, güvensiz kod sandbox'ı, tam SCIM/A2A uyum
 
 ## Doğrulama durumu
 
+### 27 Kasım 2026 canlı QA düzeltmeleri
+
+- [ ] F1/F2: node ayarları, kalıcı workflow URL'si ve klasörden yeniden açma; boş editörün otomatik kayıt üretmemesi.
+- [ ] F3/F4: workspace Icon sınıf parametresi ve değişkenlerin reload sonrası korunması.
+- [ ] F5: geçerli/geçersiz yerel YAML import; kapalı deneysel endpoint'e istek gönderilmemesi.
+- [ ] F6/F9: geç SSE aboneliğinde node toplamı/süre ve Türkçe tetikleyici logları.
+- [ ] F7/F8: revizyon panelinin görünür alanda olması ve API anahtarı sayfasından fareyle dönüş.
+
+Kod ve regresyon senaryoları eklendi; bu maddeler temiz CI ve tarayıcı kabulü tamamlanınca işaretlenecek. Yerel JS testleri 2/2 geçti. Yerel WebAssembly paketlemesi MSBuild task host ortam hatası nedeniyle tamamlanamadı; ürün koduna ortam workaround'u eklenmedi.
+
 6 Kasım 2026: 12 .NET ve 2 JavaScript testi, temiz Release build, EF model kontrolü ve dört execution içeren Chromium kabulü başarılı. Ayrıntılar ve ortam sınırlaması: [VERIFICATION.md](VERIFICATION.md). Açık kabul maddeleri varken bütün uygulama veya production hazırlığı tamamlanmış sayılmaz.

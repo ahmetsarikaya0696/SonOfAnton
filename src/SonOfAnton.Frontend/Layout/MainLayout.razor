@@ -5,7 +5,7 @@
     <div class="login-display-wrapper">
         <LoginDisplay />
     </div>
-    @Body
+    <main class="app-body">@Body</main>
 </div>
 
 @code {
@@ -22,27 +22,3 @@
         }
     }
 }
-
-<style>
-    .app-container {
-        width: 100vw;
-        height: 100vh;
-        overflow: hidden;
-        outline: none;
-        position: relative;
-    }
-
-    .login-display-wrapper {
-        position: fixed;
-        top: 0.75rem;
-        right: 1rem;
-        z-index: 9999;
-    }
-
-    @@media (max-width: 768px) {
-        .login-display-wrapper {
-            top: 0.5rem;
-            right: 0.5rem;
-        }
-    }
-</style>

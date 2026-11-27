@@ -79,3 +79,9 @@ bash tests/browser/run.sh
 ```
 
 Test script'i standart geliştirme portlarını kullanır, frontend/backend süreçlerini ve Compose servislerini sonunda durdurur. Aktif geliştirme oturumuyla aynı anda çalıştırmayın.
+
+## 27 Kasım editör/monitor düzeltmesinin dağıtımı
+
+Backend ve frontend aynı commit'ten yayımlanmalıdır. Frontend statik dosyalarını yenilerken ortamın `appsettings.json` ayarlarını koruyun; `/workflows/{id}` gibi uygulama yolları Nginx'te SPA `index.html` fallback'ine yönlenmelidir. `/api/` ve `/auth/` proxy kuralları bu fallback'ten önce uygulanır. Dağıtım sonrası tarayıcıyı yenileyip kayıtlı workflow adresini doğrudan açın; iki node'lu bir akışta monitor toplamını ve kalıcı logları doğrulayın.
+
+Bu düzeltme şema değişikliği gerektirmez. Yeni yürütmelerin node sonuçları mevcut execution log JSONB alanına yazılır. Eski yürütmelerde bulunmayan node süreleri geriye dönük oluşturulmaz. Bu depodaki CI sonucu canlı sunucuya dağıtım yapıldığı anlamına gelmez.

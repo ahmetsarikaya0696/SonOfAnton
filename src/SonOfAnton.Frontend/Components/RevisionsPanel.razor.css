@@ -1,0 +1,19 @@
+.side-panel {
+    position: fixed;
+    top: 3.75rem;
+    right: 0;
+    bottom: 0;
+    width: min(26rem, 100vw);
+    display: none;
+    flex-direction: column;
+    z-index: 200;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    box-shadow: -8px 0 24px rgba(0,0,0,.2);
+}
+.side-panel.open { display: flex; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border-color); }
+.panel-header h3 { margin: 0; font-size: 1rem; }
+.panel-content { flex: 1; min-height: 0; overflow-y: auto; }
+.empty-state, .loading-state { padding: 1.5rem; text-align: center; }

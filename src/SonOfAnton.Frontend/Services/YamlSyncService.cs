@@ -59,6 +59,19 @@ public class YamlSyncService
         _debounceTimer.Start();
     }
 
+    public void ImportYaml(string yaml)
+    {
+        CancelPendingUpdate();
+        ParseAndNotify(yaml);
+    }
+
+    public void CancelPendingUpdate()
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+        _debounceTimer = null;
+    }
+
     private void ParseAndNotify(string yaml)
     {
         var validation = _yamlSerializer.Validate(yaml);
